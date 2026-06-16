@@ -1,122 +1,110 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from "react";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [exercises, setExercises] = useState([]);
+  const [selectedExercise, setSelectedExercise] = useState("");
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const [rir, setRir] = useState("");
+  const [isFailure, setIsFailure] = useState(false);
+  const [recommendation, setRecommendation] = useState(null);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/exercises/")
+      .then((response) => response.json())
+      .then((data) => setExercises(data));
+  }, []);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    const response = await fetch("http://127.0.0.1:8000/api/recommendations/next-set/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        weight: Number(weight),
+        reps: Number(reps),
+        rir: rir === "" ? null : Number(rir),
+        is_failure: isFailure,
+      }),
+    });
+
+    const data = await response.json();
+    setRecommendation(data);
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <div style={{ padding: "24px", maxWidth: "600px", margin: "0 auto" }}>
+      <h1>SHAPETRONYC</h1>
+
+      <h2>Registar Série</h2>
+
+      <form onSubmit={handleSubmit}>
+        <label>Exercício</label>
+        <select
+          value={selectedExercise}
+          onChange={(e) => setSelectedExercise(e.target.value)}
+          style={{ display: "block", width: "100%", marginBottom: "12px" }}
         >
-          Count is {count}
+          <option value="">Selecionar exercício</option>
+
+          {exercises.map((exercise) => (
+            <option key={exercise.id} value={exercise.id}>
+              {exercise.name}
+            </option>
+          ))}
+        </select>
+
+        <label>Peso</label>
+        <input
+          type="number"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          style={{ display: "block", width: "100%", marginBottom: "12px" }}
+        />
+
+        <label>Reps</label>
+        <input
+          type="number"
+          value={reps}
+          onChange={(e) => setReps(e.target.value)}
+          style={{ display: "block", width: "100%", marginBottom: "12px" }}
+        />
+
+        <label>RIR</label>
+        <input
+          type="number"
+          value={rir}
+          onChange={(e) => setRir(e.target.value)}
+          style={{ display: "block", width: "100%", marginBottom: "12px" }}
+        />
+
+        <label>
+          <input
+            type="checkbox"
+            checked={isFailure}
+            onChange={(e) => setIsFailure(e.target.checked)}
+          />
+          Falha
+        </label>
+
+        <button type="submit" style={{ display: "block", marginTop: "16px" }}>
+          Calcular Próxima Série
         </button>
-      </section>
+      </form>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {recommendation && (
+        <div style={{ marginTop: "24px", padding: "16px", border: "1px solid #ccc" }}>
+          <h2>Próxima Série</h2>
+          <p><strong>Peso recomendado:</strong> {recommendation.recommended_weight} kg</p>
+          <p><strong>Reps alvo:</strong> {recommendation.target_reps}</p>
+          <p><strong>Motivo:</strong> {recommendation.reason}</p>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;
