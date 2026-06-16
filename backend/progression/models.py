@@ -1,12 +1,19 @@
 from django.db import models
 from django.contrib.auth.models import User
+
 from exercises.models import Exercise
+from training.models import TrainingWorkoutExercise
+
 
 class SetLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
 
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE
+    training_exercise = models.ForeignKey(
+        TrainingWorkoutExercise,
+        on_delete=models.CASCADE,
+        related_name="set_logs",
+        null=True,
+        blank=True,
     )
 
     exercise = models.ForeignKey(
@@ -16,19 +23,37 @@ class SetLog(models.Model):
 
     set_number = models.PositiveIntegerField()
 
-    weight = models.FloatField()
+    planned_weight = models.FloatField(
+        null=True,
+        blank=True
+    )
 
-    reps = models.PositiveIntegerField()
+    weight_used = models.FloatField()
+
+    target_min_reps = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    target_max_reps = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    reps_completed = models.PositiveIntegerField()
 
     rir = models.IntegerField(
         null=True,
         blank=True
     )
 
-    is_failure = models.BooleanField(
-        default=False
+    reached_failure = models.BooleanField(default=False)
+
+    notes = models.TextField(
+        blank=True
     )
 
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.exercise.name} - Set {self.set_number}"
