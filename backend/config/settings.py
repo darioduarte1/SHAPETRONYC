@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'exercises',
     'workouts',
     'progression',
+    'recommendations',
 ]
 
 MIDDLEWARE = [
