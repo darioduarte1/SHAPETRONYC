@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'recommendations',
     'programs',
     'accounts',
+    'training',
 ]
 
 MIDDLEWARE = [
