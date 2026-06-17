@@ -27,6 +27,12 @@ function App() {
     days_per_week: 5,
   });
 
+  function getActiveWorkoutId() {
+    return Object.keys(activeSessionByWorkout).find((workoutId) =>
+      Boolean(activeSessionByWorkout[workoutId])
+    );
+  }
+
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
@@ -39,12 +45,6 @@ function App() {
         [field]: value,
       },
     });
-  }
-
-  function getActiveWorkoutId() {
-    return Object.keys(activeSessionByWorkout).find((workoutId) =>
-      Boolean(activeSessionByWorkout[workoutId])
-    );
   }
 
   function toggleWorkout(workoutId) {
@@ -339,8 +339,8 @@ function App() {
           {program.workouts.map((workout) => {
             const activeWorkoutId = getActiveWorkoutId();
             const activeSessionId = activeSessionByWorkout[workout.id];
-            const hasActiveWorkout = Boolean(activeWorkoutId);
             const isActiveWorkout = activeWorkoutId === String(workout.id);
+            const hasActiveWorkout = Boolean(activeWorkoutId);
             const isWorkoutOpen = isActiveWorkout || openWorkoutId === workout.id;
 
             if (hasActiveWorkout && !isActiveWorkout) {
@@ -348,7 +348,10 @@ function App() {
             }
 
             return (
-              <div key={workout.id} style={{ border: "1px solid #ccc", padding: "16px", marginTop: "16px" }}>
+              <div
+                key={workout.id}
+                style={{ border: "1px solid #ccc", padding: "16px", marginTop: "16px" }}
+              >
                 <button
                   onClick={() => toggleWorkout(workout.id)}
                   style={{
