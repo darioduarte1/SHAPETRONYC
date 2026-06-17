@@ -12,6 +12,8 @@ function App() {
   const [recommendations, setRecommendations] = useState({});
   const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
   const [sessionNotes, setSessionNotes] = useState({});
+  const [openExerciseById, setOpenExerciseById] = useState({});
+  const [openWorkoutId, setOpenWorkoutId] = useState(null);
 
   const [form, setForm] = useState({
     username: "",
@@ -36,6 +38,27 @@ function App() {
         ...setForms[trainingExerciseId],
         [field]: value,
       },
+    });
+  }
+
+  function getActiveWorkoutId() {
+    return Object.keys(activeSessionByWorkout).find((workoutId) =>
+      Boolean(activeSessionByWorkout[workoutId])
+    );
+  }
+
+  function toggleWorkout(workoutId) {
+    if (getActiveWorkoutId()) {
+      return;
+    }
+
+    setOpenWorkoutId(openWorkoutId === workoutId ? null : workoutId);
+  }
+
+  function toggleExercise(exerciseId) {
+    setOpenExerciseById({
+      ...openExerciseById,
+      [exerciseId]: !openExerciseById[exerciseId],
     });
   }
 
@@ -82,6 +105,7 @@ function App() {
 
     const data = await response.json();
     setProgram(data);
+    setOpenWorkoutId(null);
     setStep(4);
   }
 
@@ -107,6 +131,7 @@ function App() {
       ...activeSessionByWorkout,
       [workout.id]: data.id,
     });
+    setOpenWorkoutId(workout.id);
   }
 
   async function finishWorkoutSession(workout) {
@@ -138,6 +163,7 @@ function App() {
       ...activeSessionByWorkout,
       [workout.id]: null,
     });
+    setOpenWorkoutId(null);
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -311,122 +337,171 @@ function App() {
           <h2>{program.name}</h2>
 
           {program.workouts.map((workout) => {
+            const activeWorkoutId = getActiveWorkoutId();
             const activeSessionId = activeSessionByWorkout[workout.id];
+            const hasActiveWorkout = Boolean(activeWorkoutId);
+            const isActiveWorkout = activeWorkoutId === String(workout.id);
+            const isWorkoutOpen = isActiveWorkout || openWorkoutId === workout.id;
+
+            if (hasActiveWorkout && !isActiveWorkout) {
+              return null;
+            }
 
             return (
               <div key={workout.id} style={{ border: "1px solid #ccc", padding: "16px", marginTop: "16px" }}>
-                <h3>Day {workout.order} - {workout.name}</h3>
+                <button
+                  onClick={() => toggleWorkout(workout.id)}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "12px",
+                    fontSize: "18px",
+                    fontWeight: "bold",
+                    cursor: hasActiveWorkout ? "default" : "pointer",
+                    background: "transparent",
+                    border: "none",
+                  }}
+                >
+                  {isWorkoutOpen ? "▼" : "▶"} Day {workout.order} - {workout.name}
+                </button>
 
-                {!activeSessionId ? (
-                  <button onClick={() => startWorkoutSession(workout)}>
-                    Start Workout
-                  </button>
-                ) : (
-                  <div style={{ marginBottom: "16px" }}>
-                    <p style={{ color: "green" }}>Workout session active. Session ID: {activeSessionId}</p>
+                {isWorkoutOpen && (
+                  <div style={{ marginTop: "12px" }}>
+                    {!activeSessionId ? (
+                      <button onClick={() => startWorkoutSession(workout)}>
+                        Start Workout
+                      </button>
+                    ) : (
+                      <div style={{ marginBottom: "16px" }}>
+                        <p style={{ color: "green" }}>Workout session active. Session ID: {activeSessionId}</p>
 
-                    <textarea
-                      placeholder="Final workout notes"
-                      value={sessionNotes[workout.id] || ""}
-                      onChange={(e) =>
-                        setSessionNotes({
-                          ...sessionNotes,
-                          [workout.id]: e.target.value,
-                        })
-                      }
-                      style={{ display: "block", width: "100%", marginTop: "8px" }}
-                    />
+                        <textarea
+                          placeholder="Final workout notes"
+                          value={sessionNotes[workout.id] || ""}
+                          onChange={(e) =>
+                            setSessionNotes({
+                              ...sessionNotes,
+                              [workout.id]: e.target.value,
+                            })
+                          }
+                          style={{ display: "block", width: "100%", marginTop: "8px" }}
+                        />
 
-                    <button onClick={() => finishWorkoutSession(workout)} style={{ marginTop: "8px" }}>
-                      Finish Workout
-                    </button>
+                        <button onClick={() => finishWorkoutSession(workout)} style={{ marginTop: "8px" }}>
+                          Finish Workout
+                        </button>
+                      </div>
+                    )}
+
+                    {workout.exercises.map((item) => {
+                      const currentForm = setForms[item.id] || {};
+                      const reachedFailure = Boolean(currentForm.reached_failure);
+                      const isOpen = Boolean(openExerciseById[item.id]);
+
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            borderBottom: "1px solid #ddd",
+                            padding: "12px 0",
+                          }}
+                        >
+                          <button
+                            onClick={() => toggleExercise(item.id)}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              padding: "12px",
+                              fontSize: "16px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {isOpen ? "▼" : "▶"} {item.exercise_name}
+                          </button>
+
+                          {isOpen && (
+                            <div style={{ marginTop: "12px" }}>
+                              <p>
+                                Target: {item.sets} sets | {item.target_min_reps}-{item.target_max_reps} reps | RIR {item.target_rir}
+                              </p>
+
+                              <input
+                                type="number"
+                                placeholder="Set number"
+                                value={currentForm.set_number || ""}
+                                onChange={(e) => updateSetForm(item.id, "set_number", e.target.value)}
+                              />
+
+                              <input
+                                type="number"
+                                placeholder="Planned weight"
+                                value={currentForm.planned_weight || ""}
+                                onChange={(e) => updateSetForm(item.id, "planned_weight", e.target.value)}
+                              />
+
+                              <input
+                                type="number"
+                                placeholder="Weight used"
+                                value={currentForm.weight_used || ""}
+                                onChange={(e) => updateSetForm(item.id, "weight_used", e.target.value)}
+                              />
+
+                              <input
+                                type="number"
+                                placeholder="Reps completed"
+                                value={currentForm.reps_completed || ""}
+                                onChange={(e) => updateSetForm(item.id, "reps_completed", e.target.value)}
+                              />
+
+                              <label style={{ display: "block", marginTop: "8px" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={reachedFailure}
+                                  onChange={(e) => updateSetForm(item.id, "reached_failure", e.target.checked)}
+                                />
+                                Reached failure
+                              </label>
+
+                              {!reachedFailure && (
+                                <input
+                                  type="number"
+                                  placeholder="RIR"
+                                  value={currentForm.rir || ""}
+                                  onChange={(e) => updateSetForm(item.id, "rir", e.target.value)}
+                                />
+                              )}
+
+                              <textarea
+                                placeholder="Notes for AI feedback"
+                                value={currentForm.notes || ""}
+                                onChange={(e) => updateSetForm(item.id, "notes", e.target.value)}
+                                style={{ display: "block", width: "100%", marginTop: "8px" }}
+                              />
+
+                              <button onClick={() => saveSet(item)} style={{ marginTop: "8px" }}>
+                                Save Set
+                              </button>
+
+                              {wasSetSaved(item.id) && (
+                                <p style={{ color: "green" }}>At least one set saved for this exercise.</p>
+                              )}
+
+                              {recommendations[item.id] && (
+                                <div style={{ marginTop: "8px", padding: "12px", border: "1px solid #999" }}>
+                                  <strong>Next set recommendation</strong>
+                                  <p>Weight: {recommendations[item.id].recommended_weight} kg</p>
+                                  <p>Target reps: {recommendations[item.id].target_reps}</p>
+                                  <p>Reason: {recommendations[item.id].reason}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-
-                {workout.exercises.map((item) => {
-                  const currentForm = setForms[item.id] || {};
-                  const reachedFailure = Boolean(currentForm.reached_failure);
-
-                  return (
-                    <div key={item.id} style={{ borderBottom: "1px solid #ddd", padding: "16px 0" }}>
-                      <strong>{item.exercise_name}</strong>
-
-                      <p>
-                        Target: {item.sets} sets | {item.target_min_reps}-{item.target_max_reps} reps | RIR {item.target_rir}
-                      </p>
-
-                      <input
-                        type="number"
-                        placeholder="Set number"
-                        value={currentForm.set_number || ""}
-                        onChange={(e) => updateSetForm(item.id, "set_number", e.target.value)}
-                      />
-
-                      <input
-                        type="number"
-                        placeholder="Planned weight"
-                        value={currentForm.planned_weight || ""}
-                        onChange={(e) => updateSetForm(item.id, "planned_weight", e.target.value)}
-                      />
-
-                      <input
-                        type="number"
-                        placeholder="Weight used"
-                        value={currentForm.weight_used || ""}
-                        onChange={(e) => updateSetForm(item.id, "weight_used", e.target.value)}
-                      />
-
-                      <input
-                        type="number"
-                        placeholder="Reps completed"
-                        value={currentForm.reps_completed || ""}
-                        onChange={(e) => updateSetForm(item.id, "reps_completed", e.target.value)}
-                      />
-
-                      <label style={{ display: "block", marginTop: "8px" }}>
-                        <input
-                          type="checkbox"
-                          checked={reachedFailure}
-                          onChange={(e) => updateSetForm(item.id, "reached_failure", e.target.checked)}
-                        />
-                        Reached failure
-                      </label>
-
-                      {!reachedFailure && (
-                        <input
-                          type="number"
-                          placeholder="RIR"
-                          value={currentForm.rir || ""}
-                          onChange={(e) => updateSetForm(item.id, "rir", e.target.value)}
-                        />
-                      )}
-
-                      <textarea
-                        placeholder="Notes for AI feedback"
-                        value={currentForm.notes || ""}
-                        onChange={(e) => updateSetForm(item.id, "notes", e.target.value)}
-                        style={{ display: "block", width: "100%", marginTop: "8px" }}
-                      />
-
-                      <button onClick={() => saveSet(item)} style={{ marginTop: "8px" }}>
-                        Save Set
-                      </button>
-
-                      {wasSetSaved(item.id) && (
-                        <p style={{ color: "green" }}>At least one set saved for this exercise.</p>
-                      )}
-
-                      {recommendations[item.id] && (
-                        <div style={{ marginTop: "8px", padding: "12px", border: "1px solid #999" }}>
-                          <strong>Next set recommendation</strong>
-                          <p>Weight: {recommendations[item.id].recommended_weight} kg</p>
-                          <p>Target reps: {recommendations[item.id].target_reps}</p>
-                          <p>Reason: {recommendations[item.id].reason}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
             );
           })}
