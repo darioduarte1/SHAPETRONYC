@@ -6,3 +6,4 @@ class NextSetRecommendationSerializer(serializers.Serializer):
     reps = serializers.IntegerField()
     rir = serializers.IntegerField(required=False, allow_null=True)
     is_failure = serializers.BooleanField(default=False)
+    notes = serializers.CharField(required=False, allow_blank=True)

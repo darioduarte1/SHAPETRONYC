@@ -4,6 +4,7 @@ from .models import (
     TrainingProgram,
     TrainingWorkout,
     TrainingWorkoutExercise,
+    WorkoutSession,
 )
 
 
@@ -24,6 +25,7 @@ class TrainingWorkoutExerciseSerializer(serializers.ModelSerializer):
             "target_max_reps",
             "target_rir",
             "order",
+            "workout",
         ]
 
 
@@ -58,4 +60,20 @@ class TrainingProgramSerializer(serializers.ModelSerializer):
             "level",
             "days_per_week",
             "workouts",
+        ]
+
+class WorkoutSessionSerializer(serializers.ModelSerializer):
+    workout_name = serializers.CharField(source="workout.name", read_only=True)
+
+    class Meta:
+        model = WorkoutSession
+        fields = [
+            "id",
+            "user",
+            "workout",
+            "workout_name",
+            "status",
+            "started_at",
+            "completed_at",
+            "notes",
         ]

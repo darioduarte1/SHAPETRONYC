@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 
 from exercises.models import Exercise
-from training.models import TrainingWorkoutExercise
+from training.models import TrainingWorkoutExercise, WorkoutSession
 
 
 class SetLog(models.Model):
@@ -57,3 +57,11 @@ class SetLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.exercise.name} - Set {self.set_number}"
+
+    workout_session = models.ForeignKey(
+    WorkoutSession,
+    on_delete=models.CASCADE,
+    related_name="set_logs",
+    null=True,
+    blank=True,
+    )
