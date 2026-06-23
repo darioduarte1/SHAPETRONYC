@@ -137,6 +137,12 @@ function App() {
     };
   }
 
+  function getWarmupReferenceSet(trainingExerciseId, setNumber) {
+    const previousSet = getPreviousSetForRow(trainingExerciseId, setNumber);
+
+    return previousSet?.set_type === "WARMUP" ? previousSet : null;
+  }
+
   function getExerciseRowCount(exercise) {
     const logs = getExerciseLogs(exercise.id);
 
@@ -194,6 +200,22 @@ function App() {
     return String(sameTypeIndex);
   }
 
+  function getPlannedValuesForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
+    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+
+    if (rowSetType === "WARMUP") {
+      const warmupReferenceSet = getWarmupReferenceSet(exercise.id, sourceSetNumber);
+
+      return {
+        weight: warmupReferenceSet?.weight_used ?? "",
+        reps: warmupReferenceSet?.reps_completed ?? "",
+        reason: "",
+      };
+    }
+
+    return getRecommendedSetForRow(exercise.id, sourceSetNumber);
+  }
+
   function formatTimer(totalSeconds) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -243,25 +265,26 @@ function App() {
 
     const rowSetType = getSetTypeForExerciseRow(exercise, nextRow.sourceSetNumber, nextRow.displaySetNumber);
     const visibleSetLabel = getVisibleSetLabel(exercise, rows, nextRow.sourceSetNumber, nextRow.displaySetNumber);
-    const recommendedSet = getRecommendedSetForRow(exercise.id, nextRow.sourceSetNumber);
+    const plannedValues = getPlannedValuesForExerciseRow(exercise, nextRow.sourceSetNumber, nextRow.displaySetNumber);
+    const warmupReferenceSet = getWarmupReferenceSet(exercise.id, nextRow.sourceSetNumber);
     const latestRecommendation = recommendations[exercise.id];
-    const recommendedWeight = recommendedSet.weight || latestRecommendation?.recommended_weight;
-    const recommendedReps = recommendedSet.reps || latestRecommendation?.target_reps;
+    const recommendedWeight = plannedValues.weight || latestRecommendation?.recommended_weight;
+    const recommendedReps = plannedValues.reps || latestRecommendation?.target_reps;
     const hasLoadTarget = recommendedWeight !== "" && recommendedWeight !== undefined && recommendedReps;
     const loadCue = hasLoadTarget
       ? `Aponta para ${recommendedWeight}kg x ${recommendedReps} reps.`
       : `Trabalha dentro do alvo de ${exercise.target_min_reps}-${exercise.target_max_reps} reps.`;
-    const warmupCue = hasLoadTarget
-      ? `A referência guardada é ${recommendedWeight}kg x ${recommendedReps}, mas começa abaixo disso se precisares.`
+    const warmupCue = warmupReferenceSet
+      ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
       : `Sobe a carga gradualmente até sentires o movimento pronto.`;
-    const reason = recommendedSet.reason || latestRecommendation?.reason || "";
+    const reason = plannedValues.reason || latestRecommendation?.reason || "";
 
     if (rowSetType === "WARMUP") {
       return {
         eyebrow: "Próximo passo",
         title: `Faz a série ${visibleSetLabel} de aquecimento`,
         message: `Usa uma carga controlada para preparar o movimento. ${warmupCue}`,
-        reason,
+        reason: "",
         isResting: false,
       };
     }
@@ -577,10 +600,10 @@ function App() {
     const formData = setForms[setFormKey] || {};
     const sessionId = activeSessionByWorkout[exercise.workout];
     const previousSet = getPreviousSetForRow(exercise.id, sourceSetNumber);
-    const recommendedSet = getRecommendedSetForRow(exercise.id, sourceSetNumber);
-    const weightUsed = formData.weight_used ?? recommendedSet.weight;
-    const repsCompleted = formData.reps_completed ?? recommendedSet.reps;
     const setType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+    const plannedValues = getPlannedValuesForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+    const weightUsed = formData.weight_used ?? plannedValues.weight;
+    const repsCompleted = formData.reps_completed ?? plannedValues.reps;
     const selectedEffortOption = effortOption || EFFORT_OPTIONS[2];
     const restSeconds = getRestSecondsForRow(setFormKey);
 
@@ -991,13 +1014,17 @@ function App() {
                                       const isCompleted = Boolean(currentSet);
                                       const effortMeta = getEffortMetaFromSet(currentSet);
                                       const restSecondsForRow = getRestSecondsForRow(setFormKey);
-                                      const recommendedSet = getRecommendedSetForRow(item.id, sourceSetNumber);
+                                      const plannedValues = getPlannedValuesForExerciseRow(
+                                        item,
+                                        sourceSetNumber,
+                                        displaySetNumber
+                                      );
                                       const weightValue =
-                                        currentSet?.weight_used ?? rowForm.weight_used ?? recommendedSet.weight;
+                                        currentSet?.weight_used ?? rowForm.weight_used ?? plannedValues.weight;
                                       const repsValue =
                                         currentSet?.reps_completed ??
                                         rowForm.reps_completed ??
-                                        recommendedSet.reps;
+                                        plannedValues.reps;
 
                                       return (
                                         <tr
