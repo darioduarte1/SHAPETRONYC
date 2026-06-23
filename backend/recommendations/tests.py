@@ -2,6 +2,7 @@ from django.test import SimpleTestCase
 from types import SimpleNamespace
 
 from recommendations.services.progression_engine import calculate_next_set
+from recommendations.services.ai_coach_engine import build_local_coach_summary
 from recommendations.services.training_coach_engine import calculate_training_coach_decision
 from recommendations.services.workout_progression_engine import calculate_exercise_progression
 
@@ -195,3 +196,53 @@ class WorkoutProgressionEngineTests(SimpleTestCase):
         self.assertEqual(recommendation["recommended_weight"], 47.5)
         self.assertEqual(recommendation["recommended_sets"], 2)
         self.assertEqual(recommendation["target_rir"], 3)
+
+
+class AiCoachEngineTests(SimpleTestCase):
+    def test_local_coach_highlights_progression_opportunity(self):
+        summary = build_local_coach_summary(
+            {
+                "session": {
+                    "notes": "",
+                    "total_sets": 6,
+                    "total_volume": 3600,
+                    "failure_count": 0,
+                    "exercise_count": 2,
+                },
+                "progression": {
+                    "summary": {
+                        "action_counts": {
+                            "increase_load": 1,
+                            "maintain_load": 1,
+                        }
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(summary["status"], "llm_disabled")
+        self.assertIn("margem", summary["headline"].lower())
+        self.assertEqual(summary["metrics"]["total_sets"], 6)
+
+    def test_local_coach_prioritizes_recovery_when_failures_accumulate(self):
+        summary = build_local_coach_summary(
+            {
+                "session": {
+                    "notes": "muito pesado",
+                    "total_sets": 5,
+                    "total_volume": 2200,
+                    "failure_count": 2,
+                    "exercise_count": 1,
+                },
+                "progression": {
+                    "summary": {
+                        "action_counts": {
+                            "reduce_volume": 1,
+                        }
+                    }
+                },
+            }
+        )
+
+        self.assertIn("recuperação", summary["headline"].lower())
+        self.assertIn("falha", " ".join(summary["focus_points"]).lower())

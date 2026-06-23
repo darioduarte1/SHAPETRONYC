@@ -38,6 +38,7 @@ function App() {
   const [openSetTypeMenuBySet, setOpenSetTypeMenuBySet] = useState({});
   const [removedSetByKey, setRemovedSetByKey] = useState({});
   const [latestWorkoutProgression, setLatestWorkoutProgression] = useState(null);
+  const [latestAiCoach, setLatestAiCoach] = useState(null);
 
   const [form, setForm] = useState({
     username: "",
@@ -369,6 +370,16 @@ function App() {
     return `${weightLabel} | ${recommendation.recommended_sets} séries | ${recommendation.target_reps} reps | RIR ${recommendation.target_rir}`;
   }
 
+  function getAiCoachSourceLabel(status) {
+    const labels = {
+      llm_enabled: "OpenAI",
+      llm_error: "Fallback local",
+      llm_disabled: "Fallback local",
+    };
+
+    return labels[status] || "Coach";
+  }
+
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
@@ -567,6 +578,7 @@ function App() {
       setProgram(data);
       setOpenWorkoutId(null);
       setLatestWorkoutProgression(null);
+      setLatestAiCoach(null);
       setExerciseLogsById({});
       setExerciseRowCounts({});
       setRemovedSetByKey({});
@@ -604,6 +616,7 @@ function App() {
     });
     setOpenWorkoutId(workout.id);
     setLatestWorkoutProgression(null);
+    setLatestAiCoach(null);
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -645,6 +658,7 @@ function App() {
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
     setLatestWorkoutProgression(data.next_workout_progression || null);
+    setLatestAiCoach(data.ai_coach_summary || null);
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -967,6 +981,91 @@ function App() {
                   </div>
                 ))}
               </div>
+            </section>
+          )}
+
+          {latestAiCoach && (
+            <section
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                background: "rgba(8, 47, 73, 0.42)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: "#7dd3fc",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      letterSpacing: "0",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    AI Coach
+                  </div>
+                  <h3 style={{ marginTop: "6px", marginBottom: "8px" }}>{latestAiCoach.headline}</h3>
+                </div>
+                <span
+                  style={{
+                    color: "#bae6fd",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {getAiCoachSourceLabel(latestAiCoach.status)}
+                </span>
+              </div>
+
+              <p style={{ color: "#e5e7eb" }}>{latestAiCoach.summary}</p>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: "10px",
+                  marginTop: "14px",
+                }}
+              >
+                <div>
+                  <strong>Volume</strong>
+                  <p>{Number(latestAiCoach.metrics?.total_volume || 0).toFixed(1)} kg</p>
+                </div>
+                <div>
+                  <strong>Séries</strong>
+                  <p>{latestAiCoach.metrics?.total_sets || 0}</p>
+                </div>
+                <div>
+                  <strong>Falhas</strong>
+                  <p>{latestAiCoach.metrics?.failure_count || 0}</p>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
+                {latestAiCoach.focus_points?.map((point) => (
+                  <p key={point} style={{ margin: 0, color: "#cbd5e1" }}>
+                    {point}
+                  </p>
+                ))}
+              </div>
+
+              <p style={{ marginTop: "14px", color: "#bae6fd" }}>
+                {latestAiCoach.next_session_strategy}
+              </p>
+              <p style={{ marginTop: "8px", color: "#94a3b8", fontSize: "13px" }}>
+                {latestAiCoach.recovery_note}
+              </p>
             </section>
           )}
 

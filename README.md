@@ -79,6 +79,7 @@ Implementado:
 - Bloqueio dos restantes dias durante treino ativo
 - Resumo simples da sessão em tempo real
 - Recomendações para o próximo treino após terminar uma sessão
+- AI Coach pós-treino com fallback local quando não há chave OpenAI
 
 Em preparação:
 - Dashboard completo
@@ -348,24 +349,30 @@ Subir carga
 52.5kg | 3 séries | 12 reps | RIR 2
 ```
 
-## Roadmap
-
 ### Sprint 12 - AI Coach
 
 Objetivo:
-Substituir progressivamente a simulação baseada em regras por uma camada de coach com LLM.
+Começar a substituir a simulação baseada em regras por uma camada de coach com LLM.
 
-Possíveis integrações:
-- OpenAI
-- Claude
-- Gemini
+Entregue:
+- Serviço `recommendations/services/ai_coach_engine.py`
+- Contexto estruturado da sessão para análise do coach
+- Integração opcional com OpenAI Responses API via `OPENAI_API_KEY`
+- Fallback local determinístico quando a chave não está configurada
+- Resumo "AI Coach" depois de terminar uma sessão
+- Métricas pós-treino no painel do coach
+- Testes do fallback local
 
-Funções esperadas:
-- Interpretar histórico
-- Interpretar fadiga
-- Ajustar progressão
-- Gerar feedback personalizado
-- Explicar decisões de treino em linguagem natural
+Configuração opcional:
+
+```bash
+export OPENAI_API_KEY="..."
+export AI_COACH_MODEL="gpt-5.5"
+```
+
+Sem `OPENAI_API_KEY`, o sistema continua funcional e mostra recomendações locais.
+
+## Roadmap
 
 ### Sprint 13 - Dashboard do Atleta
 

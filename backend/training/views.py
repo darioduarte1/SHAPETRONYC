@@ -6,6 +6,7 @@ from rest_framework import status
 
 from accounts.models import UserProfile
 from progression.models import SetLog
+from recommendations.services.ai_coach_engine import generate_session_ai_coach_summary
 from recommendations.services.workout_progression_engine import calculate_workout_progression
 
 from .serializers import TrainingProgramSerializer, WorkoutSessionSerializer
@@ -119,11 +120,18 @@ class FinishWorkoutSessionView(APIView):
             "created_at",
         )
         progression = calculate_workout_progression(session.workout, set_logs)
+        ai_coach_summary = generate_session_ai_coach_summary(
+            session.workout,
+            set_logs,
+            progression,
+            notes,
+        )
 
         return Response(
             {
                 **serializer.data,
                 "next_workout_progression": progression,
+                "ai_coach_summary": ai_coach_summary,
             },
             status=status.HTTP_200_OK,
         )
