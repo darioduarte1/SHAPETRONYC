@@ -12,6 +12,19 @@ class UserProfileListCreateView(generics.ListCreateAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
 
+    def create(self, request, *args, **kwargs):
+        user_id = request.data.get("user")
+        existing_profile = UserProfile.objects.filter(user_id=user_id).first() if user_id else None
+
+        if existing_profile:
+            serializer = self.get_serializer(existing_profile, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return super().create(request, *args, **kwargs)
+
 
 class CreateUserView(APIView):
     def post(self, request):
