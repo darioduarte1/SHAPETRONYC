@@ -286,7 +286,8 @@ function App() {
     const warmupCue = warmupReferenceSet
       ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
       : `Sobe a carga gradualmente até sentires o movimento pronto.`;
-    const reason = plannedValues.reason || latestRecommendation?.reason || "";
+    const reason =
+      plannedValues.reason || latestRecommendation?.guidance_message || latestRecommendation?.reason || "";
 
     if (rowSetType === "WARMUP") {
       return {
@@ -708,6 +709,7 @@ function App() {
         rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
         is_failure: selectedEffortOption.reachedFailure,
         notes: formData.notes || "",
+        set_type: setType,
       }),
     });
 
