@@ -16,7 +16,19 @@ class GenerateProgramView(APIView):
     def post(self, request):
         profile_id = request.data.get("profile_id")
 
-        profile = UserProfile.objects.get(id=profile_id)
+        if not profile_id:
+            return Response(
+                {"error": "profile_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         program = generate_training_program(profile)
 

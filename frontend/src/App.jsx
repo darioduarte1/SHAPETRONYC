@@ -22,6 +22,8 @@ function App() {
   const [profileId, setProfileId] = useState(null);
   const [userId, setUserId] = useState(null);
   const [program, setProgram] = useState(null);
+  const [programError, setProgramError] = useState("");
+  const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
   const [setForms, setSetForms] = useState({});
   const [recommendations, setRecommendations] = useState({});
   const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
@@ -453,6 +455,7 @@ function App() {
 
   async function createProfile(e) {
     e.preventDefault();
+    setProgramError("");
 
     const userResponse = await fetch(`${API_BASE_URL}/api/accounts/create-user/`, {
       method: "POST",
@@ -461,6 +464,13 @@ function App() {
     });
 
     const userData = await userResponse.json();
+
+    if (!userResponse.ok) {
+      console.error(userData);
+      alert("Erro ao criar utilizador. Confirma os dados e tenta novamente.");
+      return;
+    }
+
     setUserId(userData.id);
 
     const profileResponse = await fetch(`${API_BASE_URL}/api/accounts/profiles/`, {
@@ -481,25 +491,59 @@ function App() {
 
     const profileData = await profileResponse.json();
 
+    if (!profileResponse.ok) {
+      console.error(profileData);
+      alert("Erro ao criar perfil. Confirma os dados e tenta novamente.");
+      return;
+    }
+
     setProfileId(profileData.id);
     setStep(3);
   }
 
   async function generateProgram() {
-    const response = await fetch(`${API_BASE_URL}/api/training/generate-program/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile_id: profileId }),
-    });
+    if (!profileId) {
+      setProgramError("Não encontrei o perfil activo. Volta a criar o perfil antes de gerar o programa.");
+      return;
+    }
 
-    const data = await response.json();
-    setProgram(data);
-    setOpenWorkoutId(null);
-    setExerciseLogsById({});
-    setExerciseRowCounts({});
-    setRemovedSetByKey({});
-    setOpenSetTypeMenuBySet({});
-    setStep(4);
+    setProgramError("");
+    setIsGeneratingProgram(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/training/generate-program/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: profileId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+        setProgramError(data.error || "Não foi possível gerar o programa. Tenta novamente.");
+        return;
+      }
+
+      if (!Array.isArray(data.workouts)) {
+        console.error(data);
+        setProgramError("A resposta do programa veio incompleta. Tenta novamente.");
+        return;
+      }
+
+      setProgram(data);
+      setOpenWorkoutId(null);
+      setExerciseLogsById({});
+      setExerciseRowCounts({});
+      setRemovedSetByKey({});
+      setOpenSetTypeMenuBySet({});
+      setStep(4);
+    } catch (error) {
+      console.error(error);
+      setProgramError("Não consegui contactar o servidor para gerar o programa.");
+    } finally {
+      setIsGeneratingProgram(false);
+    }
   }
 
   async function startWorkoutSession(workout) {
@@ -799,7 +843,10 @@ function App() {
       {step === 3 && (
         <div>
           <h2>Profile created</h2>
-          <button onClick={generateProgram}>Generate My Program</button>
+          <button onClick={generateProgram} disabled={isGeneratingProgram}>
+            {isGeneratingProgram ? "Generating..." : "Generate My Program"}
+          </button>
+          {programError && <p style={{ color: "#ef4444", marginTop: "8px" }}>{programError}</p>}
         </div>
       )}
 
