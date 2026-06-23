@@ -249,6 +249,17 @@ function App() {
     return `${setLog.weight_used}kg x ${setLog.reps_completed}${effortLabel}`;
   }
 
+  function serializeSetForCoach(setLog) {
+    return {
+      set_number: Number(setLog.set_number),
+      set_type: setLog.set_type,
+      weight_used: Number(setLog.weight_used),
+      reps_completed: Number(setLog.reps_completed),
+      rir: setLog.rir,
+      reached_failure: Boolean(setLog.reached_failure),
+    };
+  }
+
   function getNextExerciseRow(exercise, rows) {
     return rows.find((row) => !getCurrentSetForRow(exercise.id, row.displaySetNumber));
   }
@@ -288,8 +299,9 @@ function App() {
     const warmupCue = warmupReferenceSet
       ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
       : `Sobe a carga gradualmente até sentires o movimento pronto.`;
-    const reason =
-      plannedValues.reason || latestRecommendation?.guidance_message || latestRecommendation?.reason || "";
+    const coachTitle = latestRecommendation?.guidance_title;
+    const coachMessage = latestRecommendation?.guidance_message;
+    const reason = plannedValues.reason || latestRecommendation?.reason || "";
 
     if (rowSetType === "WARMUP") {
       return {
@@ -304,8 +316,8 @@ function App() {
     if (rowSetType === "DROP") {
       return {
         eyebrow: "Próximo passo",
-        title: `Faz a série ${visibleSetLabel} em drop`,
-        message: `Reduz a carga e mantém a execução limpa até ao alvo. ${loadCue}`,
+        title: coachTitle ? `Série ${visibleSetLabel}: ${coachTitle}` : `Faz a série ${visibleSetLabel} em drop`,
+        message: coachMessage ? `${coachMessage} ${loadCue}` : `Reduz a carga e mantém a execução limpa até ao alvo. ${loadCue}`,
         reason,
         isResting: false,
       };
@@ -313,8 +325,8 @@ function App() {
 
     return {
       eyebrow: "Próximo passo",
-      title: `Faz a série ${visibleSetLabel}`,
-      message: `Mantém o controlo e respeita o esforço planeado. ${loadCue}`,
+      title: coachTitle ? `Série ${visibleSetLabel}: ${coachTitle}` : `Faz a série ${visibleSetLabel}`,
+      message: coachMessage ? `${coachMessage} ${loadCue}` : `Mantém o controlo e respeita o esforço planeado. ${loadCue}`,
       reason,
       isResting: false,
     };
@@ -744,6 +756,14 @@ function App() {
       [setFormKey]: false,
     });
 
+    const currentExerciseLogs = getExerciseLogs(exercise.id);
+    const completedSetsForCoach = [
+      ...currentExerciseLogs.current_sets.filter(
+        (setLog) => Number(setLog.set_number) !== displaySetNumber
+      ),
+      data,
+    ].sort((firstSet, secondSet) => Number(firstSet.set_number) - Number(secondSet.set_number));
+
     const recommendationResponse = await fetch(`${API_BASE_URL}/api/recommendations/next-set/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -754,6 +774,10 @@ function App() {
         is_failure: selectedEffortOption.reachedFailure,
         notes: formData.notes || "",
         set_type: setType,
+        set_number: displaySetNumber,
+        total_sets: exercise.sets,
+        current_sets: completedSetsForCoach.map(serializeSetForCoach),
+        previous_sets: currentExerciseLogs.previous_sets.map(serializeSetForCoach),
       }),
     });
 

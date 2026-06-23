@@ -64,3 +64,66 @@ class TrainingCoachEngineTests(SimpleTestCase):
 
         self.assertEqual(decision["action"], "maintain")
         self.assertEqual(decision["recommended_weight"], 50)
+
+    def test_reduces_more_after_consecutive_working_misses(self):
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=9,
+            rir=None,
+            is_failure=True,
+            set_type="WORKING",
+            current_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 10,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 9,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+            ],
+        )
+
+        self.assertEqual(decision["action"], "reduce_load_for_fatigue")
+        self.assertEqual(decision["recommended_weight"], 45)
+        self.assertEqual(decision["recommended_rest_seconds"], 180)
+        self.assertEqual(decision["context"]["consecutive_working_misses"], 2)
+
+    def test_stabilizes_load_after_previous_miss(self):
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=12,
+            rir=3,
+            is_failure=False,
+            set_type="WORKING",
+            current_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 10,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+            ],
+        )
+
+        self.assertEqual(decision["action"], "stabilize_after_miss")
+        self.assertEqual(decision["recommended_weight"], 50)
+        self.assertEqual(decision["recommended_rest_seconds"], 150)

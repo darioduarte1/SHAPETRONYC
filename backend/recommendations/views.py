@@ -22,6 +22,10 @@ class NextSetRecommendationView(APIView):
             is_failure=data["is_failure"],
             notes=data.get("notes", ""),
             set_type=data["set_type"],
+            set_number=data.get("set_number"),
+            total_sets=data.get("total_sets"),
+            current_sets=data.get("current_sets", []),
+            previous_sets=data.get("previous_sets", []),
         )
 
         return Response(recommendation, status=status.HTTP_200_OK)
