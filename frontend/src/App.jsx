@@ -217,6 +217,14 @@ function App() {
     return getRecommendedSetForRow(exercise.id, sourceSetNumber);
   }
 
+  function shouldForceFailureEffort(setType, repsCompleted) {
+    return setType === "WORKING" && Number(repsCompleted) < TARGET_REPS;
+  }
+
+  function getEffortOptionsForSet(setType, repsCompleted) {
+    return shouldForceFailureEffort(setType, repsCompleted) ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS;
+  }
+
   function formatTimer(totalSeconds) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -605,7 +613,9 @@ function App() {
     const plannedValues = getPlannedValuesForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
     const weightUsed = formData.weight_used ?? plannedValues.weight;
     const repsCompleted = formData.reps_completed ?? plannedValues.reps;
-    const selectedEffortOption = effortOption || EFFORT_OPTIONS[2];
+    const selectedEffortOption = shouldForceFailureEffort(setType, repsCompleted)
+      ? EFFORT_OPTIONS[0]
+      : effortOption || EFFORT_OPTIONS[2];
     const restSeconds = getRestSecondsForRow(setFormKey);
 
     if (!sessionId) {
@@ -1026,6 +1036,7 @@ function App() {
                                         currentSet?.reps_completed ??
                                         rowForm.reps_completed ??
                                         plannedValues.reps;
+                                      const availableEffortOptions = getEffortOptionsForSet(rowSetType, repsValue);
 
                                       return (
                                         <tr
@@ -1272,7 +1283,7 @@ function App() {
                                                     boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
                                                   }}
                                                 >
-                                                  {EFFORT_OPTIONS.map((option) => (
+                                                  {availableEffortOptions.map((option) => (
                                                     <button
                                                       key={option.value}
                                                       type="button"
