@@ -6,6 +6,12 @@ from training.models import TrainingWorkoutExercise, WorkoutSession
 
 
 class SetLog(models.Model):
+    SET_TYPE_CHOICES = [
+        ("WARMUP", "Warm-up"),
+        ("WORKING", "Working set"),
+        ("DROP", "Drop set"),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     training_exercise = models.ForeignKey(
@@ -22,6 +28,12 @@ class SetLog(models.Model):
     )
 
     set_number = models.PositiveIntegerField()
+
+    set_type = models.CharField(
+        max_length=20,
+        choices=SET_TYPE_CHOICES,
+        default="WORKING",
+    )
 
     planned_weight = models.FloatField(
         null=True,
@@ -59,9 +71,9 @@ class SetLog(models.Model):
         return f"{self.user.username} - {self.exercise.name} - Set {self.set_number}"
 
     workout_session = models.ForeignKey(
-    WorkoutSession,
-    on_delete=models.CASCADE,
-    related_name="set_logs",
-    null=True,
-    blank=True,
+        WorkoutSession,
+        on_delete=models.CASCADE,
+        related_name="set_logs",
+        null=True,
+        blank=True,
     )

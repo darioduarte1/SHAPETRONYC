@@ -1,6 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_REST_SECONDS = 120;
+
+const SET_TYPES = [
+  { value: "WARMUP", label: "Aquecimento", shortLabel: "W", color: "#eab308" },
+  { value: "WORKING", label: "Normal", shortLabel: "N", color: "#f8fafc" },
+  { value: "DROP", label: "Drop", shortLabel: "D", color: "#ef4444" },
+];
+
+const EFFORT_OPTIONS = [
+  { value: "FAILURE", label: "FALHA", color: "#ef4444", reachedFailure: true, rir: null },
+  { value: "RIR_0_1", label: "RIR 0/1", color: "#f97316", reachedFailure: false, rir: 1 },
+  { value: "RIR_2_3", label: "RIR 2/3", color: "#eab308", reachedFailure: false, rir: 2 },
+  { value: "RIR_4_PLUS", label: "RIR 4+", color: "#22c55e", reachedFailure: false, rir: 4 },
+];
 
 function App() {
   const [step, setStep] = useState(1);
@@ -8,12 +22,17 @@ function App() {
   const [userId, setUserId] = useState(null);
   const [program, setProgram] = useState(null);
   const [setForms, setSetForms] = useState({});
-  const [savedSets, setSavedSets] = useState([]);
   const [recommendations, setRecommendations] = useState({});
   const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
   const [sessionNotes, setSessionNotes] = useState({});
   const [openExerciseById, setOpenExerciseById] = useState({});
   const [openWorkoutId, setOpenWorkoutId] = useState(null);
+  const [exerciseLogsById, setExerciseLogsById] = useState({});
+  const [exerciseRowCounts, setExerciseRowCounts] = useState({});
+  const [restTimers, setRestTimers] = useState({});
+  const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
+  const [openRestMenuBySet, setOpenRestMenuBySet] = useState({});
+  const [removedSetByKey, setRemovedSetByKey] = useState({});
 
   const [form, setForm] = useState({
     username: "",
@@ -27,21 +46,169 @@ function App() {
     days_per_week: 5,
   });
 
+  useEffect(() => {
+    const hasRunningTimer = Object.values(restTimers).some((seconds) => seconds > 0);
+
+    if (!hasRunningTimer) {
+      return;
+    }
+
+    const timerId = window.setInterval(() => {
+      setRestTimers((currentTimers) =>
+        Object.fromEntries(
+          Object.entries(currentTimers).map(([exerciseId, seconds]) => [
+            exerciseId,
+            Math.max(0, seconds - 1),
+          ])
+        )
+      );
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [restTimers]);
+
   function getActiveWorkoutId() {
     return Object.keys(activeSessionByWorkout).find((workoutId) =>
       Boolean(activeSessionByWorkout[workoutId])
     );
   }
 
+  function getSetFormKey(trainingExerciseId, setNumber) {
+    return `${trainingExerciseId}-${setNumber}`;
+  }
+
+  function getSetTypeMeta(setType) {
+    return SET_TYPES.find((type) => type.value === setType) || SET_TYPES[1];
+  }
+
+  function getEffortMetaFromSet(setLog) {
+    if (!setLog) {
+      return null;
+    }
+
+    if (setLog.reached_failure) {
+      return EFFORT_OPTIONS[0];
+    }
+
+    if (setLog.rir === null || setLog.rir === undefined) {
+      return null;
+    }
+
+    if (setLog.rir <= 1) {
+      return EFFORT_OPTIONS[1];
+    }
+
+    if (setLog.rir <= 3) {
+      return EFFORT_OPTIONS[2];
+    }
+
+    return EFFORT_OPTIONS[3];
+  }
+
+  function getExerciseLogs(trainingExerciseId) {
+    return exerciseLogsById[trainingExerciseId] || {
+      previous_sets: [],
+      current_sets: [],
+      previous_session: null,
+      recommended_sets: [],
+    };
+  }
+
+  function getCurrentSetForRow(trainingExerciseId, setNumber) {
+    return getExerciseLogs(trainingExerciseId).current_sets.find(
+      (setLog) => Number(setLog.set_number) === setNumber
+    );
+  }
+
+  function getPreviousSetForRow(trainingExerciseId, setNumber) {
+    return getExerciseLogs(trainingExerciseId).previous_sets[setNumber - 1];
+  }
+
+  function getRecommendedSetForRow(trainingExerciseId, setNumber) {
+    const recommendedSet = getExerciseLogs(trainingExerciseId).recommended_sets.find(
+      (setRecommendation) => Number(setRecommendation.set_number) === setNumber
+    );
+
+    return {
+      weight: recommendedSet?.recommended_weight ?? "",
+      reps: recommendedSet?.recommended_reps ?? "",
+      reason: recommendedSet?.reason ?? "",
+    };
+  }
+
+  function getExerciseRowCount(exercise) {
+    const logs = getExerciseLogs(exercise.id);
+
+    return Math.max(
+      exerciseRowCounts[exercise.id] || 0,
+      exercise.sets,
+      logs.previous_sets.length,
+      logs.current_sets.length,
+      1
+    );
+  }
+
+  function getExerciseRows(exercise) {
+    const rowCount = getExerciseRowCount(exercise);
+    const visibleSourceRows = Array.from({ length: rowCount }, (_, index) => index + 1).filter((sourceSetNumber) => {
+      const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
+
+      return !removedSetByKey[setFormKey];
+    });
+
+    return visibleSourceRows.map((sourceSetNumber, index) => ({
+      sourceSetNumber,
+      displaySetNumber: index + 1,
+    }));
+  }
+
+  function formatTimer(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    return `${minutes}min ${String(seconds).padStart(2, "0")}s`;
+  }
+
+  function getRestSecondsForRow(setFormKey) {
+    return Number(setForms[setFormKey]?.rest_seconds || DEFAULT_REST_SECONDS);
+  }
+
+  function formatPreviousSet(setLog) {
+    if (!setLog) {
+      return "-";
+    }
+
+    const effortMeta = getEffortMetaFromSet(setLog);
+    const effortLabel = effortMeta ? ` ${effortMeta.label}` : "";
+
+    return `${setLog.weight_used}kg x ${setLog.reps_completed}${effortLabel}`;
+  }
+
+  function getWorkoutSessionStats(workout) {
+    const workoutExercises = workout.exercises || [];
+    const currentSets = workoutExercises.flatMap(
+      (exercise) => getExerciseLogs(exercise.id).current_sets
+    );
+    const volume = currentSets.reduce(
+      (total, setLog) => total + Number(setLog.weight_used) * Number(setLog.reps_completed),
+      0
+    );
+
+    return {
+      sets: currentSets.length,
+      volume,
+    };
+  }
+
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  function updateSetForm(trainingExerciseId, field, value) {
+  function updateSetForm(setFormKey, field, value) {
     setSetForms({
       ...setForms,
-      [trainingExerciseId]: {
-        ...setForms[trainingExerciseId],
+      [setFormKey]: {
+        ...setForms[setFormKey],
         [field]: value,
       },
     });
@@ -55,11 +222,94 @@ function App() {
     setOpenWorkoutId(openWorkoutId === workoutId ? null : workoutId);
   }
 
-  function toggleExercise(exerciseId) {
+  async function toggleExercise(exercise) {
+    const isOpening = !openExerciseById[exercise.id];
+
     setOpenExerciseById({
       ...openExerciseById,
-      [exerciseId]: !openExerciseById[exerciseId],
+      [exercise.id]: isOpening,
     });
+
+    if (isOpening) {
+      await loadExerciseHistory(exercise);
+    }
+  }
+
+  function addExerciseRow(exercise) {
+    setExerciseRowCounts({
+      ...exerciseRowCounts,
+      [exercise.id]: getExerciseRowCount(exercise) + 1,
+    });
+  }
+
+  function removeExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
+    const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
+
+    if (getCurrentSetForRow(exercise.id, displaySetNumber)) {
+      return;
+    }
+
+    setRemovedSetByKey({
+      ...removedSetByKey,
+      [setFormKey]: true,
+    });
+
+    setSetForms((currentSetForms) => {
+      const nextSetForms = { ...currentSetForms };
+      delete nextSetForms[setFormKey];
+      return nextSetForms;
+    });
+
+    setOpenRestMenuBySet({
+      ...openRestMenuBySet,
+      [setFormKey]: false,
+    });
+
+    setOpenCompletionMenuBySet({
+      ...openCompletionMenuBySet,
+      [setFormKey]: false,
+    });
+  }
+
+  async function loadExerciseHistory(exercise, sessionIdOverride = null) {
+    const sessionId = sessionIdOverride || activeSessionByWorkout[exercise.workout];
+
+    if (!profileId || !sessionId) {
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      profile_id: profileId,
+      exercise_id: exercise.exercise,
+      training_exercise_id: exercise.id,
+      session_id: sessionId,
+    });
+
+    const response = await fetch(`${API_BASE_URL}/api/progression/exercise-history/?${params}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return null;
+    }
+
+    setExerciseLogsById((currentLogs) => ({
+      ...currentLogs,
+      [exercise.id]: data,
+    }));
+
+    setExerciseRowCounts((currentCounts) => ({
+      ...currentCounts,
+      [exercise.id]: Math.max(
+        currentCounts[exercise.id] || 0,
+        exercise.sets,
+        data.previous_sets.length,
+        data.current_sets.length,
+        1
+      ),
+    }));
+
+    return data;
   }
 
   async function createProfile(e) {
@@ -106,6 +356,9 @@ function App() {
     const data = await response.json();
     setProgram(data);
     setOpenWorkoutId(null);
+    setExerciseLogsById({});
+    setExerciseRowCounts({});
+    setRemovedSetByKey({});
     setStep(4);
   }
 
@@ -132,6 +385,10 @@ function App() {
       [workout.id]: data.id,
     });
     setOpenWorkoutId(workout.id);
+
+    workout.exercises.forEach((exercise) => {
+      loadExerciseHistory(exercise, data.id);
+    });
   }
 
   async function finishWorkoutSession(workout) {
@@ -164,26 +421,46 @@ function App() {
       [workout.id]: null,
     });
     setOpenWorkoutId(null);
+    setOpenExerciseById({});
+    setRestTimers({});
+    setRemovedSetByKey({});
 
     alert(`Workout finished: ${data.workout_name}`);
   }
 
-  async function saveSet(exercise) {
-    const formData = setForms[exercise.id] || {};
+  function toggleCompletionMenu(setFormKey) {
+    setOpenCompletionMenuBySet({
+      ...openCompletionMenuBySet,
+      [setFormKey]: !openCompletionMenuBySet[setFormKey],
+    });
+  }
+
+  function toggleRestMenu(setFormKey) {
+    setOpenRestMenuBySet({
+      ...openRestMenuBySet,
+      [setFormKey]: !openRestMenuBySet[setFormKey],
+    });
+  }
+
+  async function saveSet(exercise, sourceSetNumber, displaySetNumber, effortOption) {
+    const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
+    const formData = setForms[setFormKey] || {};
     const sessionId = activeSessionByWorkout[exercise.workout];
+    const previousSet = getPreviousSetForRow(exercise.id, sourceSetNumber);
+    const recommendedSet = getRecommendedSetForRow(exercise.id, sourceSetNumber);
+    const weightUsed = formData.weight_used ?? recommendedSet.weight;
+    const repsCompleted = formData.reps_completed ?? recommendedSet.reps;
+    const setType = formData.set_type || previousSet?.set_type || "WORKING";
+    const selectedEffortOption = effortOption || EFFORT_OPTIONS[2];
+    const restSeconds = getRestSecondsForRow(setFormKey);
 
     if (!sessionId) {
       alert("Primeiro tens de iniciar o treino com Start Workout.");
       return;
     }
 
-    if (!formData.weight_used || !formData.reps_completed) {
-      alert("Preenche pelo menos o peso usado e as reps realizadas.");
-      return;
-    }
-
-    if (!formData.reached_failure && formData.rir === undefined) {
-      alert("Se não chegaste à falha, tens de indicar o RIR.");
+    if (weightUsed === "" || repsCompleted === "") {
+      alert("Preenche o peso e as reps antes de confirmar a série.");
       return;
     }
 
@@ -195,14 +472,15 @@ function App() {
         workout_session: sessionId,
         training_exercise: exercise.id,
         exercise: exercise.exercise,
-        set_number: Number(formData.set_number || 1),
-        planned_weight: formData.planned_weight ? Number(formData.planned_weight) : null,
-        weight_used: Number(formData.weight_used),
+        set_number: displaySetNumber,
+        set_type: setType,
+        planned_weight: previousSet?.weight_used ?? null,
+        weight_used: Number(weightUsed),
         target_min_reps: exercise.target_min_reps,
         target_max_reps: exercise.target_max_reps,
-        reps_completed: Number(formData.reps_completed),
-        rir: formData.reached_failure ? null : Number(formData.rir),
-        reached_failure: Boolean(formData.reached_failure),
+        reps_completed: Number(repsCompleted),
+        rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
+        reached_failure: selectedEffortOption.reachedFailure,
         notes: formData.notes || "",
       }),
     });
@@ -215,45 +493,67 @@ function App() {
       return;
     }
 
-    setSavedSets([...savedSets, data]);
+    setExerciseLogsById((currentLogs) => {
+      const currentExerciseLogs = currentLogs[exercise.id] || {
+        previous_sets: [],
+        current_sets: [],
+        previous_session: null,
+        recommended_sets: [],
+      };
+      const otherCurrentSets = currentExerciseLogs.current_sets.filter(
+        (setLog) => Number(setLog.set_number) !== displaySetNumber
+      );
+
+      return {
+        ...currentLogs,
+        [exercise.id]: {
+          ...currentExerciseLogs,
+          current_sets: [...otherCurrentSets, data].sort(
+            (firstSet, secondSet) => Number(firstSet.set_number) - Number(secondSet.set_number)
+          ),
+        },
+      };
+    });
+
+    setRestTimers({
+      ...restTimers,
+      [exercise.id]: restSeconds,
+    });
+
+    setOpenCompletionMenuBySet({
+      ...openCompletionMenuBySet,
+      [setFormKey]: false,
+    });
+
+    setOpenRestMenuBySet({
+      ...openRestMenuBySet,
+      [setFormKey]: false,
+    });
 
     const recommendationResponse = await fetch(`${API_BASE_URL}/api/recommendations/next-set/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        weight: Number(formData.weight_used),
-        reps: Number(formData.reps_completed),
-        rir: formData.reached_failure ? null : Number(formData.rir),
-        is_failure: Boolean(formData.reached_failure),
+        weight: Number(weightUsed),
+        reps: Number(repsCompleted),
+        rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
+        is_failure: selectedEffortOption.reachedFailure,
         notes: formData.notes || "",
       }),
     });
 
     const recommendationData = await recommendationResponse.json();
 
-    setRecommendations({
-      ...recommendations,
-      [exercise.id]: recommendationData,
-    });
-
-    setSetForms({
-      ...setForms,
-      [exercise.id]: {
-        ...formData,
-        set_number: Number(formData.set_number || 1) + 1,
-        reps_completed: "",
-        rir: "",
-        notes: "",
-      },
-    });
-  }
-
-  function wasSetSaved(trainingExerciseId) {
-    return savedSets.some((set) => set.training_exercise === trainingExerciseId);
+    if (recommendationResponse.ok) {
+      setRecommendations({
+        ...recommendations,
+        [exercise.id]: recommendationData,
+      });
+    }
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "850px", margin: "0 auto" }}>
+    <div style={{ padding: "24px", maxWidth: "920px", margin: "0 auto" }}>
       <h1>SHAPETRONYC</h1>
 
       {step === 1 && (
@@ -342,6 +642,7 @@ function App() {
             const isActiveWorkout = activeWorkoutId === String(workout.id);
             const hasActiveWorkout = Boolean(activeWorkoutId);
             const isWorkoutOpen = isActiveWorkout || openWorkoutId === workout.id;
+            const workoutStats = getWorkoutSessionStats(workout);
 
             if (hasActiveWorkout && !isActiveWorkout) {
               return null;
@@ -377,6 +678,23 @@ function App() {
                     ) : (
                       <div style={{ marginBottom: "16px" }}>
                         <p style={{ color: "green" }}>Workout session active. Session ID: {activeSessionId}</p>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                            gap: "12px",
+                            marginTop: "12px",
+                          }}
+                        >
+                          <div>
+                            <strong>Volume</strong>
+                            <p>{workoutStats.volume.toFixed(1)} kg</p>
+                          </div>
+                          <div>
+                            <strong>Séries concluídas</strong>
+                            <p>{workoutStats.sets}</p>
+                          </div>
+                        </div>
 
                         <textarea
                           placeholder="Final workout notes"
@@ -396,21 +714,22 @@ function App() {
                       </div>
                     )}
 
-                    {workout.exercises.map((item) => {
-                      const currentForm = setForms[item.id] || {};
-                      const reachedFailure = Boolean(currentForm.reached_failure);
+                    {activeSessionId && workout.exercises.map((item) => {
+                      const exerciseLogs = getExerciseLogs(item.id);
                       const isOpen = Boolean(openExerciseById[item.id]);
+                      const restSeconds = restTimers[item.id] || 0;
+                      const rows = getExerciseRows(item);
 
                       return (
                         <div
                           key={item.id}
                           style={{
                             borderBottom: "1px solid #ddd",
-                            padding: "12px 0",
+                            padding: "14px 0",
                           }}
                         >
                           <button
-                            onClick={() => toggleExercise(item.id)}
+                            onClick={() => toggleExercise(item)}
                             style={{
                               width: "100%",
                               textAlign: "left",
@@ -429,66 +748,275 @@ function App() {
                                 Target: {item.sets} sets | {item.target_min_reps}-{item.target_max_reps} reps | RIR {item.target_rir}
                               </p>
 
-                              <input
-                                type="number"
-                                placeholder="Set number"
-                                value={currentForm.set_number || ""}
-                                onChange={(e) => updateSetForm(item.id, "set_number", e.target.value)}
-                              />
+                              <p style={{ marginTop: "8px", color: restSeconds > 0 ? "#0ea5e9" : "#777" }}>
+                                Descanso: {formatTimer(restSeconds)}
+                              </p>
 
-                              <input
-                                type="number"
-                                placeholder="Planned weight"
-                                value={currentForm.planned_weight || ""}
-                                onChange={(e) => updateSetForm(item.id, "planned_weight", e.target.value)}
-                              />
-
-                              <input
-                                type="number"
-                                placeholder="Weight used"
-                                value={currentForm.weight_used || ""}
-                                onChange={(e) => updateSetForm(item.id, "weight_used", e.target.value)}
-                              />
-
-                              <input
-                                type="number"
-                                placeholder="Reps completed"
-                                value={currentForm.reps_completed || ""}
-                                onChange={(e) => updateSetForm(item.id, "reps_completed", e.target.value)}
-                              />
-
-                              <label style={{ display: "block", marginTop: "8px" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={reachedFailure}
-                                  onChange={(e) => updateSetForm(item.id, "reached_failure", e.target.checked)}
-                                />
-                                Reached failure
-                              </label>
-
-                              {!reachedFailure && (
-                                <input
-                                  type="number"
-                                  placeholder="RIR"
-                                  value={currentForm.rir || ""}
-                                  onChange={(e) => updateSetForm(item.id, "rir", e.target.value)}
-                                />
+                              {exerciseLogs.previous_session && (
+                                <p style={{ marginTop: "8px", color: "#777" }}>
+                                  Anterior: {exerciseLogs.previous_session.workout_name}
+                                </p>
                               )}
 
-                              <textarea
-                                placeholder="Notes for AI feedback"
-                                value={currentForm.notes || ""}
-                                onChange={(e) => updateSetForm(item.id, "notes", e.target.value)}
-                                style={{ display: "block", width: "100%", marginTop: "8px" }}
-                              />
+                              <div style={{ overflowX: "auto", marginTop: "12px" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
+                                  <thead>
+                                    <tr style={{ color: "#777", textTransform: "uppercase", fontSize: "13px" }}>
+                                      <th style={{ textAlign: "left", padding: "8px" }}>Série</th>
+                                      <th style={{ textAlign: "left", padding: "8px" }}>Anterior</th>
+                                      <th style={{ textAlign: "left", padding: "8px" }}>Kg</th>
+                                      <th style={{ textAlign: "left", padding: "8px" }}>Reps</th>
+                                      <th style={{ textAlign: "center", padding: "8px" }}>Feita</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rows.map(({ sourceSetNumber, displaySetNumber }) => {
+                                      const setFormKey = getSetFormKey(item.id, sourceSetNumber);
+                                      const currentSet = getCurrentSetForRow(item.id, displaySetNumber);
+                                      const previousSet = getPreviousSetForRow(item.id, sourceSetNumber);
+                                      const rowForm = setForms[setFormKey] || {};
+                                      const rowSetType =
+                                        currentSet?.set_type || rowForm.set_type || previousSet?.set_type || "WORKING";
+                                      const setTypeMeta = getSetTypeMeta(rowSetType);
+                                      const isCompleted = Boolean(currentSet);
+                                      const effortMeta = getEffortMetaFromSet(currentSet);
+                                      const restSecondsForRow = getRestSecondsForRow(setFormKey);
+                                      const recommendedSet = getRecommendedSetForRow(item.id, sourceSetNumber);
+                                      const weightValue =
+                                        currentSet?.weight_used ?? rowForm.weight_used ?? recommendedSet.weight;
+                                      const repsValue =
+                                        currentSet?.reps_completed ??
+                                        rowForm.reps_completed ??
+                                        recommendedSet.reps;
 
-                              <button onClick={() => saveSet(item)} style={{ marginTop: "8px" }}>
-                                Save Set
+                                      return (
+                                        <tr
+                                          key={sourceSetNumber}
+                                          style={{
+                                            background: displaySetNumber % 2 === 0 ? "rgba(148, 163, 184, 0.12)" : "transparent",
+                                          }}
+                                        >
+                                          <td style={{ padding: "8px" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                              <div style={{ position: "relative" }}>
+                                                <button
+                                                  type="button"
+                                                  disabled={isCompleted}
+                                                  onClick={() => toggleRestMenu(setFormKey)}
+                                                  title="Configurar descanso"
+                                                  style={{
+                                                    width: "30px",
+                                                    height: "30px",
+                                                    borderRadius: "6px",
+                                                    border: "1px solid #555",
+                                                    background: "transparent",
+                                                    color: "#999",
+                                                    cursor: isCompleted ? "default" : "pointer",
+                                                  }}
+                                                >
+                                                  ⋯
+                                                </button>
+
+                                                {openRestMenuBySet[setFormKey] && !isCompleted && (
+                                                  <div
+                                                    style={{
+                                                      position: "absolute",
+                                                      top: "36px",
+                                                      left: "0",
+                                                      zIndex: 10,
+                                                      minWidth: "180px",
+                                                      padding: "10px",
+                                                      border: "1px solid #555",
+                                                      borderRadius: "8px",
+                                                      background: "#111827",
+                                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
+                                                    }}
+                                                  >
+                                                    <label style={{ display: "block", fontSize: "13px", color: "#cbd5e1" }}>
+                                                      Descanso após série
+                                                    </label>
+                                                    <input
+                                                      type="number"
+                                                      min="15"
+                                                      step="15"
+                                                      value={restSecondsForRow}
+                                                      onChange={(e) =>
+                                                        updateSetForm(setFormKey, "rest_seconds", e.target.value)
+                                                      }
+                                                      style={{ width: "100%", marginTop: "6px" }}
+                                                    />
+                                                    <div
+                                                      style={{
+                                                        display: "grid",
+                                                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                                        gap: "6px",
+                                                        marginTop: "8px",
+                                                      }}
+                                                    >
+                                                      {[60, 90, 120, 180].map((seconds) => (
+                                                        <button
+                                                          key={seconds}
+                                                          type="button"
+                                                          onClick={() => updateSetForm(setFormKey, "rest_seconds", seconds)}
+                                                          style={{ padding: "6px" }}
+                                                        >
+                                                          {formatTimer(seconds)}
+                                                        </button>
+                                                      ))}
+                                                    </div>
+
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => removeExerciseRow(item, sourceSetNumber, displaySetNumber)}
+                                                      style={{
+                                                        width: "100%",
+                                                        marginTop: "10px",
+                                                        padding: "8px",
+                                                        border: "1px solid #7f1d1d",
+                                                        borderRadius: "6px",
+                                                        background: "rgba(127, 29, 29, 0.18)",
+                                                        color: "#fca5a5",
+                                                        fontWeight: "bold",
+                                                        cursor: "pointer",
+                                                      }}
+                                                    >
+                                                      Remover série
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              <strong style={{ color: setTypeMeta.color, minWidth: "18px" }}>
+                                                {rowSetType === "WORKING" ? displaySetNumber : setTypeMeta.shortLabel}
+                                              </strong>
+                                              <select
+                                                value={rowSetType}
+                                                disabled={isCompleted}
+                                                onChange={(e) => updateSetForm(setFormKey, "set_type", e.target.value)}
+                                                style={{ maxWidth: "132px" }}
+                                              >
+                                                {SET_TYPES.map((setType) => (
+                                                  <option key={setType.value} value={setType.value}>
+                                                    {setType.label}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          </td>
+                                          <td style={{ padding: "8px", color: "#777" }}>
+                                            {formatPreviousSet(previousSet)}
+                                          </td>
+                                          <td style={{ padding: "8px" }}>
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              value={weightValue}
+                                              disabled={isCompleted}
+                                              onChange={(e) => updateSetForm(setFormKey, "weight_used", e.target.value)}
+                                              style={{ width: "90px" }}
+                                            />
+                                          </td>
+                                          <td style={{ padding: "8px" }}>
+                                            <input
+                                              type="number"
+                                              value={repsValue}
+                                              disabled={isCompleted}
+                                              onChange={(e) => updateSetForm(setFormKey, "reps_completed", e.target.value)}
+                                              style={{ width: "78px" }}
+                                            />
+                                          </td>
+                                          <td style={{ padding: "8px", textAlign: "center" }}>
+                                            <div
+                                              style={{
+                                                position: "relative",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                              }}
+                                            >
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (!isCompleted) {
+                                                    toggleCompletionMenu(setFormKey);
+                                                  }
+                                                }}
+                                                style={{
+                                                  minWidth: "42px",
+                                                  height: "34px",
+                                                  borderRadius: "8px",
+                                                  border: "1px solid #4b5563",
+                                                  background: isCompleted ? "#16a34a" : "transparent",
+                                                  color: isCompleted ? "#fff" : "#cbd5e1",
+                                                  fontWeight: "bold",
+                                                  cursor: isCompleted ? "default" : "pointer",
+                                                }}
+                                              >
+                                                ✓
+                                              </button>
+
+                                              {effortMeta && (
+                                                <span
+                                                  style={{
+                                                    color: effortMeta.color,
+                                                    fontWeight: "bold",
+                                                    whiteSpace: "nowrap",
+                                                  }}
+                                                >
+                                                  {effortMeta.label}
+                                                </span>
+                                              )}
+
+                                              {openCompletionMenuBySet[setFormKey] && !isCompleted && (
+                                                <div
+                                                  style={{
+                                                    position: "absolute",
+                                                    top: "40px",
+                                                    right: "0",
+                                                    zIndex: 10,
+                                                    minWidth: "150px",
+                                                    padding: "8px",
+                                                    border: "1px solid #555",
+                                                    borderRadius: "8px",
+                                                    background: "#111827",
+                                                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
+                                                  }}
+                                                >
+                                                  {EFFORT_OPTIONS.map((option) => (
+                                                    <button
+                                                      key={option.value}
+                                                      type="button"
+                                                      onClick={() => saveSet(item, sourceSetNumber, displaySetNumber, option)}
+                                                      style={{
+                                                        display: "block",
+                                                        width: "100%",
+                                                        padding: "9px 10px",
+                                                        border: "none",
+                                                        borderRadius: "6px",
+                                                        background: "transparent",
+                                                        color: option.color,
+                                                        fontWeight: "bold",
+                                                        textAlign: "left",
+                                                        cursor: "pointer",
+                                                      }}
+                                                    >
+                                                      {option.label}
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
+                                + Adicionar Série
                               </button>
-
-                              {wasSetSaved(item.id) && (
-                                <p style={{ color: "green" }}>At least one set saved for this exercise.</p>
-                              )}
 
                               {recommendations[item.id] && (
                                 <div style={{ marginTop: "8px", padding: "12px", border: "1px solid #999" }}>
