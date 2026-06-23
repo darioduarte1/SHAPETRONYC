@@ -199,6 +199,20 @@ Implementado:
 
 ✅ Notas e feedback do utilizador
 
+## Sprint 11 - Workout Progression
+
+Objetivo:
+Gerar recomendações para o próximo treino depois de concluir uma sessão.
+
+Entregue:
+- Recomendações por exercício após Finish Workout
+- Subir carga quando todas as séries chegam às 12 reps com margem
+- Manter carga quando ainda falta consolidar reps
+- Reduzir volume quando há falhas repetidas ou fadiga forte
+- Ajustar RIR alvo quando o treino chega ao alvo mas fica demasiado perto da falha
+- Painel no frontend com a progressão recomendada para o próximo treino
+- Testes do motor de progressão
+
 ---
 
 # Próximos Sprints
@@ -215,19 +229,6 @@ Métricas:
 - Duração do treino
 - Média de RIR
 - Número de falhas
-
----
-
-## Sprint 11 - Workout Progression
-
-Objetivo:
-Gerar recomendações para o próximo treino.
-
-Exemplos:
-- Subir carga
-- Manter carga
-- Reduzir volume
-- Alterar RIR alvo
 
 ---
 
