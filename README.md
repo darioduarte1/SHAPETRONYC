@@ -141,6 +141,44 @@ mesmo quando a performance permitir aumento.
 
 ---
 
+## Sprint 8 - Workout Day UX
+
+### Implementado
+- Dias de treino em dropdown
+- Apenas um dia aberto de cada vez
+- Bloqueio visual dos restantes dias durante sessão ativa
+- Regresso à lista completa ao terminar o treino
+
+---
+
+## Sprint 9 - Live Exercise History
+
+### Implementado
+- Histórico do último treino por exercício
+- Tabela de séries por exercício durante sessão ativa
+- Valores anteriores com carga, reps e esforço final
+- Recomendação inicial de carga e reps baseada no último treino
+- Registo em tempo real da série atual
+- Tipos de série:
+  - Aquecimento
+  - Normal
+  - Drop
+- Seleção de esforço ao concluir série:
+  - FALHA
+  - RIR 0/1
+  - RIR 2/3
+  - RIR 4+
+- Timer de descanso configurável por série
+- Remoção de séries ainda não concluídas
+- Renumeração automática das séries após remoção
+
+### Backend
+- Endpoint de histórico por exercício
+- Recomendações iniciais por série calculadas no backend
+- Novo campo `set_type` em `SetLog`
+
+---
+
 # Estado Atual
 
 Implementado:
@@ -165,7 +203,7 @@ Implementado:
 
 # Próximos Sprints
 
-## Sprint 8 - Session Summary
+## Sprint 10 - Session Summary
 
 Objetivo:
 Gerar análise automática do treino.
@@ -180,19 +218,7 @@ Métricas:
 
 ---
 
-## Sprint 9 - Exercise History
-
-Objetivo:
-Mostrar evolução por exercício.
-
-Métricas:
-- Progressão de carga
-- Progressão de repetições
-- Volume acumulado
-
----
-
-## Sprint 10 - Workout Progression
+## Sprint 11 - Workout Progression
 
 Objetivo:
 Gerar recomendações para o próximo treino.
@@ -205,7 +231,7 @@ Exemplos:
 
 ---
 
-## Sprint 11 - AI Coach
+## Sprint 12 - AI Coach
 
 Objetivo:
 Substituir a simulação atual por um LLM.

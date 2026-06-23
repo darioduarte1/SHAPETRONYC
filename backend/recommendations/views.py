@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .serializers import NextSetRecommendationSerializer
-from .services.hybrid_recommendation_engine import calculate_hybrid_next_set
+from .services.training_coach_engine import calculate_training_coach_decision
 
 
 class NextSetRecommendationView(APIView):
@@ -15,12 +15,17 @@ class NextSetRecommendationView(APIView):
 
         data = serializer.validated_data
 
-        recommendation = calculate_hybrid_next_set(
+        recommendation = calculate_training_coach_decision(
             weight=data["weight"],
             reps=data["reps"],
             rir=data.get("rir"),
             is_failure=data["is_failure"],
             notes=data.get("notes", ""),
+            set_type=data["set_type"],
+            set_number=data.get("set_number"),
+            total_sets=data.get("total_sets"),
+            current_sets=data.get("current_sets", []),
+            previous_sets=data.get("previous_sets", []),
         )
 
         return Response(recommendation, status=status.HTTP_200_OK)
