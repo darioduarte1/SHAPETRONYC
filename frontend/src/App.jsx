@@ -167,6 +167,11 @@ function App() {
     const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
     const currentSet = getCurrentSetForRow(exercise.id, displaySetNumber);
     const previousSet = getPreviousSetForRow(exercise.id, sourceSetNumber);
+    const hasCurrentSets = getExerciseLogs(exercise.id).current_sets.length > 0;
+
+    if (!currentSet && !setForms[setFormKey]?.set_type && !hasCurrentSets && sourceSetNumber === 1) {
+      return "WARMUP";
+    }
 
     return currentSet?.set_type || setForms[setFormKey]?.set_type || previousSet?.set_type || "WORKING";
   }
@@ -209,6 +214,75 @@ function App() {
     const effortLabel = effortMeta ? ` ${effortMeta.label}` : "";
 
     return `${setLog.weight_used}kg x ${setLog.reps_completed}${effortLabel}`;
+  }
+
+  function getNextExerciseRow(exercise, rows) {
+    return rows.find((row) => !getCurrentSetForRow(exercise.id, row.displaySetNumber));
+  }
+
+  function getGuidanceForExercise(exercise, rows, restSeconds) {
+    if (restSeconds > 0) {
+      return {
+        eyebrow: "Descanso",
+        title: "Aguarda antes da próxima série",
+        message: "Respira, recupera a técnica e prepara a próxima execução.",
+        isResting: true,
+      };
+    }
+
+    const nextRow = getNextExerciseRow(exercise, rows);
+
+    if (!nextRow) {
+      return {
+        eyebrow: "Exercício concluído",
+        title: "Todas as séries deste exercício estão registadas",
+        message: "Segue para o próximo exercício quando te sentires pronto.",
+        isResting: false,
+      };
+    }
+
+    const rowSetType = getSetTypeForExerciseRow(exercise, nextRow.sourceSetNumber, nextRow.displaySetNumber);
+    const visibleSetLabel = getVisibleSetLabel(exercise, rows, nextRow.sourceSetNumber, nextRow.displaySetNumber);
+    const recommendedSet = getRecommendedSetForRow(exercise.id, nextRow.sourceSetNumber);
+    const latestRecommendation = recommendations[exercise.id];
+    const recommendedWeight = recommendedSet.weight || latestRecommendation?.recommended_weight;
+    const recommendedReps = recommendedSet.reps || latestRecommendation?.target_reps;
+    const hasLoadTarget = recommendedWeight !== "" && recommendedWeight !== undefined && recommendedReps;
+    const loadCue = hasLoadTarget
+      ? `Aponta para ${recommendedWeight}kg x ${recommendedReps} reps.`
+      : `Trabalha dentro do alvo de ${exercise.target_min_reps}-${exercise.target_max_reps} reps.`;
+    const warmupCue = hasLoadTarget
+      ? `A referência guardada é ${recommendedWeight}kg x ${recommendedReps}, mas começa abaixo disso se precisares.`
+      : `Sobe a carga gradualmente até sentires o movimento pronto.`;
+    const reason = recommendedSet.reason || latestRecommendation?.reason || "";
+
+    if (rowSetType === "WARMUP") {
+      return {
+        eyebrow: "Próximo passo",
+        title: `Faz a série ${visibleSetLabel} de aquecimento`,
+        message: `Usa uma carga controlada para preparar o movimento. ${warmupCue}`,
+        reason,
+        isResting: false,
+      };
+    }
+
+    if (rowSetType === "DROP") {
+      return {
+        eyebrow: "Próximo passo",
+        title: `Faz a série ${visibleSetLabel} em drop`,
+        message: `Reduz a carga e mantém a execução limpa até ao alvo. ${loadCue}`,
+        reason,
+        isResting: false,
+      };
+    }
+
+    return {
+      eyebrow: "Próximo passo",
+      title: `Faz a série ${visibleSetLabel}`,
+      message: `Mantém o controlo e respeita o esforço planeado. ${loadCue}`,
+      reason,
+      isResting: false,
+    };
   }
 
   function getWorkoutSessionStats(workout) {
@@ -476,6 +550,13 @@ function App() {
     });
   }
 
+  function adjustRestTimer(exerciseId, secondsDelta) {
+    setRestTimers((currentTimers) => ({
+      ...currentTimers,
+      [exerciseId]: Math.max(0, (currentTimers[exerciseId] || 0) + secondsDelta),
+    }));
+  }
+
   function toggleSetTypeMenu(setFormKey) {
     setOpenSetTypeMenuBySet({
       ...openSetTypeMenuBySet,
@@ -499,7 +580,7 @@ function App() {
     const recommendedSet = getRecommendedSetForRow(exercise.id, sourceSetNumber);
     const weightUsed = formData.weight_used ?? recommendedSet.weight;
     const repsCompleted = formData.reps_completed ?? recommendedSet.reps;
-    const setType = formData.set_type || previousSet?.set_type || "WORKING";
+    const setType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
     const selectedEffortOption = effortOption || EFFORT_OPTIONS[2];
     const restSeconds = getRestSecondsForRow(setFormKey);
 
@@ -773,6 +854,7 @@ function App() {
                       const isOpen = Boolean(openExerciseById[item.id]);
                       const restSeconds = restTimers[item.id] || 0;
                       const rows = getExerciseRows(item);
+                      const guidance = getGuidanceForExercise(item, rows, restSeconds);
 
                       return (
                         <div
@@ -802,15 +884,80 @@ function App() {
                                 Target: {item.sets} sets | {item.target_min_reps}-{item.target_max_reps} reps | RIR {item.target_rir}
                               </p>
 
-                              <p style={{ marginTop: "8px", color: restSeconds > 0 ? "#0ea5e9" : "#777" }}>
-                                Descanso: {formatTimer(restSeconds)}
-                              </p>
-
                               {exerciseLogs.previous_session && (
                                 <p style={{ marginTop: "8px", color: "#777" }}>
                                   Anterior: {exerciseLogs.previous_session.workout_name}
                                 </p>
                               )}
+
+                              <div
+                                style={{
+                                  marginTop: "12px",
+                                  padding: "16px",
+                                  border: "1px solid #334155",
+                                  borderRadius: "8px",
+                                  background: "rgba(15, 23, 42, 0.78)",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    color: guidance.isResting ? "#0ea5e9" : "#94a3b8",
+                                    fontSize: "12px",
+                                    fontWeight: "bold",
+                                    letterSpacing: "0",
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {guidance.eyebrow}
+                                </div>
+                                <strong
+                                  style={{
+                                    display: "block",
+                                    marginTop: "6px",
+                                    color: "#f8fafc",
+                                    fontSize: "18px",
+                                  }}
+                                >
+                                  {guidance.title}
+                                </strong>
+                                <p style={{ marginTop: "6px", color: "#cbd5e1" }}>{guidance.message}</p>
+
+                                {guidance.reason && !guidance.isResting && (
+                                  <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
+                                    {guidance.reason}
+                                  </p>
+                                )}
+
+                                {guidance.isResting && (
+                                  <div style={{ marginTop: "14px" }}>
+                                    <div
+                                      style={{
+                                        color: "#0ea5e9",
+                                        fontSize: "42px",
+                                        fontWeight: "bold",
+                                        lineHeight: "1",
+                                      }}
+                                    >
+                                      {formatTimer(restSeconds)}
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "grid",
+                                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                        gap: "8px",
+                                        marginTop: "12px",
+                                      }}
+                                    >
+                                      <button type="button" onClick={() => adjustRestTimer(item.id, -15)}>
+                                        -15s
+                                      </button>
+                                      <button type="button" onClick={() => adjustRestTimer(item.id, 15)}>
+                                        +15s
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
 
                               <div style={{ overflowX: "auto", marginTop: "12px" }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
@@ -1132,15 +1279,6 @@ function App() {
                               <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
                                 + Adicionar Série
                               </button>
-
-                              {recommendations[item.id] && (
-                                <div style={{ marginTop: "8px", padding: "12px", border: "1px solid #999" }}>
-                                  <strong>Next set recommendation</strong>
-                                  <p>Weight: {recommendations[item.id].recommended_weight} kg</p>
-                                  <p>Target reps: {recommendations[item.id].target_reps}</p>
-                                  <p>Reason: {recommendations[item.id].reason}</p>
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>
