@@ -32,6 +32,7 @@ function App() {
   const [restTimers, setRestTimers] = useState({});
   const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
   const [openRestMenuBySet, setOpenRestMenuBySet] = useState({});
+  const [openSetTypeMenuBySet, setOpenSetTypeMenuBySet] = useState({});
   const [removedSetByKey, setRemovedSetByKey] = useState({});
 
   const [form, setForm] = useState({
@@ -162,6 +163,32 @@ function App() {
     }));
   }
 
+  function getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
+    const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
+    const currentSet = getCurrentSetForRow(exercise.id, displaySetNumber);
+    const previousSet = getPreviousSetForRow(exercise.id, sourceSetNumber);
+
+    return currentSet?.set_type || setForms[setFormKey]?.set_type || previousSet?.set_type || "WORKING";
+  }
+
+  function getVisibleSetLabel(exercise, rows, sourceSetNumber, displaySetNumber) {
+    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+    const sameTypeRows = rows.filter((row) =>
+      getSetTypeForExerciseRow(exercise, row.sourceSetNumber, row.displaySetNumber) === rowSetType
+    );
+    const sameTypeIndex = sameTypeRows.findIndex((row) => row.sourceSetNumber === sourceSetNumber) + 1;
+
+    if (rowSetType === "WARMUP") {
+      return sameTypeRows.length > 1 ? `W${sameTypeIndex}` : "W";
+    }
+
+    if (rowSetType === "DROP") {
+      return sameTypeRows.length > 1 ? `D${sameTypeIndex}` : "D";
+    }
+
+    return String(sameTypeIndex);
+  }
+
   function formatTimer(totalSeconds) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -269,6 +296,11 @@ function App() {
       ...openCompletionMenuBySet,
       [setFormKey]: false,
     });
+
+    setOpenSetTypeMenuBySet({
+      ...openSetTypeMenuBySet,
+      [setFormKey]: false,
+    });
   }
 
   async function loadExerciseHistory(exercise, sessionIdOverride = null) {
@@ -359,6 +391,7 @@ function App() {
     setExerciseLogsById({});
     setExerciseRowCounts({});
     setRemovedSetByKey({});
+    setOpenSetTypeMenuBySet({});
     setStep(4);
   }
 
@@ -424,6 +457,7 @@ function App() {
     setOpenExerciseById({});
     setRestTimers({});
     setRemovedSetByKey({});
+    setOpenSetTypeMenuBySet({});
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -439,6 +473,21 @@ function App() {
     setOpenRestMenuBySet({
       ...openRestMenuBySet,
       [setFormKey]: !openRestMenuBySet[setFormKey],
+    });
+  }
+
+  function toggleSetTypeMenu(setFormKey) {
+    setOpenSetTypeMenuBySet({
+      ...openSetTypeMenuBySet,
+      [setFormKey]: !openSetTypeMenuBySet[setFormKey],
+    });
+  }
+
+  function selectSetType(setFormKey, setType) {
+    updateSetForm(setFormKey, "set_type", setType);
+    setOpenSetTypeMenuBySet({
+      ...openSetTypeMenuBySet,
+      [setFormKey]: false,
     });
   }
 
@@ -527,6 +576,11 @@ function App() {
 
     setOpenRestMenuBySet({
       ...openRestMenuBySet,
+      [setFormKey]: false,
+    });
+
+    setOpenSetTypeMenuBySet({
+      ...openSetTypeMenuBySet,
       [setFormKey]: false,
     });
 
@@ -775,9 +829,18 @@ function App() {
                                       const currentSet = getCurrentSetForRow(item.id, displaySetNumber);
                                       const previousSet = getPreviousSetForRow(item.id, sourceSetNumber);
                                       const rowForm = setForms[setFormKey] || {};
-                                      const rowSetType =
-                                        currentSet?.set_type || rowForm.set_type || previousSet?.set_type || "WORKING";
+                                      const rowSetType = getSetTypeForExerciseRow(
+                                        item,
+                                        sourceSetNumber,
+                                        displaySetNumber
+                                      );
                                       const setTypeMeta = getSetTypeMeta(rowSetType);
+                                      const visibleSetLabel = getVisibleSetLabel(
+                                        item,
+                                        rows,
+                                        sourceSetNumber,
+                                        displaySetNumber
+                                      );
                                       const isCompleted = Boolean(currentSet);
                                       const effortMeta = getEffortMetaFromSet(currentSet);
                                       const restSecondsForRow = getRestSecondsForRow(setFormKey);
@@ -886,21 +949,73 @@ function App() {
                                                 )}
                                               </div>
 
-                                              <strong style={{ color: setTypeMeta.color, minWidth: "18px" }}>
-                                                {rowSetType === "WORKING" ? displaySetNumber : setTypeMeta.shortLabel}
-                                              </strong>
-                                              <select
-                                                value={rowSetType}
-                                                disabled={isCompleted}
-                                                onChange={(e) => updateSetForm(setFormKey, "set_type", e.target.value)}
-                                                style={{ maxWidth: "132px" }}
-                                              >
-                                                {SET_TYPES.map((setType) => (
-                                                  <option key={setType.value} value={setType.value}>
-                                                    {setType.label}
-                                                  </option>
-                                                ))}
-                                              </select>
+                                              <div style={{ position: "relative" }}>
+                                                <button
+                                                  type="button"
+                                                  disabled={isCompleted}
+                                                  onClick={() => toggleSetTypeMenu(setFormKey)}
+                                                  title="Alterar tipo de série"
+                                                  style={{
+                                                    minWidth: "42px",
+                                                    height: "32px",
+                                                    borderRadius: "8px",
+                                                    border: "1px solid #334155",
+                                                    background: "rgba(15, 23, 42, 0.7)",
+                                                    color: setTypeMeta.color,
+                                                    fontWeight: "bold",
+                                                    cursor: isCompleted ? "default" : "pointer",
+                                                  }}
+                                                >
+                                                  {visibleSetLabel}
+                                                </button>
+
+                                                {openSetTypeMenuBySet[setFormKey] && !isCompleted && (
+                                                  <div
+                                                    style={{
+                                                      position: "absolute",
+                                                      top: "38px",
+                                                      left: "0",
+                                                      zIndex: 10,
+                                                      minWidth: "150px",
+                                                      padding: "8px",
+                                                      border: "1px solid #555",
+                                                      borderRadius: "8px",
+                                                      background: "#111827",
+                                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
+                                                    }}
+                                                  >
+                                                    {SET_TYPES.map((setType) => (
+                                                      <button
+                                                        key={setType.value}
+                                                        type="button"
+                                                        onClick={() => selectSetType(setFormKey, setType.value)}
+                                                        style={{
+                                                          display: "flex",
+                                                          alignItems: "center",
+                                                          gap: "8px",
+                                                          width: "100%",
+                                                          padding: "9px 10px",
+                                                          border: "none",
+                                                          borderRadius: "6px",
+                                                          background:
+                                                            rowSetType === setType.value
+                                                              ? "rgba(148, 163, 184, 0.18)"
+                                                              : "transparent",
+                                                          color: "#e5e7eb",
+                                                          fontWeight: "bold",
+                                                          textAlign: "left",
+                                                          cursor: "pointer",
+                                                        }}
+                                                      >
+                                                        <span style={{ color: setType.color, minWidth: "22px" }}>
+                                                          {setType.shortLabel}
+                                                        </span>
+                                                        {setType.label}
+                                                      </button>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
                                           </td>
                                           <td style={{ padding: "8px", color: "#777" }}>
