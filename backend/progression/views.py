@@ -80,8 +80,6 @@ class ExerciseHistoryView(APIView):
                 workout_session=previous_session,
             ).order_by("set_number", "created_at")
 
-        target_min_reps = training_exercise.target_min_reps if training_exercise else 10
-        target_max_reps = training_exercise.target_max_reps if training_exercise else 12
         previous_sets_by_number = {
             set_log.set_number: set_log
             for set_log in previous_sets
@@ -97,8 +95,6 @@ class ExerciseHistoryView(APIView):
                 "set_number": set_number,
                 **calculate_recommended_set(
                     previous_sets_by_number.get(set_number),
-                    target_min_reps,
-                    target_max_reps,
                 ),
             }
             for set_number in range(1, max_rows + 1)

@@ -2,7 +2,7 @@ def round_recommended_weight(weight):
     return round(float(weight) * 2) / 2
 
 
-def calculate_recommended_set(previous_set, target_min_reps, target_max_reps):
+def calculate_recommended_set(previous_set, target_reps=12):
     if not previous_set:
         return {
             "recommended_weight": "",
@@ -13,29 +13,33 @@ def calculate_recommended_set(previous_set, target_min_reps, target_max_reps):
     previous_weight = float(previous_set.weight_used)
     previous_reps = int(previous_set.reps_completed)
     effective_rir = previous_set.rir if previous_set.rir is not None else 2
-    reached_top_of_range = previous_reps >= target_max_reps
-    below_range = previous_reps < target_min_reps
+    reached_target = previous_reps >= target_reps
 
-    if previous_set.reached_failure or effective_rir <= 1:
+    if not reached_target:
+        should_reduce_load = previous_set.reached_failure or effective_rir <= 1
+
+        if should_reduce_load:
+            return {
+                "recommended_weight": round_recommended_weight(max(0, previous_weight - 2.5)),
+                "recommended_reps": target_reps,
+                "reason": "Previous set missed 12 reps near failure, so reduce the load.",
+            }
+
         return {
-            "recommended_weight": round_recommended_weight(
-                max(0, previous_weight - 2.5) if below_range else previous_weight
-            ),
-            "recommended_reps": target_min_reps if below_range else min(previous_reps, target_max_reps),
-            "reason": "Previous set was very close to failure, so start conservatively.",
+            "recommended_weight": round_recommended_weight(previous_weight),
+            "recommended_reps": target_reps,
+            "reason": "Previous set missed 12 reps, so keep the load and build reps.",
         }
 
-    if effective_rir <= 3:
+    if effective_rir >= 2:
         return {
-            "recommended_weight": round_recommended_weight(
-                previous_weight + 2.5 if reached_top_of_range else previous_weight
-            ),
-            "recommended_reps": target_min_reps if reached_top_of_range else min(previous_reps + 1, target_max_reps),
-            "reason": "Previous set was inside the target effort range.",
+            "recommended_weight": round_recommended_weight(previous_weight + 2.5),
+            "recommended_reps": target_reps,
+            "reason": "Previous set reached 12 reps with reserve, so progress the load.",
         }
 
     return {
-        "recommended_weight": round_recommended_weight(previous_weight + 2.5),
-        "recommended_reps": target_max_reps,
-        "reason": "Previous set had plenty of reserve, so progress the load.",
+        "recommended_weight": round_recommended_weight(previous_weight),
+        "recommended_reps": target_reps,
+        "reason": "Previous set reached 12 reps close to failure, so keep the load.",
     }

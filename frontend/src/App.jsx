@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
+const TARGET_REPS = 12;
 
 const SET_TYPES = [
   { value: "WARMUP", label: "Aquecimento", shortLabel: "W", color: "#eab308" },
@@ -273,7 +274,7 @@ function App() {
     const hasLoadTarget = recommendedWeight !== "" && recommendedWeight !== undefined && recommendedReps;
     const loadCue = hasLoadTarget
       ? `Aponta para ${recommendedWeight}kg x ${recommendedReps} reps.`
-      : `Trabalha dentro do alvo de ${exercise.target_min_reps}-${exercise.target_max_reps} reps.`;
+      : `Trabalha com o objectivo de chegar às ${TARGET_REPS} reps.`;
     const warmupCue = warmupReferenceSet
       ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
       : `Sobe a carga gradualmente até sentires o movimento pronto.`;
@@ -629,8 +630,8 @@ function App() {
         set_type: setType,
         planned_weight: previousSet?.weight_used ?? null,
         weight_used: Number(weightUsed),
-        target_min_reps: exercise.target_min_reps,
-        target_max_reps: exercise.target_max_reps,
+        target_min_reps: TARGET_REPS,
+        target_max_reps: TARGET_REPS,
         reps_completed: Number(repsCompleted),
         rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
         reached_failure: selectedEffortOption.reachedFailure,
@@ -904,7 +905,7 @@ function App() {
                           {isOpen && (
                             <div style={{ marginTop: "12px" }}>
                               <p>
-                                Target: {item.sets} sets | {item.target_min_reps}-{item.target_max_reps} reps | RIR {item.target_rir}
+                                Target: {item.sets} sets | {TARGET_REPS} reps | RIR {item.target_rir}
                               </p>
 
                               {exerciseLogs.previous_session && (

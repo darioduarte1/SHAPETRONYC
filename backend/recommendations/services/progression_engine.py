@@ -1,31 +1,32 @@
 def calculate_next_set(weight, reps, rir=None, is_failure=False):
-    target_min_reps = 10
-    target_max_reps = 12
+    target_reps = 12
     weight_step = 2.5
 
-    if is_failure and reps < target_min_reps:
-        return {
-            "recommended_weight": max(weight - weight_step, 0),
-            "target_reps": "10-12",
-            "reason": "Falhaste antes do mínimo de reps. Reduzimos a carga."
-        }
+    if reps < target_reps:
+        should_reduce_load = is_failure or (rir is not None and rir <= 1)
 
-    if reps >= target_max_reps and rir is not None and rir >= 2:
-        return {
-            "recommended_weight": weight + weight_step,
-            "target_reps": "10-12",
-            "reason": "Fizeste o topo do range com margem. Aumentamos a carga."
-        }
+        if should_reduce_load:
+            return {
+                "recommended_weight": max(weight - weight_step, 0),
+                "target_reps": target_reps,
+                "reason": "Não chegaste às 12 reps com margem suficiente. Reduzimos a carga para voltares ao alvo."
+            }
 
-    if target_min_reps <= reps <= target_max_reps:
         return {
             "recommended_weight": weight,
-            "target_reps": "10-12",
-            "reason": "Ficaste dentro do range ideal. Mantemos a carga."
+            "target_reps": target_reps,
+            "reason": "Ainda não chegaste às 12 reps. Mantemos a carga para consolidares a série."
+        }
+
+    if rir is not None and rir >= 2:
+        return {
+            "recommended_weight": weight + weight_step,
+            "target_reps": target_reps,
+            "reason": "Fizeste 12 reps com margem. Aumentamos a carga na próxima série."
         }
 
     return {
         "recommended_weight": weight,
-        "target_reps": "10-12",
-        "reason": "Mantemos a carga para estabilizar performance."
+        "target_reps": target_reps,
+        "reason": "Chegaste às 12 reps, mas sem margem clara. Mantemos a carga."
     }
