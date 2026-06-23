@@ -1,7 +1,9 @@
 from django.test import SimpleTestCase
+from types import SimpleNamespace
 
 from recommendations.services.progression_engine import calculate_next_set
 from recommendations.services.training_coach_engine import calculate_training_coach_decision
+from recommendations.services.workout_progression_engine import calculate_exercise_progression
 
 
 class ProgressionEngineTests(SimpleTestCase):
@@ -127,3 +129,69 @@ class TrainingCoachEngineTests(SimpleTestCase):
         self.assertEqual(decision["action"], "stabilize_after_miss")
         self.assertEqual(decision["recommended_weight"], 50)
         self.assertEqual(decision["recommended_rest_seconds"], 150)
+
+
+class WorkoutProgressionEngineTests(SimpleTestCase):
+    def make_training_exercise(self):
+        return SimpleNamespace(
+            id=1,
+            exercise_id=10,
+            exercise=SimpleNamespace(name="Bench Press"),
+            sets=3,
+            target_rir=2,
+        )
+
+    def test_increases_load_for_next_workout_after_clean_sets(self):
+        recommendation = calculate_exercise_progression(
+            self.make_training_exercise(),
+            [
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 2,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+            ],
+        )
+
+        self.assertEqual(recommendation["action"], "increase_load")
+        self.assertEqual(recommendation["recommended_weight"], 52.5)
+        self.assertEqual(recommendation["recommended_sets"], 3)
+
+    def test_reduces_volume_for_next_workout_after_repeated_misses(self):
+        recommendation = calculate_exercise_progression(
+            self.make_training_exercise(),
+            [
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 10,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 9,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+            ],
+        )
+
+        self.assertEqual(recommendation["action"], "reduce_volume")
+        self.assertEqual(recommendation["recommended_weight"], 47.5)
+        self.assertEqual(recommendation["recommended_sets"], 2)
+        self.assertEqual(recommendation["target_rir"], 3)

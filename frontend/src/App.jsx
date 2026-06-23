@@ -37,6 +37,7 @@ function App() {
   const [openRestMenuBySet, setOpenRestMenuBySet] = useState({});
   const [openSetTypeMenuBySet, setOpenSetTypeMenuBySet] = useState({});
   const [removedSetByKey, setRemovedSetByKey] = useState({});
+  const [latestWorkoutProgression, setLatestWorkoutProgression] = useState(null);
 
   const [form, setForm] = useState({
     username: "",
@@ -348,6 +349,26 @@ function App() {
     };
   }
 
+  function getProgressionActionLabel(action) {
+    const labels = {
+      increase_load: "Subir carga",
+      maintain_load: "Manter carga",
+      reduce_volume: "Reduzir volume",
+      adjust_target_rir: "Alterar RIR",
+      maintain: "Manter plano",
+    };
+
+    return labels[action] || "Recomendação";
+  }
+
+  function formatProgressionTarget(recommendation) {
+    const weightLabel = recommendation.recommended_weight === "" || recommendation.recommended_weight === null
+      ? "carga do plano"
+      : `${recommendation.recommended_weight}kg`;
+
+    return `${weightLabel} | ${recommendation.recommended_sets} séries | ${recommendation.target_reps} reps | RIR ${recommendation.target_rir}`;
+  }
+
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
@@ -545,6 +566,7 @@ function App() {
 
       setProgram(data);
       setOpenWorkoutId(null);
+      setLatestWorkoutProgression(null);
       setExerciseLogsById({});
       setExerciseRowCounts({});
       setRemovedSetByKey({});
@@ -581,6 +603,7 @@ function App() {
       [workout.id]: data.id,
     });
     setOpenWorkoutId(workout.id);
+    setLatestWorkoutProgression(null);
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -621,6 +644,7 @@ function App() {
     setRestTimers({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
+    setLatestWorkoutProgression(data.next_workout_progression || null);
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -877,6 +901,74 @@ function App() {
       {step === 4 && program && (
         <div>
           <h2>{program.name}</h2>
+
+          {latestWorkoutProgression && (
+            <section
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                background: "rgba(15, 23, 42, 0.72)",
+              }}
+            >
+              <div
+                style={{
+                  color: "#94a3b8",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  letterSpacing: "0",
+                  textTransform: "uppercase",
+                }}
+              >
+                Próximo treino
+              </div>
+              <h3 style={{ marginTop: "6px", marginBottom: "12px" }}>
+                Progressão para {latestWorkoutProgression.workout_name}
+              </h3>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                {latestWorkoutProgression.recommendations.map((recommendation) => (
+                  <div
+                    key={recommendation.training_exercise}
+                    style={{
+                      padding: "12px",
+                      border: "1px solid rgba(148, 163, 184, 0.26)",
+                      borderRadius: "8px",
+                      background: "rgba(15, 23, 42, 0.44)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <strong>{recommendation.exercise_name}</strong>
+                      <span
+                        style={{
+                          color: "#38bdf8",
+                          fontSize: "13px",
+                          fontWeight: "bold",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {getProgressionActionLabel(recommendation.action)}
+                      </span>
+                    </div>
+                    <p style={{ marginTop: "6px", color: "#e5e7eb" }}>
+                      {formatProgressionTarget(recommendation)}
+                    </p>
+                    <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
+                      {recommendation.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {program.workouts.map((workout) => {
             const activeWorkoutId = getActiveWorkoutId();

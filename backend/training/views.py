@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from accounts.models import UserProfile
+from progression.models import SetLog
+from recommendations.services.workout_progression_engine import calculate_workout_progression
 
 from .serializers import TrainingProgramSerializer, WorkoutSessionSerializer
 from .services.training_generator import generate_training_program
@@ -106,8 +108,25 @@ class FinishWorkoutSessionView(APIView):
         session.save()
 
         serializer = WorkoutSessionSerializer(session)
+        set_logs = SetLog.objects.filter(
+            user=session.user,
+            workout_session=session,
+        ).select_related(
+            "training_exercise__exercise",
+        ).order_by(
+            "training_exercise__order",
+            "set_number",
+            "created_at",
+        )
+        progression = calculate_workout_progression(session.workout, set_logs)
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(
+            {
+                **serializer.data,
+                "next_workout_progression": progression,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class WorkoutSessionListView(APIView):
