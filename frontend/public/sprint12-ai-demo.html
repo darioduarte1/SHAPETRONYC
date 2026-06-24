@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SHAPETRONYC - AI Coach 16.º Treino</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17211b;
+        --muted: #5a665f;
+        --line: #d9e1dc;
+        --panel: #ffffff;
+        --soft: #f5f7f3;
+        --green: #18795b;
+        --green-soft: #dff3eb;
+        --amber: #a86308;
+        --amber-soft: #fff1d6;
+        --red: #b42318;
+        --red-soft: #fde7e4;
+        --blue: #2563eb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #eef3ef;
+        color: var(--ink);
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+        gap: 16px;
+        align-items: stretch;
+        margin-bottom: 18px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 8px;
+        font-size: 32px;
+        line-height: 1.1;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin-bottom: 12px;
+        font-size: 19px;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      .hero {
+        min-height: 190px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .pill.good {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .pill.warn {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .pill.risk {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 26px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .score {
+        display: grid;
+        gap: 7px;
+      }
+
+      .score-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .track {
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e4ebe6;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--green);
+        width: 0%;
+      }
+
+      .fill.warn {
+        background: var(--amber);
+      }
+
+      .fill.risk {
+        background: var(--red);
+      }
+
+      .history-chart {
+        display: grid;
+        grid-template-columns: repeat(15, minmax(26px, 1fr));
+        gap: 8px;
+        align-items: end;
+        height: 230px;
+        padding-top: 10px;
+      }
+
+      .bar-wrap {
+        display: grid;
+        grid-template-rows: 1fr auto;
+        gap: 6px;
+        height: 100%;
+        min-width: 0;
+      }
+
+      .bar {
+        align-self: end;
+        min-height: 14px;
+        border-radius: 5px 5px 2px 2px;
+        background: linear-gradient(180deg, #1e9b76, #18795b);
+        position: relative;
+      }
+
+      .bar strong {
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 4px);
+        transform: translateX(-50%);
+        color: var(--ink);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .bar-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 9px 8px;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .decision {
+        display: grid;
+        gap: 16px;
+      }
+
+      .decision-main {
+        border-left: 5px solid var(--green);
+        padding-left: 14px;
+      }
+
+      .decision-main strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 28px;
+      }
+
+      .basis {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .basis li {
+        padding: 9px 10px;
+        border-radius: 8px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .loading,
+      .error {
+        padding: 12px;
+        border-radius: 8px;
+        font-weight: 800;
+      }
+
+      .loading {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .error {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      @media (max-width: 860px) {
+        main {
+          padding: 14px;
+        }
+
+        header,
+        .grid.two,
+        .grid.three {
+          grid-template-columns: 1fr;
+        }
+
+        .history-chart {
+          grid-template-columns: repeat(5, minmax(38px, 1fr));
+          height: auto;
+        }
+
+        .bar-wrap {
+          min-height: 150px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <section class="panel hero">
+          <div>
+            <h1>16.º treino com 15 treinos de histórico</h1>
+            <p>
+              Utilizador demo <strong>sprint12_ai_demo_15</strong>. O backend tem 15 sessões
+              Push concluídas para Chest Press Machine e uma sessão de hoje em progresso.
+            </p>
+          </div>
+          <div class="pill-row">
+            <span class="pill good">Histórico real na base de dados</span>
+            <span class="pill good">AI Coach chamado via API</span>
+            <span class="pill warn">Provider local para demo</span>
+          </div>
+        </section>
+
+        <section class="panel" id="status">
+          <div class="loading">A carregar histórico e decisão do coach...</div>
+        </section>
+      </header>
+
+      <section class="grid three" id="metrics"></section>
+
+      <section class="grid two" style="margin-top: 16px">
+        <section class="panel">
+          <h2>Histórico dos últimos 15 treinos</h2>
+          <div class="history-chart" id="historyChart"></div>
+        </section>
+
+        <section class="panel decision" id="decisionPanel">
+          <h2>Decisão para o 16.º treino</h2>
+        </section>
+      </section>
+
+      <section class="panel" style="margin-top: 16px">
+        <h2>Últimas 5 exposições ao exercício</h2>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Treino</th>
+                <th>Carga</th>
+                <th>Reps</th>
+                <th>RIR</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody id="historyRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const API_BASE_URL = "http://127.0.0.1:8001";
+      const demo = {
+        userId: 29,
+        profileId: 29,
+        workoutId: 152,
+        sessionId: 48,
+        trainingExerciseId: 872,
+        exerciseId: 1,
+        exerciseName: "Chest Press Machine",
+      };
+
+      function groupBy(items, keyFn) {
+        return items.reduce((groups, item) => {
+          const key = keyFn(item);
+          groups[key] = groups[key] || [];
+          groups[key].push(item);
+          return groups;
+        }, {});
+      }
+
+      function serialiseSet(setLog) {
+        return {
+          workout_session: setLog.workout_session,
+          set_number: Number(setLog.set_number),
+          set_type: setLog.set_type,
+          weight_used: Number(setLog.weight_used),
+          reps_completed: Number(setLog.reps_completed),
+          rir: setLog.rir,
+          reached_failure: Boolean(setLog.reached_failure),
+          notes: setLog.notes || "",
+          created_at: setLog.created_at,
+        };
+      }
+
+      function getSessionSummaries(historySets) {
+        const grouped = groupBy(historySets, (setLog) => setLog.workout_session);
+        return Object.values(grouped)
+          .sort((firstSession, secondSession) => {
+            return Number(firstSession[0]?.workout_session || 0) - Number(secondSession[0]?.workout_session || 0);
+          })
+          .map((sets, index) => {
+            const workingSets = sets.filter((setLog) => setLog.set_type === "WORKING");
+            const firstSet = workingSets[0];
+            const totalVolume = workingSets.reduce(
+              (total, setLog) => total + Number(setLog.weight_used) * Number(setLog.reps_completed),
+              0
+            );
+            return {
+              index: index + 1,
+              sessionId: sets[0]?.workout_session,
+              firstWeight: Number(firstSet?.weight_used || 0),
+              firstReps: Number(firstSet?.reps_completed || 0),
+              firstRir: firstSet?.rir ?? "-",
+              totalVolume,
+              notes: firstSet?.notes || "sessão controlada",
+            };
+          });
+      }
+
+      function renderMetrics(sessions, decision, currentSet) {
+        const latest = sessions[sessions.length - 1];
+        const previous = sessions[0];
+        const totalSets = sessions.length * 3;
+        const loadDelta = latest && previous ? latest.firstWeight - previous.firstWeight : 0;
+
+        document.getElementById("metrics").innerHTML = `
+          <article class="panel metric">
+            <strong>${sessions.length}</strong>
+            <span>treinos históricos analisados</span>
+          </article>
+          <article class="panel metric">
+            <strong>${loadDelta.toFixed(1)} kg</strong>
+            <span>progressão da primeira série</span>
+          </article>
+          <article class="panel metric">
+            <strong>${currentSet.weight_used} kg x ${currentSet.reps_completed}</strong>
+            <span>primeira série registada hoje</span>
+          </article>
+        `;
+      }
+
+      function renderHistoryChart(sessions) {
+        const maxWeight = Math.max(...sessions.map((session) => session.firstWeight), 1);
+        document.getElementById("historyChart").innerHTML = sessions
+          .map((session) => {
+            const height = Math.max(14, (session.firstWeight / maxWeight) * 185);
+            return `
+              <div class="bar-wrap" title="Treino ${session.index}: ${session.firstWeight}kg">
+                <div class="bar" style="height:${height}px">
+                  <strong>${session.firstWeight.toFixed(1)}</strong>
+                </div>
+                <span class="bar-label">${session.index}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function scoreClass(value) {
+        if (value >= 75) return "good";
+        if (value >= 55) return "warn";
+        return "risk";
+      }
+
+      function scoreFillClass(name, value) {
+        if (name === "Fadiga") {
+          if (value >= 70) return "risk";
+          if (value >= 45) return "warn";
+          return "";
+        }
+        if (value >= 70) return "";
+        if (value >= 45) return "warn";
+        return "risk";
+      }
+
+      function renderScore(name, value) {
+        const fillClass = scoreFillClass(name, value);
+        return `
+          <div class="score">
+            <div class="score-head">
+              <span>${name}</span>
+              <span>${value}/100</span>
+            </div>
+            <div class="track">
+              <div class="fill ${fillClass}" style="width:${Math.max(0, Math.min(value, 100))}%"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderDecision(decision) {
+        const actionLabels = {
+          increase_weight: "Subir carga",
+          maintain_weight: "Manter carga",
+          decrease_weight: "Baixar carga",
+          add_set: "Adicionar série",
+          stop_exercise: "Terminar exercício",
+          do_backoff_set: "Backoff set",
+          flag_pain_or_risk: "Parar por risco",
+        };
+        const action = actionLabels[decision.action] || decision.action;
+        const weight = decision.recommended_weight === "" ? "sem próxima carga" : `${decision.recommended_weight} kg`;
+        const nextSet = decision.stop_exercise ? "Exercício concluído" : `${weight} x ${decision.target_reps_label || decision.target_reps}`;
+
+        document.getElementById("status").innerHTML = `
+          <h2>Estado do teste</h2>
+          <p>Dados carregados e endpoint do AI Coach respondeu com sucesso.</p>
+          <div class="pill-row">
+            <span class="pill good">${decision.source}</span>
+            <span class="pill ${decision.llm_status === "llm_enabled" ? "good" : "warn"}">${decision.llm_status}</span>
+            <span class="pill ${scoreClass(decision.readiness_score)}">Prontidão ${decision.readiness_score}/100</span>
+          </div>
+        `;
+
+        document.getElementById("decisionPanel").innerHTML = `
+          <h2>Decisão para o 16.º treino</h2>
+          <div class="decision-main">
+            <strong>${action}</strong>
+            <p>${decision.guidance_title}: ${decision.guidance_message}</p>
+            <div class="pill-row">
+              <span class="pill good">Próximo alvo: ${nextSet}</span>
+              <span class="pill">RIR alvo ${decision.target_rir}</span>
+              <span class="pill">Confiança ${decision.confidence}</span>
+            </div>
+          </div>
+          <div class="grid three">
+            ${renderScore("Prontidão", decision.readiness_score)}
+            ${renderScore("Recuperação", decision.recovery_score)}
+            ${renderScore("Fadiga", decision.fatigue_score)}
+          </div>
+          <div>
+            <h3>Porque decidiu assim</h3>
+            <ul class="basis">
+              ${(decision.decision_basis || []).map((item) => `<li>${item}</li>`).join("")}
+            </ul>
+          </div>
+          <p><strong>Razão:</strong> ${decision.reason}</p>
+        `;
+      }
+
+      function renderRecentRows(sessions) {
+        document.getElementById("historyRows").innerHTML = sessions
+          .slice(-5)
+          .map(
+            (session) => `
+              <tr>
+                <td>${session.index}</td>
+                <td>${session.firstWeight.toFixed(1)} kg</td>
+                <td>${session.firstReps}</td>
+                <td>${session.firstRir}</td>
+                <td>${session.notes}</td>
+              </tr>
+            `
+          )
+          .join("");
+      }
+
+      async function loadDemo() {
+        const historyUrl = new URL(`${API_BASE_URL}/api/progression/exercise-history/`);
+        historyUrl.search = new URLSearchParams({
+          profile_id: demo.profileId,
+          exercise_id: demo.exerciseId,
+          training_exercise_id: demo.trainingExerciseId,
+          session_id: demo.sessionId,
+        });
+
+        const historyResponse = await fetch(historyUrl);
+        const historyData = await historyResponse.json();
+
+        if (!historyResponse.ok) {
+          throw new Error(historyData.error || "Erro ao carregar histórico");
+        }
+
+        const currentSet = historyData.current_sets[0] || {
+          set_number: 1,
+          set_type: "WORKING",
+          weight_used: 62.5,
+          reps_completed: 12,
+          rir: 3,
+          reached_failure: false,
+          notes: "boa energia, sem dor, técnica estável",
+        };
+        const currentSets = historyData.current_sets.length ? historyData.current_sets : [currentSet];
+
+        const decisionResponse = await fetch(`${API_BASE_URL}/api/recommendations/next-set/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            weight: Number(currentSet.weight_used),
+            reps: Number(currentSet.reps_completed),
+            rir: currentSet.rir,
+            is_failure: Boolean(currentSet.reached_failure),
+            notes: currentSet.notes || "",
+            set_type: currentSet.set_type,
+            set_number: Number(currentSet.set_number),
+            total_sets: 3,
+            profile_id: demo.profileId,
+            training_exercise_id: demo.trainingExerciseId,
+            workout_session_id: demo.sessionId,
+            target_min_reps: 10,
+            target_max_reps: 12,
+            target_rir: 2,
+            user_context: {
+              user_id: demo.userId,
+              goal: "HYPERTROPHY",
+              level: "INTERMEDIATE",
+              training_experience: "ONE_TO_THREE",
+              days_per_week: 5,
+              body_weight: 72,
+              age: 34,
+              gender: "MALE",
+            },
+            exercise_context: {
+              exercise_id: demo.exerciseId,
+              exercise_name: demo.exerciseName,
+              muscle_group: "Chest",
+              movement_pattern: "HORIZONTAL_PUSH",
+              is_compound: true,
+              equipment: "Machine",
+              target_min_reps: 10,
+              target_max_reps: 12,
+              target_rir: 2,
+              planned_sets: 3,
+            },
+            session_context: {
+              workout_id: demo.workoutId,
+              session_id: demo.sessionId,
+              current_set_number: Number(currentSet.set_number),
+              sets_completed_in_current_exercise: currentSets.length,
+              total_sets_completed_in_session: currentSets.length,
+              session_notes: "16.º treino: boa energia, sem dor",
+              current_exercise_notes: currentSet.notes || "",
+            },
+            current_sets: currentSets.map(serialiseSet),
+            previous_sets: historyData.previous_sets.map(serialiseSet),
+            history_sets: historyData.history_sets.map(serialiseSet),
+          }),
+        });
+        const decision = await decisionResponse.json();
+
+        if (!decisionResponse.ok) {
+          throw new Error(decision.error || "Erro ao chamar AI Coach");
+        }
+
+        const sessions = getSessionSummaries(historyData.history_sets);
+        renderMetrics(sessions, decision, currentSet);
+        renderHistoryChart(sessions);
+        renderDecision(decision);
+        renderRecentRows(sessions);
+      }
+
+      loadDemo().catch((error) => {
+        document.getElementById("status").innerHTML = `<div class="error">${error.message}</div>`;
+      });
+    </script>
+  </body>
+</html>

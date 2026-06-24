@@ -6,9 +6,11 @@ from rest_framework import status
 
 from accounts.models import UserProfile
 from progression.models import SetLog
+from recommendations.services.ai_coach_engine import generate_session_ai_coach_summary
 from recommendations.services.workout_progression_engine import calculate_workout_progression
 
 from .serializers import TrainingProgramSerializer, WorkoutSessionSerializer
+from .services.athlete_dashboard import build_athlete_dashboard
 from .services.training_generator import generate_training_program
 from .models import TrainingProgram, TrainingWorkout, WorkoutSession
 
@@ -119,11 +121,18 @@ class FinishWorkoutSessionView(APIView):
             "created_at",
         )
         progression = calculate_workout_progression(session.workout, set_logs)
+        ai_coach_summary = generate_session_ai_coach_summary(
+            session.workout,
+            set_logs,
+            progression,
+            notes,
+        )
 
         return Response(
             {
                 **serializer.data,
                 "next_workout_progression": progression,
+                "ai_coach_summary": ai_coach_summary,
             },
             status=status.HTTP_200_OK,
         )
@@ -141,3 +150,17 @@ class WorkoutSessionListView(APIView):
         serializer = WorkoutSessionSerializer(sessions, many=True)
 
         return Response(serializer.data)
+
+
+class AthleteDashboardView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(build_athlete_dashboard(profile))
