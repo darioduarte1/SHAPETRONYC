@@ -2,6 +2,7 @@ TARGET_REPS = 12
 WEIGHT_STEP = 2.5
 HISTORY_LIMIT = 15
 MIN_HISTORY_FOR_HIGH_CONFIDENCE = 5
+SIMPLE_EXERCISE_PATTERNS = {"ISOLATION", "CORE", "CARDIO"}
 
 
 def round_recommended_weight(weight):
@@ -239,44 +240,122 @@ def calculate_first_working_set_from_history(recent_session_sets, target_reps=TA
     }
 
 
-def calculate_warmup_from_first_working_set(first_working_set, target_reps=TARGET_REPS):
+def get_exercise_profile_value(exercise_profile, key, default=None):
+    if not exercise_profile:
+        return default
+
+    if isinstance(exercise_profile, dict):
+        return exercise_profile.get(key, default)
+
+    return getattr(exercise_profile, key, default)
+
+
+def is_simple_exercise(exercise_profile):
+    movement_pattern = get_exercise_profile_value(exercise_profile, "movement_pattern", "")
+    is_compound = bool(get_exercise_profile_value(exercise_profile, "is_compound", False))
+
+    return not is_compound or movement_pattern in SIMPLE_EXERCISE_PATTERNS
+
+
+def build_warmup_ramp(first_weight, exercise_profile=None):
+    simple_exercise = is_simple_exercise(exercise_profile)
+
+    if first_weight < 25:
+        return [
+            {"ratio": 0.6, "reps": 8},
+        ]
+
+    if first_weight < 50:
+        return [
+            {"ratio": 0.5, "reps": 10},
+        ]
+
+    if first_weight < 80:
+        if simple_exercise:
+            return [
+                {"ratio": 0.55, "reps": 8},
+            ]
+
+        return [
+            {"ratio": 0.45, "reps": 8},
+            {"ratio": 0.7, "reps": 4},
+        ]
+
+    if first_weight < 120:
+        return [
+            {"ratio": 0.4, "reps": 8},
+            {"ratio": 0.65, "reps": 5},
+            {"ratio": 0.82, "reps": 2},
+        ]
+
+    return [
+        {"ratio": 0.35, "reps": 8},
+        {"ratio": 0.55, "reps": 5},
+        {"ratio": 0.72, "reps": 3},
+        {"ratio": 0.85, "reps": 1},
+    ]
+
+
+def calculate_warmups_from_first_working_set(
+    first_working_set,
+    target_reps=TARGET_REPS,
+    exercise_profile=None,
+):
     first_weight = number_or_none(first_working_set.get("recommended_weight"))
 
     if first_weight is None:
-        return {
-            "recommended_weight": "",
-            "recommended_reps": "",
-            "reason": "Aquecimento depende da primeira série normal prevista.",
-            "confidence": "baixa",
-            "decision_basis": ["Sem carga prevista para a primeira série normal"],
-            "source": "warmup_from_first_working_set",
+        return [
+            {
+                "recommended_weight": "",
+                "recommended_reps": "",
+                "reason": "Aquecimento depende da primeira série normal prevista.",
+                "confidence": "baixa",
+                "decision_basis": ["Sem carga prevista para a primeira série normal"],
+                "source": "warmup_from_first_working_set",
+            }
+        ]
+
+    warmup_ramp = build_warmup_ramp(first_weight, exercise_profile)
+    total_warmups = len(warmup_ramp)
+
+    return [
+        {
+            "recommended_weight": round_recommended_weight(first_weight * warmup_step["ratio"]),
+            "recommended_reps": min(target_reps, warmup_step["reps"]),
+            "reason": "Aquecimento progressivo calculado para chegar à primeira série normal com técnica pronta e pouca fadiga.",
+            "confidence": first_working_set.get("confidence", "média"),
+            "decision_basis": [
+                f"Primeira série normal prevista: {first_weight}kg",
+                f"Aquecimento {index}/{total_warmups} a {int(warmup_step['ratio'] * 100)}% da carga alvo",
+                "Reps descem à medida que a carga se aproxima da série normal",
+            ],
+            "source": "warmup_ramp_from_first_working_set",
         }
-
-    warmup_ratio = 0.5 if first_weight >= 30 else 0.6
-
-    return {
-        "recommended_weight": round_recommended_weight(first_weight * warmup_ratio),
-        "recommended_reps": min(target_reps, 10),
-        "reason": "Aquecimento calculado como proporção direta da primeira série normal prevista.",
-        "confidence": first_working_set.get("confidence", "média"),
-        "decision_basis": [
-            f"Primeira série normal prevista: {first_weight}kg",
-            f"Aquecimento a {int(warmup_ratio * 100)}% da carga alvo",
-        ],
-        "source": "warmup_from_first_working_set",
-    }
+        for index, warmup_step in enumerate(warmup_ramp, start=1)
+    ]
 
 
-def build_history_based_recommended_sets(recent_session_sets, planned_working_sets, target_reps=TARGET_REPS):
+def build_history_based_recommended_sets(
+    recent_session_sets,
+    planned_working_sets,
+    target_reps=TARGET_REPS,
+    exercise_profile=None,
+):
     first_working_set = calculate_first_working_set_from_history(recent_session_sets, target_reps)
-    warmup_set = calculate_warmup_from_first_working_set(first_working_set, target_reps)
+    warmup_sets = calculate_warmups_from_first_working_set(
+        first_working_set,
+        target_reps,
+        exercise_profile,
+    )
     recommended_sets = [
         {
-            "set_number": 1,
+            "set_number": index,
             "set_type": "WARMUP",
             **warmup_set,
         }
+        for index, warmup_set in enumerate(warmup_sets, start=1)
     ]
+    warmup_count = len(warmup_sets)
 
     for set_number in range(1, planned_working_sets + 1):
         if set_number == 1:
@@ -293,7 +372,7 @@ def build_history_based_recommended_sets(recent_session_sets, planned_working_se
 
         recommended_sets.append(
             {
-                "set_number": set_number + 1,
+                "set_number": warmup_count + set_number,
                 "set_type": "WORKING",
                 **set_recommendation,
             }

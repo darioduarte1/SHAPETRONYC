@@ -1,3 +1,109 @@
-from django.test import TestCase
+from datetime import timedelta
 
-# Create your tests here.
+from django.contrib.auth.models import User
+from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from accounts.models import UserProfile
+from exercises.models import Exercise
+from progression.models import SetLog
+from training.models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
+from training.services.athlete_dashboard import build_athlete_dashboard
+
+
+class AthleteDashboardTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="dashboard_user")
+        self.profile = UserProfile.objects.create(
+            user=self.user,
+            gender="MALE",
+            age=34,
+            height_cm=172,
+            weight_kg=72,
+            goal="HYPERTROPHY",
+            level="INTERMEDIATE",
+            training_experience="ONE_TO_THREE",
+            days_per_week=5,
+        )
+        self.program = TrainingProgram.objects.create(
+            user=self.user,
+            name="Dashboard Program",
+            goal="HYPERTROPHY",
+            level="INTERMEDIATE",
+            days_per_week=5,
+        )
+        self.workout = TrainingWorkout.objects.create(
+            program=self.program,
+            name="Push",
+            order=1,
+        )
+        self.exercise = Exercise.objects.create(
+            name="Chest Press Machine",
+            muscle_group="Chest",
+            equipment="Machine",
+            movement_pattern="HORIZONTAL_PUSH",
+            is_compound=True,
+        )
+        self.training_exercise = TrainingWorkoutExercise.objects.create(
+            workout=self.workout,
+            exercise=self.exercise,
+            order=1,
+            sets=3,
+            target_min_reps=10,
+            target_max_reps=12,
+            target_rir=2,
+        )
+
+    def create_completed_session(self, days_ago, weight, reps=12, rir=2, reached_failure=False):
+        completed_at = timezone.now() - timedelta(days=days_ago)
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="COMPLETED",
+            completed_at=completed_at,
+        )
+        SetLog.objects.create(
+            user=self.user,
+            workout_session=session,
+            training_exercise=self.training_exercise,
+            exercise=self.exercise,
+            set_number=1,
+            set_type="WORKING",
+            planned_weight=None,
+            weight_used=weight,
+            target_min_reps=10,
+            target_max_reps=12,
+            reps_completed=reps,
+            rir=rir,
+            reached_failure=reached_failure,
+        )
+
+        return session
+
+    def test_dashboard_summarizes_volume_progression_and_watchlist(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=55, reps=8, rir=None, reached_failure=True)
+
+        dashboard = build_athlete_dashboard(self.profile)
+
+        self.assertEqual(dashboard["summary"]["completed_workouts"], 3)
+        self.assertEqual(dashboard["summary"]["total_sets"], 3)
+        self.assertEqual(dashboard["summary"]["failure_count"], 1)
+        self.assertEqual(dashboard["summary"]["total_volume"], 1700.0)
+        self.assertEqual(len(dashboard["recent_sessions"]), 3)
+        self.assertEqual(dashboard["top_progressing_exercises"][0]["exercise_name"], "Chest Press Machine")
+        self.assertEqual(dashboard["top_progressing_exercises"][0]["load_change"], 5.0)
+        self.assertEqual(dashboard["watchlist_exercises"][0]["exercise_name"], "Chest Press Machine")
+        self.assertIn("falha", dashboard["watchlist_exercises"][0]["reason"])
+
+    def test_dashboard_endpoint_returns_profile_dashboard(self):
+        self.create_completed_session(days_ago=1, weight=50, reps=12, rir=2)
+        client = APIClient()
+
+        response = client.get(f"/api/training/dashboard/{self.profile.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["profile_id"], self.profile.id)
+        self.assertEqual(response.data["summary"]["completed_workouts"], 1)

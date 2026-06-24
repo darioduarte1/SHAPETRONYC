@@ -39,6 +39,7 @@ function App() {
   const [removedSetByKey, setRemovedSetByKey] = useState({});
   const [latestWorkoutProgression, setLatestWorkoutProgression] = useState(null);
   const [latestAiCoach, setLatestAiCoach] = useState(null);
+  const [athleteDashboard, setAthleteDashboard] = useState(null);
 
   const [form, setForm] = useState({
     username: "",
@@ -486,6 +487,28 @@ function App() {
     };
   }
 
+  function formatNumber(value, digits = 1) {
+    return Number(value || 0).toFixed(digits);
+  }
+
+  function formatDashboardDate(dateValue) {
+    if (!dateValue) {
+      return "-";
+    }
+
+    return new Date(dateValue).toLocaleDateString("pt-PT", {
+      day: "2-digit",
+      month: "short",
+    });
+  }
+
+  function getDashboardMaxWeeklyVolume(dashboard) {
+    return Math.max(
+      ...((dashboard?.weekly_volume || []).map((week) => Number(week.volume) || 0)),
+      1
+    );
+  }
+
   function getProgressionActionLabel(action) {
     const labels = {
       increase_load: "Subir carga",
@@ -524,6 +547,7 @@ function App() {
       ollama_training_decision: "IA Ollama local",
       last_15_workout_history: "Histórico últimos 15 treinos",
       warmup_from_first_working_set: "Aquecimento proporcional",
+      warmup_ramp_from_first_working_set: "Aquecimento progressivo",
       training_coach_engine: "Motor local",
     };
 
@@ -562,6 +586,25 @@ function App() {
         [field]: value,
       },
     });
+  }
+
+  async function loadAthleteDashboard(profileIdOverride = null) {
+    const dashboardProfileId = profileIdOverride || profileId;
+
+    if (!dashboardProfileId) {
+      return null;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/training/dashboard/${dashboardProfileId}/`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return null;
+    }
+
+    setAthleteDashboard(data);
+    return data;
   }
 
   function toggleWorkout(workoutId) {
@@ -755,6 +798,7 @@ function App() {
       setExerciseRowCounts({});
       setRemovedSetByKey({});
       setOpenSetTypeMenuBySet({});
+      loadAthleteDashboard(profileId);
       setStep(4);
     } catch (error) {
       console.error(error);
@@ -794,6 +838,7 @@ function App() {
     setExerciseRowCounts({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
+    loadAthleteDashboard();
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -836,6 +881,7 @@ function App() {
     setOpenSetTypeMenuBySet({});
     setLatestWorkoutProgression(data.next_workout_progression || null);
     setLatestAiCoach(data.ai_coach_summary || null);
+    loadAthleteDashboard();
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -1150,6 +1196,188 @@ function App() {
       {step === 4 && program && (
         <div>
           <h2>{program.name}</h2>
+
+          {athleteDashboard && (
+            <section
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                background: "rgba(15, 23, 42, 0.72)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: "#94a3b8",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      letterSpacing: "0",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Dashboard
+                  </div>
+                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>Evolução do atleta</h3>
+                </div>
+                <span style={{ color: "#bae6fd", fontSize: "12px", fontWeight: "bold" }}>
+                  Último treino: {formatDashboardDate(athleteDashboard.summary?.last_workout_at)}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                  gap: "10px",
+                  marginTop: "14px",
+                }}
+              >
+                <div>
+                  <strong>{athleteDashboard.summary?.completed_workouts || 0}</strong>
+                  <p style={{ margin: 0, color: "#94a3b8" }}>Treinos</p>
+                </div>
+                <div>
+                  <strong>{formatNumber(athleteDashboard.summary?.total_volume)} kg</strong>
+                  <p style={{ margin: 0, color: "#94a3b8" }}>Volume</p>
+                </div>
+                <div>
+                  <strong>{athleteDashboard.summary?.total_sets || 0}</strong>
+                  <p style={{ margin: 0, color: "#94a3b8" }}>Séries</p>
+                </div>
+                <div>
+                  <strong>{athleteDashboard.summary?.average_rir ?? "-"}</strong>
+                  <p style={{ margin: 0, color: "#94a3b8" }}>RIR médio</p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "14px",
+                  marginTop: "16px",
+                }}
+              >
+                <div>
+                  <strong>Volume semanal</strong>
+                  {athleteDashboard.weekly_volume?.length > 0 ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: `repeat(${athleteDashboard.weekly_volume.length}, minmax(32px, 1fr))`,
+                        gap: "8px",
+                        alignItems: "end",
+                        height: "150px",
+                        marginTop: "10px",
+                      }}
+                    >
+                      {athleteDashboard.weekly_volume.map((week) => {
+                        const maxVolume = getDashboardMaxWeeklyVolume(athleteDashboard);
+                        const height = Math.max(8, (Number(week.volume) / maxVolume) * 112);
+
+                        return (
+                          <div key={week.week} style={{ display: "grid", gap: "6px", alignItems: "end" }}>
+                            <div
+                              title={`${week.week}: ${formatNumber(week.volume)} kg`}
+                              style={{
+                                height: `${height}px`,
+                                borderRadius: "5px 5px 2px 2px",
+                                background: "#38bdf8",
+                              }}
+                            />
+                            <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "bold" }}>
+                              {week.week.split("-")[1]}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ color: "#94a3b8" }}>Sem semanas concluídas.</p>
+                  )}
+                </div>
+
+                <div>
+                  <strong>Últimos treinos</strong>
+                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                    {(athleteDashboard.recent_sessions || []).slice(0, 4).map((session) => (
+                      <div
+                        key={session.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto",
+                          gap: "10px",
+                          paddingBottom: "8px",
+                          borderBottom: "1px solid rgba(148, 163, 184, 0.22)",
+                        }}
+                      >
+                        <span>{session.workout_name}</span>
+                        <span style={{ color: "#94a3b8", fontSize: "13px" }}>
+                          {formatNumber(session.volume)} kg
+                        </span>
+                      </div>
+                    ))}
+                    {athleteDashboard.recent_sessions?.length === 0 && (
+                      <p style={{ margin: 0, color: "#94a3b8" }}>Ainda sem treinos concluídos.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: "14px",
+                  marginTop: "16px",
+                }}
+              >
+                <div>
+                  <strong>Melhor progressão</strong>
+                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                    {(athleteDashboard.top_progressing_exercises || []).map((exercise) => (
+                      <div key={exercise.exercise_id}>
+                        <span>{exercise.exercise_name}</span>
+                        <p style={{ margin: "3px 0 0", color: "#86efac", fontSize: "13px" }}>
+                          +{formatNumber(exercise.load_change)} kg em {exercise.sessions} treinos
+                        </p>
+                      </div>
+                    ))}
+                    {athleteDashboard.top_progressing_exercises?.length === 0 && (
+                      <p style={{ margin: 0, color: "#94a3b8" }}>Sem progressões suficientes.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <strong>A vigiar</strong>
+                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                    {(athleteDashboard.watchlist_exercises || []).map((exercise) => (
+                      <div key={exercise.exercise_id}>
+                        <span>{exercise.exercise_name}</span>
+                        <p style={{ margin: "3px 0 0", color: "#fbbf24", fontSize: "13px" }}>
+                          {exercise.reason}
+                        </p>
+                      </div>
+                    ))}
+                    {athleteDashboard.watchlist_exercises?.length === 0 && (
+                      <p style={{ margin: 0, color: "#94a3b8" }}>Sem alertas recentes.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
           {latestWorkoutProgression && (
             <section

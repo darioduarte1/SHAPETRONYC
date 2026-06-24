@@ -74,10 +74,10 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 28 testes a passar
+- Backend: 32 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso, incluindo user demo com 15 treinos anteriores e 16.º treino ativo
+- Teste manual no browser integrado concluído com sucesso, incluindo dashboard do Sprint 13, histórico por exercício e ramp-up progressivo de aquecimento
 
 ## Estado Atual
 
@@ -93,6 +93,7 @@ Implementado:
 - Recomendações para a próxima série
 - Recomendações iniciais baseadas nos últimos 15 treinos
 - Aquecimento calculado a partir da primeira série normal prevista
+- Ramp-up progressivo com múltiplos aquecimentos quando a carga e o exercício justificam
 - AI Coach série a série com ações fechadas e guardrails
 - Scores de fadiga, recuperação e prontidão
 - Interpretação de feedback do utilizador durante o treino
@@ -131,6 +132,7 @@ Em preparação:
 ### Training
 - `POST /api/training/generate-program/`
 - `GET /api/training/program/<profile_id>/`
+- `GET /api/training/dashboard/<profile_id>/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -441,20 +443,37 @@ Série 1: anterior 62.5kg x 12 | recomendado 60kg x 12
 Decisão do coach: subir carga quando a prontidão permite e os guardrails aprovam
 ```
 
-## Roadmap
-
 ### Sprint 13 - Dashboard do Atleta
 
 Objetivo:
-Criar uma visão agregada da evolução do atleta.
+Criar uma visão agregada da evolução do atleta para acompanhar progresso, consistência e sinais de atenção ao longo do tempo.
 
-Ideias:
-- KPIs de volume
-- Evolução de cargas
-- Evolução de reps
-- Frequência de treino
-- Exercícios com melhor progressão
-- Exercícios com estagnação
+Entregue:
+- Serviço `training/services/athlete_dashboard.py`
+- Endpoint `GET /api/training/dashboard/<profile_id>/`
+- KPIs globais:
+  - treinos concluídos
+  - volume total
+  - séries totais
+  - séries normais
+  - falhas
+  - RIR médio
+  - último treino concluído
+- Volume semanal agregado
+- Lista dos últimos treinos com volume, séries, falhas e RIR médio
+- Exercícios com melhor progressão de carga
+- Exercícios a vigiar por falhas recentes, reps abaixo do alvo ou descida de carga
+- Painel "Dashboard" no topo do programa no frontend
+- Atualização automática do dashboard ao gerar programa, iniciar treino e terminar treino
+- Testes do serviço e do endpoint
+- Regra de aquecimento progressivo:
+  - exercícios leves ou simples mantêm 1 aquecimento
+  - exercícios compostos/moderados podem criar 2 aquecimentos
+  - exercícios pesados podem criar 3 ou 4 aquecimentos
+  - reps descem à medida que a carga se aproxima da primeira série normal
+- Testes da regra de ramp-up e validação visual no browser integrado
+
+## Roadmap
 
 ### Sprint 14 - Memória de Treino
 

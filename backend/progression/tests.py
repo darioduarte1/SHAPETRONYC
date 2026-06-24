@@ -55,11 +55,73 @@ class ExerciseHistoryRecommendationTests(SimpleTestCase):
         )
 
         self.assertEqual(recommendations[0]["set_type"], "WARMUP")
-        self.assertEqual(recommendations[0]["recommended_weight"], 26.0)
+        self.assertEqual(recommendations[0]["recommended_weight"], 29.0)
         self.assertEqual(recommendations[1]["set_type"], "WORKING")
         self.assertEqual(recommendations[1]["recommended_weight"], 52.5)
         self.assertEqual(recommendations[1]["confidence"], "alta")
         self.assertEqual(len(recommendations), 4)
+
+    def test_heavier_compound_exercise_uses_multiple_warmup_ramp_sets(self):
+        recent_session_sets = [
+            [
+                SimpleNamespace(
+                    set_type="WORKING",
+                    weight_used=70,
+                    reps_completed=12,
+                    rir=3,
+                    reached_failure=False,
+                )
+            ]
+            for _ in range(5)
+        ]
+        exercise_profile = SimpleNamespace(
+            is_compound=True,
+            movement_pattern="HORIZONTAL_PUSH",
+        )
+
+        recommendations = build_history_based_recommended_sets(
+            recent_session_sets,
+            planned_working_sets=3,
+            exercise_profile=exercise_profile,
+        )
+
+        self.assertEqual([set_log["set_type"] for set_log in recommendations[:3]], ["WARMUP", "WARMUP", "WORKING"])
+        self.assertEqual(recommendations[0]["recommended_weight"], 32.5)
+        self.assertEqual(recommendations[0]["recommended_reps"], 8)
+        self.assertEqual(recommendations[1]["recommended_weight"], 51.0)
+        self.assertEqual(recommendations[1]["recommended_reps"], 4)
+        self.assertEqual(recommendations[2]["recommended_weight"], 72.5)
+        self.assertEqual(recommendations[2]["set_number"], 3)
+        self.assertEqual(len(recommendations), 5)
+
+    def test_very_heavy_compound_exercise_uses_three_warmups_before_working_set(self):
+        recent_session_sets = [
+            [
+                SimpleNamespace(
+                    set_type="WORKING",
+                    weight_used=100,
+                    reps_completed=12,
+                    rir=2,
+                    reached_failure=False,
+                )
+            ]
+            for _ in range(5)
+        ]
+        exercise_profile = SimpleNamespace(
+            is_compound=True,
+            movement_pattern="SQUAT",
+        )
+
+        recommendations = build_history_based_recommended_sets(
+            recent_session_sets,
+            planned_working_sets=3,
+            exercise_profile=exercise_profile,
+        )
+
+        self.assertEqual([set_log["set_type"] for set_log in recommendations[:4]], ["WARMUP", "WARMUP", "WARMUP", "WORKING"])
+        self.assertEqual([set_log["recommended_reps"] for set_log in recommendations[:3]], [8, 5, 2])
+        self.assertEqual(recommendations[3]["recommended_weight"], 102.5)
+        self.assertEqual(recommendations[3]["set_number"], 4)
 
     def test_last_15_history_reduces_first_working_set_after_misses(self):
         recent_session_sets = [

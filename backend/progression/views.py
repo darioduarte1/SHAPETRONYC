@@ -124,6 +124,7 @@ class ExerciseHistoryView(APIView):
         recommended_sets = build_history_based_recommended_sets(
             recent_session_sets,
             planned_working_sets,
+            exercise_profile=training_exercise.exercise if training_exercise else None,
         )
         max_rows = max(
             planned_working_sets + 1,
