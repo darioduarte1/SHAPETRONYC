@@ -16,6 +16,7 @@ from training.models import (
     WorkoutSession,
 )
 from training.services.athlete_dashboard import build_athlete_dashboard
+from training.services.adaptive_plan import build_adaptive_plan
 from training.services.training_memory import refresh_training_memory
 
 
@@ -148,3 +149,40 @@ class AthleteDashboardTests(TestCase):
 
         self.assertEqual(dashboard["training_memories"][0]["memory_type"], "PROGRESSION")
         self.assertEqual(dashboard["training_memories"][0]["exercise_name"], "Chest Press Machine")
+
+    def test_adaptive_plan_recommends_progression_from_training_memory(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+
+        adaptive_plan = build_adaptive_plan(self.profile)
+        recommendation = adaptive_plan["recommendations"][0]
+
+        self.assertEqual(recommendation["action"], "progress_load")
+        self.assertEqual(recommendation["load_adjustment"], 2.5)
+        self.assertEqual(recommendation["recommended_sets"], self.training_exercise.sets)
+
+    def test_adaptive_plan_protects_recovery_from_watchlist_memory(self):
+        self.create_completed_session(days_ago=14, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=7, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=1, weight=55, reps=8, rir=None, reached_failure=True)
+
+        adaptive_plan = build_adaptive_plan(self.profile)
+        recommendation = adaptive_plan["recommendations"][0]
+
+        self.assertEqual(recommendation["action"], "protect_recovery")
+        self.assertEqual(recommendation["priority"], "high")
+        self.assertEqual(recommendation["recommended_sets"], self.training_exercise.sets - 1)
+        self.assertEqual(recommendation["recommended_target_rir"], 3)
+
+    def test_adaptive_plan_endpoint_returns_recommendations(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+        client = APIClient()
+
+        response = client.get(f"/api/training/adaptive-plan/{self.profile.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["profile_id"], self.profile.id)
+        self.assertEqual(response.data["recommendations"][0]["action"], "progress_load")

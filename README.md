@@ -74,10 +74,10 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 34 testes a passar
+- Backend: 37 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento e memória do atleta
+- Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento, memória do atleta e plano adaptativo
 
 ## Estado Atual
 
@@ -103,14 +103,17 @@ Implementado:
 - Resumo simples da sessão em tempo real
 - Memória persistente por atleta/exercício
 - Painel de memória do atleta no dashboard
+- Plano adaptativo com recomendações por exercício
+- Ações adaptativas fechadas: proteger recuperação, aumentar margem, progredir carga e manter plano
+- Endpoint de plano adaptativo baseado na memória do atleta, dashboard e programa ativo
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
 - IA externa opcional para decisões durante o treino com OpenAI ou Ollama
 - Demo visual do Sprint 12 em `frontend/public/sprint12-ai-demo.html`
 
 Em preparação:
-- Dashboard completo
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
+- Aplicação automática controlada das recomendações adaptativas ao plano
 - Polimento da experiência visual do dashboard e análise semanal
 
 ## Fluxo Principal
@@ -135,6 +138,7 @@ Em preparação:
 - `POST /api/training/generate-program/`
 - `GET /api/training/program/<profile_id>/`
 - `GET /api/training/dashboard/<profile_id>/`
+- `GET /api/training/adaptive-plan/<profile_id>/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -496,19 +500,44 @@ Entregue:
 - Confiança por memória com base no número de sessões analisadas
 - Testes de criação, persistência e exposição das memórias no dashboard
 
-## Roadmap
-
 ### Sprint 15 - Sistema Adaptativo Completo
 
 Objetivo:
-Permitir que o plano se ajuste automaticamente com base no histórico, recuperação e performance.
+Criar a primeira camada de adaptação do plano com base no programa ativo, dashboard do atleta e memória persistente por exercício.
+
+Entregue:
+- Serviço `training/services/adaptive_plan.py`
+- Endpoint `GET /api/training/adaptive-plan/<profile_id>/`
+- Recomendações adaptativas por exercício do programa ativo
+- Leitura direta da memória de treino:
+  - `PROGRESSION` gera sugestão de progressão controlada de carga
+  - `WATCHLIST` gera proteção de recuperação, mais margem e possível redução de volume
+  - `EFFORT_PATTERN` gera aumento de margem antes de nova progressão
+- Resumo por plano com contagem de ações e prioridades altas
+- Painel "Plano adaptativo" no frontend
+- Evidência visível por recomendação para explicar o motivo da decisão
+- Primeira fase sem mutação automática do plano: a app recomenda, mostra o motivo e mantém o controlo explícito
+- Testes do serviço adaptativo e do endpoint
+
+Próximos passos do Sprint 15:
+- Permitir aplicar recomendações selecionadas ao plano
+- Criar histórico de recomendações aceites/ignoradas
+- Adicionar deload sugerido quando a watchlist persiste por vários treinos
+- Gerar feedback semanal com base em memória, consistência e tendência de volume
+
+## Roadmap
+
+### Sprint 16 - Aplicação Controlada das Recomendações
+
+Objetivo:
+Transformar recomendações adaptativas em alterações controladas ao plano, sempre com revisão explícita antes de aplicar.
 
 Ideias:
-- Ajuste automático de volume
-- Ajuste automático de carga
-- Alteração de exercícios
-- Deloads sugeridos
-- Feedback semanal
+- Botão para aplicar recomendação por exercício
+- Revisão antes/depois das alterações
+- Histórico de decisões adaptativas
+- Deload assistido
+- Feedback semanal consolidado
 
 ## Estrutura do Projeto
 

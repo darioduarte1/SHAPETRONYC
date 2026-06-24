@@ -40,6 +40,7 @@ function App() {
   const [latestWorkoutProgression, setLatestWorkoutProgression] = useState(null);
   const [latestAiCoach, setLatestAiCoach] = useState(null);
   const [athleteDashboard, setAthleteDashboard] = useState(null);
+  const [adaptivePlan, setAdaptivePlan] = useState(null);
 
   const [form, setForm] = useState({
     username: "",
@@ -509,6 +510,28 @@ function App() {
     );
   }
 
+  function getAdaptiveActionLabel(action) {
+    const labels = {
+      protect_recovery: "Proteger recuperação",
+      increase_margin: "Aumentar margem",
+      progress_load: "Progredir carga",
+      maintain_plan: "Manter plano",
+    };
+
+    return labels[action] || "Ajuste";
+  }
+
+  function getAdaptiveActionColor(action) {
+    const colors = {
+      protect_recovery: "#fbbf24",
+      increase_margin: "#38bdf8",
+      progress_load: "#86efac",
+      maintain_plan: "#94a3b8",
+    };
+
+    return colors[action] || "#94a3b8";
+  }
+
   function getProgressionActionLabel(action) {
     const labels = {
       increase_load: "Subir carga",
@@ -604,6 +627,25 @@ function App() {
     }
 
     setAthleteDashboard(data);
+    return data;
+  }
+
+  async function loadAdaptivePlan(profileIdOverride = null) {
+    const adaptiveProfileId = profileIdOverride || profileId;
+
+    if (!adaptiveProfileId) {
+      return null;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/training/adaptive-plan/${adaptiveProfileId}/`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return null;
+    }
+
+    setAdaptivePlan(data);
     return data;
   }
 
@@ -799,6 +841,7 @@ function App() {
       setRemovedSetByKey({});
       setOpenSetTypeMenuBySet({});
       loadAthleteDashboard(profileId);
+      loadAdaptivePlan(profileId);
       setStep(4);
     } catch (error) {
       console.error(error);
@@ -839,6 +882,7 @@ function App() {
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
     loadAthleteDashboard();
+    loadAdaptivePlan();
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -882,6 +926,7 @@ function App() {
     setLatestWorkoutProgression(data.next_workout_progression || null);
     setLatestAiCoach(data.ai_coach_summary || null);
     loadAthleteDashboard();
+    loadAdaptivePlan();
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -1430,6 +1475,108 @@ function App() {
                     </p>
                   )}
                 </div>
+              </div>
+            </section>
+          )}
+
+          {adaptivePlan && (
+            <section
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                background: "rgba(20, 83, 45, 0.28)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: "#86efac",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      letterSpacing: "0",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Plano adaptativo
+                  </div>
+                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>Ajustes sugeridos</h3>
+                </div>
+                <span style={{ color: "#bbf7d0", fontSize: "12px", fontWeight: "bold" }}>
+                  {adaptivePlan.summary?.high_priority_count || 0} prioridade alta
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
+                {(adaptivePlan.recommendations || [])
+                  .filter((recommendation) => recommendation.action !== "maintain_plan")
+                  .slice(0, 6)
+                  .map((recommendation) => (
+                    <div
+                      key={recommendation.training_exercise}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid rgba(134, 239, 172, 0.2)",
+                        borderRadius: "8px",
+                        background: "rgba(15, 23, 42, 0.38)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <div>
+                          <strong>{recommendation.exercise_name}</strong>
+                          <p style={{ margin: "4px 0 0", color: "#cbd5e1", fontSize: "13px" }}>
+                            {recommendation.workout_name}
+                          </p>
+                        </div>
+                        <span
+                          style={{
+                            color: getAdaptiveActionColor(recommendation.action),
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {getAdaptiveActionLabel(recommendation.action)}
+                        </span>
+                      </div>
+                      <p style={{ margin: "8px 0 0", color: "#e5e7eb" }}>
+                        {recommendation.message}
+                      </p>
+                      <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "13px" }}>
+                        Séries: {recommendation.current_sets} → {recommendation.recommended_sets} | RIR: {recommendation.current_target_rir} → {recommendation.recommended_target_rir} | carga {recommendation.load_adjustment > 0 ? "+" : ""}{recommendation.load_adjustment}kg
+                      </p>
+                      {recommendation.evidence?.length > 0 && (
+                        <div style={{ display: "grid", gap: "3px", marginTop: "8px" }}>
+                          {recommendation.evidence.map((item) => (
+                            <p key={item} style={{ margin: 0, color: "#94a3b8", fontSize: "12px" }}>
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                {(adaptivePlan.recommendations || []).filter((recommendation) => recommendation.action !== "maintain_plan").length === 0 && (
+                  <p style={{ margin: 0, color: "#94a3b8" }}>
+                    Sem ajustes adaptativos por agora. Mantém o plano e continua a recolher dados.
+                  </p>
+                )}
               </div>
             </section>
           )}
