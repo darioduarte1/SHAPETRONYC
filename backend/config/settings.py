@@ -138,7 +138,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
 ]
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 AI_COACH_MODEL = os.environ.get("AI_COACH_MODEL", "gpt-5.5")
+AI_TRAINING_DECISION_MODEL = os.environ.get("AI_TRAINING_DECISION_MODEL", AI_COACH_MODEL)
+AI_TRAINING_DECISION_PROVIDER = os.environ.get(
+    "AI_TRAINING_DECISION_PROVIDER",
+    "openai" if OPENAI_API_KEY else "local",
+)
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_TRAINING_DECISION_MODEL = os.environ.get("OLLAMA_TRAINING_DECISION_MODEL", "qwen3:8b")

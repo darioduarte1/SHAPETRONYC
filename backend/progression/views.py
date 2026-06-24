@@ -6,7 +6,12 @@ from accounts.models import UserProfile
 from training.models import TrainingWorkoutExercise, WorkoutSession
 from .models import SetLog
 from .serializers import SetLogSerializer
-from .services.exercise_history_recommendation import calculate_recommended_set
+from .services.exercise_history_recommendation import (
+    HISTORY_LIMIT,
+    build_history_based_recommended_sets,
+    group_sets_by_session,
+    summarize_recent_sessions,
+)
 
 
 class SetLogListCreateView(generics.ListCreateAPIView):
@@ -36,6 +41,16 @@ class ExerciseHistoryView(APIView):
             )
 
         training_exercise = None
+        current_session = None
+
+        if session_id:
+            try:
+                current_session = WorkoutSession.objects.select_related("workout").get(
+                    id=session_id,
+                    user=profile.user,
+                )
+            except (WorkoutSession.DoesNotExist, ValueError):
+                current_session = None
 
         if training_exercise_id:
             try:
@@ -52,19 +67,31 @@ class ExerciseHistoryView(APIView):
             workout_session_id=session_id,
         ).order_by("set_number", "created_at")
 
-        previous_session_ids = SetLog.objects.filter(
+        recent_sessions = WorkoutSession.objects.filter(
             user=profile.user,
-            exercise_id=exercise_id,
-            workout_session__status="COMPLETED",
-        ).exclude(
-            workout_session_id=session_id
-        ).values_list(
-            "workout_session_id",
-            flat=True,
-        ).distinct()
+            status="COMPLETED",
+            set_logs__exercise_id=exercise_id,
+        )
+
+        if current_session:
+            recent_sessions = recent_sessions.filter(
+                workout__name=current_session.workout.name,
+            ).exclude(
+                id=current_session.id,
+            )
+
+        recent_session_ids = list(
+            recent_sessions.order_by(
+                "-completed_at",
+                "-started_at",
+            ).values_list(
+                "id",
+                flat=True,
+            ).distinct()[:HISTORY_LIMIT]
+        )
 
         previous_session = WorkoutSession.objects.filter(
-            id__in=previous_session_ids,
+            id__in=recent_session_ids,
             user=profile.user,
         ).order_by(
             "-completed_at",
@@ -80,25 +107,30 @@ class ExerciseHistoryView(APIView):
                 workout_session=previous_session,
             ).order_by("set_number", "created_at")
 
-        previous_sets_by_number = {
-            set_log.set_number: set_log
-            for set_log in previous_sets
-        }
+        recent_set_logs = SetLog.objects.filter(
+            user=profile.user,
+            exercise_id=exercise_id,
+            workout_session_id__in=recent_session_ids,
+        ).select_related(
+            "workout_session__workout",
+        ).order_by(
+            "-workout_session__completed_at",
+            "-workout_session__started_at",
+            "set_number",
+            "created_at",
+        )
+        recent_session_sets = group_sets_by_session(recent_set_logs)
+        planned_working_sets = training_exercise.sets if training_exercise else 1
+        recommended_sets = build_history_based_recommended_sets(
+            recent_session_sets,
+            planned_working_sets,
+        )
         max_rows = max(
-            training_exercise.sets if training_exercise else 0,
-            len(previous_sets_by_number),
+            planned_working_sets + 1,
             current_sets.count(),
+            len(recommended_sets),
             1,
         )
-        recommended_sets = [
-            {
-                "set_number": set_number,
-                **calculate_recommended_set(
-                    previous_sets_by_number.get(set_number),
-                ),
-            }
-            for set_number in range(1, max_rows + 1)
-        ]
 
         return Response({
             "previous_session": {
@@ -108,5 +140,13 @@ class ExerciseHistoryView(APIView):
             } if previous_session else None,
             "previous_sets": SetLogSerializer(previous_sets, many=True).data,
             "current_sets": SetLogSerializer(current_sets, many=True).data,
+            "history_sets": SetLogSerializer(recent_set_logs, many=True).data,
             "recommended_sets": recommended_sets,
+            "history_summary": summarize_recent_sessions(recent_session_sets),
+            "history_scope": {
+                "workout_name": current_session.workout.name if current_session else None,
+                "session_limit": HISTORY_LIMIT,
+                "sessions_found": len(recent_session_sets),
+                "rows": max_rows,
+            },
         })

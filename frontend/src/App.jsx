@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
 const TARGET_REPS = 12;
 
@@ -115,6 +115,7 @@ function App() {
     return exerciseLogsById[trainingExerciseId] || {
       previous_sets: [],
       current_sets: [],
+      history_sets: [],
       previous_session: null,
       recommended_sets: [],
     };
@@ -126,26 +127,35 @@ function App() {
     );
   }
 
-  function getPreviousSetForRow(trainingExerciseId, setNumber) {
-    return getExerciseLogs(trainingExerciseId).previous_sets[setNumber - 1];
+  function normalizeSetType(setType) {
+    return setType || "WORKING";
   }
 
-  function getRecommendedSetForRow(trainingExerciseId, setNumber) {
-    const recommendedSet = getExerciseLogs(trainingExerciseId).recommended_sets.find(
-      (setRecommendation) => Number(setRecommendation.set_number) === setNumber
+  function getPreviousSetByTypePosition(trainingExerciseId, setType, typePosition) {
+    return getExerciseLogs(trainingExerciseId).previous_sets.filter(
+      (setLog) => normalizeSetType(setLog.set_type) === setType
+    )[typePosition - 1] || null;
+  }
+
+  function getRecommendedSetRecordForRow(trainingExerciseId, setNumber, setType = null) {
+    return getExerciseLogs(trainingExerciseId).recommended_sets.find(
+      (setRecommendation) =>
+        Number(setRecommendation.set_number) === setNumber &&
+        (!setType || setRecommendation.set_type === setType)
     );
+  }
+
+  function getRecommendedSetForRow(trainingExerciseId, setNumber, setType = null) {
+    const recommendedSet = getRecommendedSetRecordForRow(trainingExerciseId, setNumber, setType);
 
     return {
       weight: recommendedSet?.recommended_weight ?? "",
       reps: recommendedSet?.recommended_reps ?? "",
       reason: recommendedSet?.reason ?? "",
+      source: recommendedSet?.source ?? "",
+      confidence: recommendedSet?.confidence ?? "",
+      decisionBasis: recommendedSet?.decision_basis ?? [],
     };
-  }
-
-  function getWarmupReferenceSet(trainingExerciseId, setNumber) {
-    const previousSet = getPreviousSetForRow(trainingExerciseId, setNumber);
-
-    return previousSet?.set_type === "WARMUP" ? previousSet : null;
   }
 
   function getExerciseRowCount(exercise) {
@@ -153,9 +163,10 @@ function App() {
 
     return Math.max(
       exerciseRowCounts[exercise.id] || 0,
-      exercise.sets,
+      exercise.sets + 1,
       logs.previous_sets.length,
       logs.current_sets.length,
+      logs.recommended_sets.length,
       1
     );
   }
@@ -177,14 +188,36 @@ function App() {
   function getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
     const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
     const currentSet = getCurrentSetForRow(exercise.id, displaySetNumber);
-    const previousSet = getPreviousSetForRow(exercise.id, sourceSetNumber);
+    const recommendedSet = getRecommendedSetRecordForRow(exercise.id, sourceSetNumber);
     const hasCurrentSets = getExerciseLogs(exercise.id).current_sets.length > 0;
 
     if (!currentSet && !setForms[setFormKey]?.set_type && !hasCurrentSets && sourceSetNumber === 1) {
       return "WARMUP";
     }
 
-    return currentSet?.set_type || setForms[setFormKey]?.set_type || previousSet?.set_type || "WORKING";
+    return currentSet?.set_type || setForms[setFormKey]?.set_type || recommendedSet?.set_type || "WORKING";
+  }
+
+  function getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
+    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+    const currentRowIndex = rows.findIndex((row) => row.sourceSetNumber === sourceSetNumber);
+
+    return rows.slice(0, currentRowIndex + 1).filter(
+      (row) => getSetTypeForExerciseRow(exercise, row.sourceSetNumber, row.displaySetNumber) === rowSetType
+    ).length;
+  }
+
+  function getPreviousSetForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
+    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+    const typePosition = getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
+
+    return getPreviousSetByTypePosition(exercise.id, rowSetType, typePosition);
+  }
+
+  function getWarmupReferenceSet(exercise, rows, sourceSetNumber, displaySetNumber) {
+    const typePosition = getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
+
+    return getPreviousSetByTypePosition(exercise.id, "WARMUP", typePosition);
   }
 
   function getVisibleSetLabel(exercise, rows, sourceSetNumber, displaySetNumber) {
@@ -205,20 +238,24 @@ function App() {
     return String(sameTypeIndex);
   }
 
-  function getPlannedValuesForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
+  function getPlannedValuesForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
     const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
 
     if (rowSetType === "WARMUP") {
-      const warmupReferenceSet = getWarmupReferenceSet(exercise.id, sourceSetNumber);
+      const warmupReferenceSet = getWarmupReferenceSet(exercise, rows, sourceSetNumber, displaySetNumber);
+      const recommendedWarmup = getRecommendedSetForRow(exercise.id, sourceSetNumber, "WARMUP");
 
       return {
-        weight: warmupReferenceSet?.weight_used ?? "",
-        reps: warmupReferenceSet?.reps_completed ?? "",
-        reason: "",
+        weight: recommendedWarmup.weight || warmupReferenceSet?.weight_used || "",
+        reps: recommendedWarmup.reps || warmupReferenceSet?.reps_completed || "",
+        reason: recommendedWarmup.reason,
+        source: recommendedWarmup.source,
+        confidence: recommendedWarmup.confidence,
+        decisionBasis: recommendedWarmup.decisionBasis,
       };
     }
 
-    return getRecommendedSetForRow(exercise.id, sourceSetNumber);
+    return getRecommendedSetForRow(exercise.id, sourceSetNumber, "WORKING");
   }
 
   function shouldForceFailureEffort(setType, repsCompleted) {
@@ -253,12 +290,70 @@ function App() {
 
   function serializeSetForCoach(setLog) {
     return {
+      workout_session: setLog.workout_session,
+      session_id: setLog.workout_session,
       set_number: Number(setLog.set_number),
       set_type: setLog.set_type,
       weight_used: Number(setLog.weight_used),
       reps_completed: Number(setLog.reps_completed),
       rir: setLog.rir,
       reached_failure: Boolean(setLog.reached_failure),
+      notes: setLog.notes || "",
+      created_at: setLog.created_at,
+    };
+  }
+
+  function getRepsInputValue(repsValue, fallbackReps) {
+    if (typeof repsValue === "number") {
+      return repsValue;
+    }
+
+    const match = String(repsValue || "").match(/\d+/g);
+
+    if (!match?.length) {
+      return fallbackReps;
+    }
+
+    return Number(match[match.length - 1]);
+  }
+
+  function getExerciseTargetLabel(exercise) {
+    if (!exercise.target_min_reps || !exercise.target_max_reps) {
+      return `${TARGET_REPS}`;
+    }
+
+    if (exercise.target_min_reps === exercise.target_max_reps) {
+      return `${exercise.target_max_reps}`;
+    }
+
+    return `${exercise.target_min_reps}-${exercise.target_max_reps}`;
+  }
+
+  function buildUserCoachContext() {
+    return {
+      user_id: userId,
+      goal: form.goal,
+      level: form.level,
+      training_experience: form.training_experience,
+      days_per_week: Number(form.days_per_week),
+      body_weight: Number(form.weight_kg),
+      age: Number(form.age),
+      gender: form.gender,
+    };
+  }
+
+  function buildExerciseCoachContext(exercise) {
+    return {
+      exercise_id: exercise.exercise,
+      exercise_name: exercise.exercise_name,
+      muscle_group: exercise.exercise_muscle_group,
+      movement_pattern: exercise.exercise_movement_pattern,
+      is_compound: Boolean(exercise.exercise_is_compound),
+      equipment: exercise.exercise_equipment,
+      target_min_reps: exercise.target_min_reps,
+      target_max_reps: exercise.target_max_reps,
+      target_rir: exercise.target_rir,
+      planned_sets: exercise.sets,
     };
   }
 
@@ -276,6 +371,24 @@ function App() {
       };
     }
 
+    const latestRecommendation = recommendations[exercise.id];
+
+    if (latestRecommendation?.exercise_status === "complete") {
+      return {
+        eyebrow: "Exercício concluído",
+        title: latestRecommendation.guidance_title || "Passa para o próximo exercício",
+        message: latestRecommendation.guidance_message || "O coach decidiu que continuar agora acrescenta mais fadiga do que benefício.",
+        reason: latestRecommendation.reason,
+        isResting: false,
+        source: latestRecommendation.source,
+        confidence: latestRecommendation.confidence,
+        llmStatus: latestRecommendation.llm_status,
+        guardrailApplied: latestRecommendation.guardrail_applied,
+        guardrailReason: latestRecommendation.guardrail_reason,
+        decisionBasis: latestRecommendation.decision_basis || [],
+      };
+    }
+
     const nextRow = getNextExerciseRow(exercise, rows);
 
     if (!nextRow) {
@@ -289,21 +402,41 @@ function App() {
 
     const rowSetType = getSetTypeForExerciseRow(exercise, nextRow.sourceSetNumber, nextRow.displaySetNumber);
     const visibleSetLabel = getVisibleSetLabel(exercise, rows, nextRow.sourceSetNumber, nextRow.displaySetNumber);
-    const plannedValues = getPlannedValuesForExerciseRow(exercise, nextRow.sourceSetNumber, nextRow.displaySetNumber);
-    const warmupReferenceSet = getWarmupReferenceSet(exercise.id, nextRow.sourceSetNumber);
-    const latestRecommendation = recommendations[exercise.id];
+    const plannedValues = getPlannedValuesForExerciseRow(
+      exercise,
+      rows,
+      nextRow.sourceSetNumber,
+      nextRow.displaySetNumber
+    );
+    const warmupReferenceSet = getWarmupReferenceSet(
+      exercise,
+      rows,
+      nextRow.sourceSetNumber,
+      nextRow.displaySetNumber
+    );
     const recommendedWeight = plannedValues.weight || latestRecommendation?.recommended_weight;
     const recommendedReps = plannedValues.reps || latestRecommendation?.target_reps;
+    const targetLabel = latestRecommendation?.target_reps_label || getExerciseTargetLabel(exercise);
     const hasLoadTarget = recommendedWeight !== "" && recommendedWeight !== undefined && recommendedReps;
     const loadCue = hasLoadTarget
-      ? `Aponta para ${recommendedWeight}kg x ${recommendedReps} reps.`
-      : `Trabalha com o objectivo de chegar às ${TARGET_REPS} reps.`;
-    const warmupCue = warmupReferenceSet
-      ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
+      ? `Aponta para ${recommendedWeight}kg x ${targetLabel} reps.`
+      : `Trabalha com o objectivo de chegar às ${targetLabel} reps.`;
+    const warmupCue = plannedValues.weight && plannedValues.reps
+        ? `Aquecimento recomendado: ${plannedValues.weight}kg x ${plannedValues.reps} reps.`
+      : warmupReferenceSet
+        ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
       : `Sobe a carga gradualmente até sentires o movimento pronto.`;
     const coachTitle = latestRecommendation?.guidance_title;
     const coachMessage = latestRecommendation?.guidance_message;
-    const reason = plannedValues.reason || latestRecommendation?.reason || "";
+    const reason = latestRecommendation?.reason || plannedValues.reason || "";
+    const coachMetadata = {
+      source: latestRecommendation?.source || plannedValues.source,
+      confidence: latestRecommendation?.confidence || plannedValues.confidence,
+      llmStatus: latestRecommendation?.llm_status,
+      guardrailApplied: latestRecommendation?.guardrail_applied,
+      guardrailReason: latestRecommendation?.guardrail_reason,
+      decisionBasis: latestRecommendation?.decision_basis || plannedValues.decisionBasis || [],
+    };
 
     if (rowSetType === "WARMUP") {
       return {
@@ -312,6 +445,7 @@ function App() {
         message: `Usa uma carga controlada para preparar o movimento. ${warmupCue}`,
         reason: "",
         isResting: false,
+        ...coachMetadata,
       };
     }
 
@@ -322,6 +456,7 @@ function App() {
         message: coachMessage ? `${coachMessage} ${loadCue}` : `Reduz a carga e mantém a execução limpa até ao alvo. ${loadCue}`,
         reason,
         isResting: false,
+        ...coachMetadata,
       };
     }
 
@@ -331,6 +466,7 @@ function App() {
       message: coachMessage ? `${coachMessage} ${loadCue}` : `Mantém o controlo e respeita o esforço planeado. ${loadCue}`,
       reason,
       isResting: false,
+      ...coachMetadata,
     };
   }
 
@@ -378,6 +514,40 @@ function App() {
     };
 
     return labels[status] || "Coach";
+  }
+
+  function getDecisionSourceLabel(source) {
+    const labels = {
+      hybrid_local_training_coach: "Coach híbrido local",
+      hybrid_local_workout_progression: "Progressão híbrida local",
+      openai_training_decision: "IA OpenAI série a série",
+      ollama_training_decision: "IA Ollama local",
+      last_15_workout_history: "Histórico últimos 15 treinos",
+      warmup_from_first_working_set: "Aquecimento proporcional",
+      training_coach_engine: "Motor local",
+    };
+
+    return labels[source] || "Motor local";
+  }
+
+  function getLlmStatusLabel(status) {
+    const labels = {
+      llm_enabled: "IA ativa",
+      llm_error: "Fallback local",
+      llm_disabled: "Regras locais",
+    };
+
+    return labels[status] || "";
+  }
+
+  function getConfidenceColor(confidence) {
+    const colors = {
+      alta: "#22c55e",
+      média: "#eab308",
+      baixa: "#f97316",
+    };
+
+    return colors[confidence] || "#94a3b8";
   }
 
   function handleChange(e) {
@@ -487,9 +657,10 @@ function App() {
       ...currentCounts,
       [exercise.id]: Math.max(
         currentCounts[exercise.id] || 0,
-        exercise.sets,
+        exercise.sets + 1,
         data.previous_sets.length,
         data.current_sets.length,
+        data.recommended_sets.length,
         1
       ),
     }));
@@ -579,6 +750,7 @@ function App() {
       setOpenWorkoutId(null);
       setLatestWorkoutProgression(null);
       setLatestAiCoach(null);
+      setRecommendations({});
       setExerciseLogsById({});
       setExerciseRowCounts({});
       setRemovedSetByKey({});
@@ -617,6 +789,11 @@ function App() {
     setOpenWorkoutId(workout.id);
     setLatestWorkoutProgression(null);
     setLatestAiCoach(null);
+    setRecommendations({});
+    setExerciseLogsById({});
+    setExerciseRowCounts({});
+    setRemovedSetByKey({});
+    setOpenSetTypeMenuBySet({});
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -703,9 +880,10 @@ function App() {
     const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
     const formData = setForms[setFormKey] || {};
     const sessionId = activeSessionByWorkout[exercise.workout];
-    const previousSet = getPreviousSetForRow(exercise.id, sourceSetNumber);
+    const rows = getExerciseRows(exercise);
+    const previousSet = getPreviousSetForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
     const setType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
-    const plannedValues = getPlannedValuesForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
+    const plannedValues = getPlannedValuesForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
     const weightUsed = formData.weight_used ?? plannedValues.weight;
     const repsCompleted = formData.reps_completed ?? plannedValues.reps;
     const selectedEffortOption = shouldForceFailureEffort(setType, repsCompleted)
@@ -735,8 +913,8 @@ function App() {
         set_type: setType,
         planned_weight: previousSet?.weight_used ?? null,
         weight_used: Number(weightUsed),
-        target_min_reps: TARGET_REPS,
-        target_max_reps: TARGET_REPS,
+        target_min_reps: exercise.target_min_reps || TARGET_REPS,
+        target_max_reps: exercise.target_max_reps || TARGET_REPS,
         reps_completed: Number(repsCompleted),
         rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
         reached_failure: selectedEffortOption.reachedFailure,
@@ -756,6 +934,7 @@ function App() {
       const currentExerciseLogs = currentLogs[exercise.id] || {
         previous_sets: [],
         current_sets: [],
+        history_sets: [],
         previous_session: null,
         recommended_sets: [],
       };
@@ -814,8 +993,29 @@ function App() {
         set_type: setType,
         set_number: displaySetNumber,
         total_sets: exercise.sets,
+        profile_id: profileId,
+        training_exercise_id: exercise.id,
+        workout_session_id: sessionId,
+        target_min_reps: exercise.target_min_reps || TARGET_REPS,
+        target_max_reps: exercise.target_max_reps || TARGET_REPS,
+        target_rir: exercise.target_rir || 2,
+        user_context: buildUserCoachContext(),
+        exercise_context: buildExerciseCoachContext(exercise),
+        session_context: {
+          workout_id: exercise.workout,
+          session_id: sessionId,
+          current_set_number: displaySetNumber,
+          sets_completed_in_current_exercise: completedSetsForCoach.length,
+          total_sets_completed_in_session: Object.values(exerciseLogsById).reduce(
+            (totalSets, exerciseLogs) => totalSets + (exerciseLogs.current_sets?.length || 0),
+            0
+          ) + 1,
+          session_notes: sessionNotes[exercise.workout] || "",
+          current_exercise_notes: formData.notes || "",
+        },
         current_sets: completedSetsForCoach.map(serializeSetForCoach),
         previous_sets: currentExerciseLogs.previous_sets.map(serializeSetForCoach),
+        history_sets: currentExerciseLogs.history_sets.map(serializeSetForCoach),
       }),
     });
 
@@ -826,6 +1026,41 @@ function App() {
         ...recommendations,
         [exercise.id]: recommendationData,
       });
+
+      if (recommendationData.exercise_status !== "complete") {
+        const nextSourceSetNumber = sourceSetNumber + 1;
+        const nextSetFormKey = getSetFormKey(exercise.id, nextSourceSetNumber);
+
+        if (recommendationData.next_set_type && recommendationData.next_set_type !== "COMPLETE") {
+          setSetForms((currentSetForms) => ({
+            ...currentSetForms,
+            [nextSetFormKey]: {
+              ...currentSetForms[nextSetFormKey],
+              set_type: recommendationData.next_set_type,
+              weight_used:
+                recommendationData.recommended_weight === ""
+                  ? currentSetForms[nextSetFormKey]?.weight_used
+                  : recommendationData.recommended_weight,
+              reps_completed:
+                recommendationData.target_reps === ""
+                  ? currentSetForms[nextSetFormKey]?.reps_completed
+                  : getRepsInputValue(
+                      recommendationData.target_reps,
+                      exercise.target_max_reps || TARGET_REPS
+                    ),
+            },
+          }));
+        }
+
+        setExerciseRowCounts((currentCounts) => ({
+          ...currentCounts,
+          [exercise.id]: Math.max(
+            currentCounts[exercise.id] || 0,
+            getExerciseRowCount(exercise),
+            nextSourceSetNumber
+          ),
+        }));
+      }
     }
   }
 
@@ -978,6 +1213,34 @@ function App() {
                     <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
                       {recommendation.message}
                     </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px",
+                        marginTop: "10px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      <span style={{ color: "#bae6fd" }}>
+                        {getDecisionSourceLabel(recommendation.source)}
+                      </span>
+                      {recommendation.confidence && (
+                        <span style={{ color: getConfidenceColor(recommendation.confidence) }}>
+                          Confiança {recommendation.confidence}
+                        </span>
+                      )}
+                    </div>
+                    {recommendation.decision_basis?.length > 0 && (
+                      <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
+                        {recommendation.decision_basis.map((basis) => (
+                          <p key={basis} style={{ margin: 0, color: "#cbd5e1", fontSize: "12px" }}>
+                            {basis}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1226,6 +1489,48 @@ function App() {
                                   </p>
                                 )}
 
+                                {guidance.source && !guidance.isResting && (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "8px",
+                                      marginTop: "10px",
+                                      fontSize: "12px",
+                                      fontWeight: "bold",
+                                    }}
+                                  >
+                                    <span style={{ color: "#bae6fd" }}>
+                                      {getDecisionSourceLabel(guidance.source)}
+                                    </span>
+                                    {guidance.llmStatus && (
+                                      <span style={{ color: guidance.llmStatus === "llm_enabled" ? "#86efac" : "#fbbf24" }}>
+                                        {getLlmStatusLabel(guidance.llmStatus)}
+                                      </span>
+                                    )}
+                                    {guidance.confidence && (
+                                      <span style={{ color: getConfidenceColor(guidance.confidence) }}>
+                                        Confiança {guidance.confidence}
+                                      </span>
+                                    )}
+                                    {guidance.guardrailApplied && (
+                                      <span title={guidance.guardrailReason} style={{ color: "#fbbf24" }}>
+                                        Guardrail aplicado
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {guidance.decisionBasis?.length > 0 && !guidance.isResting && (
+                                  <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
+                                    {guidance.decisionBasis.map((basis) => (
+                                      <p key={basis} style={{ margin: 0, color: "#cbd5e1", fontSize: "12px" }}>
+                                        {basis}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
                                 {guidance.isResting && (
                                   <div style={{ marginTop: "14px" }}>
                                     <div
@@ -1272,10 +1577,15 @@ function App() {
                                     {rows.map(({ sourceSetNumber, displaySetNumber }) => {
                                       const setFormKey = getSetFormKey(item.id, sourceSetNumber);
                                       const currentSet = getCurrentSetForRow(item.id, displaySetNumber);
-                                      const previousSet = getPreviousSetForRow(item.id, sourceSetNumber);
                                       const rowForm = setForms[setFormKey] || {};
                                       const rowSetType = getSetTypeForExerciseRow(
                                         item,
+                                        sourceSetNumber,
+                                        displaySetNumber
+                                      );
+                                      const previousSet = getPreviousSetForExerciseRow(
+                                        item,
+                                        rows,
                                         sourceSetNumber,
                                         displaySetNumber
                                       );
@@ -1291,6 +1601,7 @@ function App() {
                                       const restSecondsForRow = getRestSecondsForRow(setFormKey);
                                       const plannedValues = getPlannedValuesForExerciseRow(
                                         item,
+                                        rows,
                                         sourceSetNumber,
                                         displaySetNumber
                                       );

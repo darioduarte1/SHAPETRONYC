@@ -24,11 +24,28 @@ cd backend
 ./venv/bin/python manage.py runserver 127.0.0.1:8000
 ```
 
+Para usar IA local gratuita durante o treino com Ollama:
+
+```bash
+ollama pull qwen3:8b
+export AI_TRAINING_DECISION_PROVIDER="ollama"
+export OLLAMA_TRAINING_DECISION_MODEL="qwen3:8b"
+./venv/bin/python manage.py runserver 127.0.0.1:8000
+```
+
+O Ollama deve estar aberto em `http://127.0.0.1:11434`.
+
 ### Frontend
 
 ```bash
 cd frontend
 npm run dev
+```
+
+Para apontar o frontend para uma porta de backend diferente:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8001 npm run dev
 ```
 
 No browser, usar:
@@ -57,10 +74,10 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 14 testes a passar
+- Backend: 28 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso
+- Teste manual no browser integrado concluído com sucesso, incluindo user demo com 15 treinos anteriores e 16.º treino ativo
 
 ## Estado Atual
 
@@ -74,17 +91,24 @@ Implementado:
 - Tipos de série: aquecimento, normal e drop
 - Histórico por exercício
 - Recomendações para a próxima série
+- Recomendações iniciais baseadas nos últimos 15 treinos
+- Aquecimento calculado a partir da primeira série normal prevista
+- AI Coach série a série com ações fechadas e guardrails
+- Scores de fadiga, recuperação e prontidão
+- Interpretação de feedback do utilizador durante o treino
 - Timer de descanso
 - Dropdowns por dia e por exercício
 - Bloqueio dos restantes dias durante treino ativo
 - Resumo simples da sessão em tempo real
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
+- IA externa opcional para decisões durante o treino com OpenAI ou Ollama
+- Demo visual do Sprint 12 em `frontend/public/sprint12-ai-demo.html`
 
 Em preparação:
 - Dashboard completo
-- Integração real com LLM
-- Memória longitudinal do atleta
+- Memória longitudinal do atleta para além da janela recente de 15 treinos
+- Polimento da experiência visual do dashboard e análise semanal
 
 ## Fluxo Principal
 
@@ -352,25 +376,70 @@ Subir carga
 ### Sprint 12 - AI Coach
 
 Objetivo:
-Começar a substituir a simulação baseada em regras por uma camada de coach com LLM.
+Transformar o sistema de recomendações num coach de treino em tempo real, capaz de decidir a próxima ação série a série com base no histórico, no desempenho atual, na recuperação e no feedback do atleta.
 
 Entregue:
 - Serviço `recommendations/services/ai_coach_engine.py`
+- Serviço `recommendations/services/training_coach_engine.py`
+- Serviço `recommendations/services/ai_training_decision_engine.py`
 - Contexto estruturado da sessão para análise do coach
 - Integração opcional com OpenAI Responses API via `OPENAI_API_KEY`
+- Integração opcional com Ollama para decisões locais durante o treino
 - Fallback local determinístico quando a chave não está configurada
 - Resumo "AI Coach" depois de terminar uma sessão
 - Métricas pós-treino no painel do coach
-- Testes do fallback local
+- Endpoint `POST /api/recommendations/next-set/` enriquecido com:
+  - contexto do utilizador
+  - contexto do exercício
+  - contexto da sessão
+  - séries anteriores
+  - séries atuais
+  - histórico recente
+- Motor local com ações fechadas:
+  - manter carga
+  - subir carga
+  - descer carga
+  - repetir
+  - fazer mais um aquecimento
+  - avançar para séries normais
+  - fazer drop set
+  - parar exercício
+- Guardrails para impedir subidas perigosas, progressão a partir de aquecimento e decisões incoerentes com dor/fadiga
+- Scores de fadiga, recuperação e prontidão
+- Recomendações iniciais por exercício com base nos últimos 15 treinos
+- Cálculo automático de aquecimento proporcional à primeira série normal prevista
+- Correção do alinhamento visual do histórico: a linha `W` mostra apenas aquecimentos anteriores e a série `1` mostra a primeira série normal anterior
+- Página demo `sprint12-ai-demo.html` para visualizar o 16.º treino depois de 15 treinos históricos
+- Testes do motor local, fallback local, guardrails e histórico
 
 Configuração opcional:
 
 ```bash
 export OPENAI_API_KEY="..."
 export AI_COACH_MODEL="gpt-5.5"
+export AI_TRAINING_DECISION_PROVIDER="openai"
+export AI_TRAINING_DECISION_MODEL="gpt-5.5"
 ```
 
-Sem `OPENAI_API_KEY`, o sistema continua funcional e mostra recomendações locais.
+Configuração opcional com Ollama:
+
+```bash
+ollama pull qwen3:8b
+export AI_TRAINING_DECISION_PROVIDER="ollama"
+export OLLAMA_TRAINING_DECISION_MODEL="qwen3:8b"
+```
+
+Sem `OPENAI_API_KEY` e sem Ollama, o sistema continua funcional e mostra decisões locais determinísticas.
+
+Exemplo validado no browser integrado:
+
+```text
+Histórico: 15 treinos anteriores
+Treino atual: 16.º treino
+Linha W: anterior "-" | recomendado 30kg x 10
+Série 1: anterior 62.5kg x 12 | recomendado 60kg x 12
+Decisão do coach: subir carga quando a prontidão permite e os guardrails aprovam
+```
 
 ## Roadmap
 

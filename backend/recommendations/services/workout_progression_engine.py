@@ -1,5 +1,6 @@
 TARGET_REPS = 12
 WEIGHT_STEP = 2.5
+MIN_COMPLETION_RATIO_FOR_LOAD_INCREASE = 0.66
 
 
 def round_recommended_weight(weight):
@@ -14,6 +15,15 @@ def number_or_none(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def average(values):
+    clean_values = [value for value in values if value is not None]
+
+    if not clean_values:
+        return None
+
+    return round(sum(clean_values) / len(clean_values), 1)
 
 
 def serialize_progression_set(set_log):
@@ -45,31 +55,85 @@ def set_has_reserve(set_log):
     return reps is not None and reps >= TARGET_REPS and rir is not None and rir >= 2
 
 
+def summarize_working_sets(working_sets, planned_sets):
+    rir_values = [number_or_none(set_log.get("rir")) for set_log in working_sets]
+    volumes = [
+        (number_or_none(set_log.get("weight_used")) or 0)
+        * (number_or_none(set_log.get("reps_completed")) or 0)
+        for set_log in working_sets
+    ]
+    missed_sets = [set_log for set_log in working_sets if set_missed_target(set_log)]
+    reserve_sets = [set_log for set_log in working_sets if set_has_reserve(set_log)]
+    completed_ratio = round(len(working_sets) / planned_sets, 2) if planned_sets else 0
+
+    return {
+        "working_set_count": len(working_sets),
+        "planned_sets": planned_sets,
+        "completed_ratio": completed_ratio,
+        "missed_set_count": len(missed_sets),
+        "reserve_set_count": len(reserve_sets),
+        "failure_count": len([set_log for set_log in working_sets if set_log.get("reached_failure")]),
+        "missed_ratio": round(len(missed_sets) / len(working_sets), 2) if working_sets else 0,
+        "reserve_ratio": round(len(reserve_sets) / len(working_sets), 2) if working_sets else 0,
+        "average_rir": average(rir_values),
+        "volume": round(sum(volumes), 1),
+    }
+
+
+def confidence_from_summary(summary):
+    if summary["working_set_count"] == 0:
+        return "baixa"
+
+    if summary["completed_ratio"] >= 1 and summary["reserve_ratio"] >= 0.8 and summary["missed_set_count"] == 0:
+        return "alta"
+
+    if summary["missed_ratio"] >= 0.5 or summary["completed_ratio"] < MIN_COMPLETION_RATIO_FOR_LOAD_INCREASE:
+        return "média"
+
+    return "média"
+
+
+def with_progression_metadata(recommendation, summary, decision_basis):
+    return {
+        **recommendation,
+        "confidence": confidence_from_summary(summary),
+        "decision_basis": decision_basis,
+        "progression_context": summary,
+        "source": "hybrid_local_workout_progression",
+    }
+
+
 def calculate_exercise_progression(training_exercise, current_sets):
     working_sets = [set_log for set_log in current_sets if is_working_set(set_log)]
     planned_sets = training_exercise.sets
     target_rir = training_exercise.target_rir
+    summary = summarize_working_sets(working_sets, planned_sets)
 
     if not working_sets:
-        return {
-            "training_exercise": training_exercise.id,
-            "exercise": training_exercise.exercise_id,
-            "exercise_name": training_exercise.exercise.name,
-            "action": "maintain",
-            "recommended_weight": "",
-            "recommended_sets": planned_sets,
-            "target_reps": TARGET_REPS,
-            "target_rir": target_rir,
-            "title": "Mantém o plano",
-            "message": "Sem séries normais registadas neste exercício. Mantém o plano no próximo treino.",
-            "reason": "Não existem dados suficientes para ajustar a progressão.",
-        }
+        return with_progression_metadata(
+            {
+                "training_exercise": training_exercise.id,
+                "exercise": training_exercise.exercise_id,
+                "exercise_name": training_exercise.exercise.name,
+                "action": "maintain",
+                "recommended_weight": "",
+                "recommended_sets": planned_sets,
+                "target_reps": TARGET_REPS,
+                "target_rir": target_rir,
+                "title": "Mantém o plano",
+                "message": "Sem séries normais registadas neste exercício. Mantém o plano no próximo treino.",
+                "reason": "Não existem dados suficientes para ajustar a progressão.",
+            },
+            summary,
+            ["Sem séries normais registadas"],
+        )
 
     last_working_set = working_sets[-1]
     missed_sets = [set_log for set_log in working_sets if set_missed_target(set_log)]
     reserve_sets = [set_log for set_log in working_sets if set_has_reserve(set_log)]
     last_weight = number_or_none(last_working_set.get("weight_used")) or 0
     missed_ratio = len(missed_sets) / len(working_sets)
+    completed_ratio = len(working_sets) / planned_sets if planned_sets else 0
 
     base_response = {
         "training_exercise": training_exercise.id,
@@ -81,51 +145,87 @@ def calculate_exercise_progression(training_exercise, current_sets):
     }
 
     if len(missed_sets) >= 2 or missed_ratio >= 0.5:
-        return {
-            **base_response,
-            "action": "reduce_volume",
-            "recommended_weight": round_recommended_weight(max(last_weight - WEIGHT_STEP, 0)),
-            "recommended_sets": max(1, planned_sets - 1),
-            "target_rir": max(target_rir, 3),
-            "title": "Reduz volume",
-            "message": "No próximo treino, faz menos uma série normal e baixa ligeiramente a carga.",
-            "reason": "Houve falhas ou séries abaixo das 12 reps em metade ou mais das séries normais.",
-        }
+        return with_progression_metadata(
+            {
+                **base_response,
+                "action": "reduce_volume",
+                "recommended_weight": round_recommended_weight(max(last_weight - WEIGHT_STEP, 0)),
+                "recommended_sets": max(1, planned_sets - 1),
+                "target_rir": max(target_rir, 3),
+                "title": "Reduz volume",
+                "message": "No próximo treino, faz menos uma série normal e baixa ligeiramente a carga.",
+                "reason": "Houve falhas ou séries abaixo das 12 reps em metade ou mais das séries normais.",
+            },
+            summary,
+            ["Falhas ou misses em metade ou mais das séries normais", "Prioridade: recuperação e qualidade técnica"],
+        )
+
+    if (
+        len(reserve_sets) == len(working_sets)
+        and completed_ratio >= MIN_COMPLETION_RATIO_FOR_LOAD_INCREASE
+    ):
+        return with_progression_metadata(
+            {
+                **base_response,
+                "action": "increase_load",
+                "recommended_weight": round_recommended_weight(last_weight + WEIGHT_STEP),
+                "recommended_sets": planned_sets,
+                "target_rir": target_rir,
+                "title": "Sobe carga",
+                "message": "No próximo treino, aumenta a carga mantendo o mesmo volume.",
+                "reason": "As séries normais registadas chegaram às 12 reps com margem e o volume foi suficiente para justificar progressão.",
+            },
+            summary,
+            ["Todas as séries normais registadas chegaram ao alvo", "RIR com margem", "Volume suficiente para progressão"],
+        )
 
     if len(reserve_sets) == len(working_sets):
-        return {
-            **base_response,
-            "action": "increase_load",
-            "recommended_weight": round_recommended_weight(last_weight + WEIGHT_STEP),
-            "recommended_sets": planned_sets,
-            "target_rir": target_rir,
-            "title": "Sobe carga",
-            "message": "No próximo treino, aumenta a carga mantendo o mesmo volume.",
-            "reason": "Todas as séries normais chegaram às 12 reps com margem.",
-        }
+        return with_progression_metadata(
+            {
+                **base_response,
+                "action": "maintain_load",
+                "recommended_weight": round_recommended_weight(last_weight),
+                "recommended_sets": planned_sets,
+                "target_rir": target_rir,
+                "title": "Confirma volume",
+                "message": "A performance foi boa, mas faltam séries suficientes para subir com confiança. Repete a carga no próximo treino.",
+                "reason": "O exercício teve margem, mas o volume registado ficou abaixo do mínimo para uma progressão segura.",
+            },
+            summary,
+            ["Séries com margem", "Volume registado insuficiente para subir carga"],
+        )
 
     if missed_sets:
-        return {
+        return with_progression_metadata(
+            {
+                **base_response,
+                "action": "maintain_load",
+                "recommended_weight": round_recommended_weight(last_weight),
+                "recommended_sets": planned_sets,
+                "target_rir": max(target_rir, 2),
+                "title": "Mantém carga",
+                "message": "No próximo treino, repete a carga e tenta completar as 12 reps com melhor margem.",
+                "reason": "Algumas séries ainda não justificam subida de carga.",
+            },
+            summary,
+            ["Pelo menos uma série falhou o alvo", "Carga mantida para consolidar"],
+        )
+
+    return with_progression_metadata(
+        {
             **base_response,
-            "action": "maintain_load",
+            "action": "adjust_target_rir",
             "recommended_weight": round_recommended_weight(last_weight),
             "recommended_sets": planned_sets,
-            "target_rir": max(target_rir, 2),
-            "title": "Mantém carga",
-            "message": "No próximo treino, repete a carga e tenta completar as 12 reps com melhor margem.",
-            "reason": "Algumas séries ainda não justificam subida de carga.",
-        }
-
-    return {
-        **base_response,
-        "action": "adjust_target_rir",
-        "recommended_weight": round_recommended_weight(last_weight),
-        "recommended_sets": planned_sets,
-        "target_rir": max(target_rir, 3),
-        "title": "Ajusta RIR",
-        "message": "No próximo treino, mantém a carga e procura terminar com mais reserva.",
-        "reason": "O alvo de reps foi atingido, mas a margem de esforço ainda ficou curta.",
-    }
+            "target_reps": TARGET_REPS,
+            "target_rir": max(target_rir, 3),
+            "title": "Ajusta RIR",
+            "message": "No próximo treino, mantém a carga e procura terminar com mais reserva.",
+            "reason": "O alvo de reps foi atingido, mas a margem de esforço ainda ficou curta.",
+        },
+        summary,
+        ["Alvo de reps atingido", "RIR ainda curto para subir carga"],
+    )
 
 
 def calculate_workout_progression(workout, set_logs):
