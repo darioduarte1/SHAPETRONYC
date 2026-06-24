@@ -8,8 +8,15 @@ from rest_framework.test import APIClient
 from accounts.models import UserProfile
 from exercises.models import Exercise
 from progression.models import SetLog
-from training.models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
+from training.models import (
+    AthleteTrainingMemory,
+    TrainingProgram,
+    TrainingWorkout,
+    TrainingWorkoutExercise,
+    WorkoutSession,
+)
 from training.services.athlete_dashboard import build_athlete_dashboard
+from training.services.training_memory import refresh_training_memory
 
 
 class AthleteDashboardTests(TestCase):
@@ -107,3 +114,37 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["profile_id"], self.profile.id)
         self.assertEqual(response.data["summary"]["completed_workouts"], 1)
+
+    def test_training_memory_persists_progression_and_watchlist_patterns(self):
+        self.create_completed_session(days_ago=21, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=14, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=7, weight=57.5, reps=12, rir=2)
+
+        memories = refresh_training_memory(self.profile)
+
+        self.assertEqual(AthleteTrainingMemory.objects.count(), 1)
+        self.assertEqual(memories[0]["memory_type"], "PROGRESSION")
+        self.assertIn("está a progredir", memories[0]["title"])
+
+        self.create_completed_session(days_ago=1, weight=57.5, reps=8, rir=None, reached_failure=True)
+        memories = refresh_training_memory(self.profile)
+        memory_types = {memory["memory_type"] for memory in memories}
+
+        self.assertIn("WATCHLIST", memory_types)
+        self.assertTrue(
+            AthleteTrainingMemory.objects.filter(
+                user=self.user,
+                exercise=self.exercise,
+                memory_type="WATCHLIST",
+            ).exists()
+        )
+
+    def test_dashboard_includes_training_memories(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+
+        dashboard = build_athlete_dashboard(self.profile)
+
+        self.assertEqual(dashboard["training_memories"][0]["memory_type"], "PROGRESSION")
+        self.assertEqual(dashboard["training_memories"][0]["exercise_name"], "Chest Press Machine")

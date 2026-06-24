@@ -74,10 +74,10 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 32 testes a passar
+- Backend: 34 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso, incluindo dashboard do Sprint 13, histórico por exercício e ramp-up progressivo de aquecimento
+- Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento e memória do atleta
 
 ## Estado Atual
 
@@ -101,6 +101,8 @@ Implementado:
 - Dropdowns por dia e por exercício
 - Bloqueio dos restantes dias durante treino ativo
 - Resumo simples da sessão em tempo real
+- Memória persistente por atleta/exercício
+- Painel de memória do atleta no dashboard
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
 - IA externa opcional para decisões durante o treino com OpenAI ou Ollama
@@ -473,19 +475,28 @@ Entregue:
   - reps descem à medida que a carga se aproxima da primeira série normal
 - Testes da regra de ramp-up e validação visual no browser integrado
 
-## Roadmap
-
 ### Sprint 14 - Memória de Treino
 
 Objetivo:
-Criar contexto acumulado ao longo do tempo.
+Criar contexto acumulado ao longo do tempo para que a app reconheça padrões por atleta e por exercício, em vez de depender apenas da sessão atual.
 
-Ideias:
-- Preferências do atleta
-- Exercícios problemáticos
-- Histórico de fadiga
-- Tendências por grupo muscular
-- Recomendações com base em múltiplas semanas
+Entregue:
+- Modelo `AthleteTrainingMemory`
+- Migration `training/migrations/0003_athletetrainingmemory.py`
+- Serviço `training/services/training_memory.py`
+- Memórias persistentes por utilizador, exercício e tipo:
+  - progressão
+  - watchlist
+  - padrão de esforço
+- Atualização automática da memória ao consultar o dashboard
+- Atualização automática da memória ao terminar uma sessão
+- Inclusão de `training_memories` na resposta do dashboard
+- Painel "Memória do atleta" no frontend
+- Evidências por memória para explicar o motivo do sinal
+- Confiança por memória com base no número de sessões analisadas
+- Testes de criação, persistência e exposição das memórias no dashboard
+
+## Roadmap
 
 ### Sprint 15 - Sistema Adaptativo Completo
 

@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from progression.models import SetLog
 from training.models import WorkoutSession
+from training.services.training_memory import refresh_training_memory
 
 
 RECENT_SESSION_LIMIT = 6
@@ -153,6 +154,7 @@ def build_weekly_volume(set_logs):
 
 
 def build_athlete_dashboard(profile):
+    training_memories = refresh_training_memory(profile)
     completed_sessions = list(
         WorkoutSession.objects.filter(
             user=profile.user,
@@ -198,5 +200,6 @@ def build_athlete_dashboard(profile):
             serialize_session_summary(session, sets_by_session[session.id])
             for session in completed_sessions[:RECENT_SESSION_LIMIT]
         ],
+        "training_memories": training_memories,
         **exercise_insights,
     }

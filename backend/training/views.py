@@ -11,6 +11,7 @@ from recommendations.services.workout_progression_engine import calculate_workou
 
 from .serializers import TrainingProgramSerializer, WorkoutSessionSerializer
 from .services.athlete_dashboard import build_athlete_dashboard
+from .services.training_memory import refresh_training_memory
 from .services.training_generator import generate_training_program
 from .models import TrainingProgram, TrainingWorkout, WorkoutSession
 
@@ -127,6 +128,11 @@ class FinishWorkoutSessionView(APIView):
             progression,
             notes,
         )
+        try:
+            profile = UserProfile.objects.get(user=session.user)
+            refresh_training_memory(profile)
+        except UserProfile.DoesNotExist:
+            pass
 
         return Response(
             {

@@ -1376,6 +1376,61 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              <div style={{ marginTop: "16px" }}>
+                <strong>Memória do atleta</strong>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: "10px",
+                    marginTop: "10px",
+                  }}
+                >
+                  {(athleteDashboard.training_memories || []).map((memory) => (
+                    <div
+                      key={memory.id}
+                      style={{
+                        padding: "10px",
+                        border: "1px solid rgba(148, 163, 184, 0.22)",
+                        borderRadius: "8px",
+                        background: "rgba(15, 23, 42, 0.44)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <span style={{ fontWeight: "bold" }}>{memory.title}</span>
+                        <span style={{ color: getConfidenceColor(memory.confidence), fontSize: "12px", fontWeight: "bold" }}>
+                          {memory.confidence}
+                        </span>
+                      </div>
+                      <p style={{ margin: "6px 0 0", color: "#cbd5e1", fontSize: "13px" }}>
+                        {memory.summary}
+                      </p>
+                      {memory.evidence?.length > 0 && (
+                        <div style={{ display: "grid", gap: "3px", marginTop: "8px" }}>
+                          {memory.evidence.map((item) => (
+                            <p key={item} style={{ margin: 0, color: "#94a3b8", fontSize: "12px" }}>
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {athleteDashboard.training_memories?.length === 0 && (
+                    <p style={{ margin: 0, color: "#94a3b8" }}>
+                      Ainda sem memória suficiente. Termina mais alguns treinos para criar padrões.
+                    </p>
+                  )}
+                </div>
+              </div>
             </section>
           )}
 

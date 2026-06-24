@@ -72,6 +72,42 @@ class TrainingWorkoutExercise(models.Model):
     def __str__(self):
         return f"{self.workout.name} - {self.exercise.name}"
 
+
+class AthleteTrainingMemory(models.Model):
+    MEMORY_TYPE_CHOICES = [
+        ("PROGRESSION", "Progression"),
+        ("WATCHLIST", "Watchlist"),
+        ("EFFORT_PATTERN", "Effort pattern"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="training_memories",
+    )
+    exercise = models.ForeignKey(
+        Exercise,
+        on_delete=models.CASCADE,
+        related_name="training_memories",
+    )
+    memory_type = models.CharField(max_length=30, choices=MEMORY_TYPE_CHOICES)
+    title = models.CharField(max_length=120)
+    summary = models.TextField()
+    evidence = models.JSONField(default=list, blank=True)
+    confidence = models.CharField(max_length=20, default="média")
+    severity = models.PositiveIntegerField(default=1)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "exercise", "memory_type")
+        ordering = ["-severity", "-updated_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.exercise.name} - {self.memory_type}"
+
+
 class WorkoutSession(models.Model):
     STATUS_CHOICES = [
         ("IN_PROGRESS", "In Progress"),
