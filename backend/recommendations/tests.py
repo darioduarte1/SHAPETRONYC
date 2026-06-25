@@ -48,7 +48,7 @@ class TrainingCoachEngineTests(SimpleTestCase):
         decision = calculate_training_coach_decision(
             weight=20,
             reps=12,
-            rir=4,
+            rir=None,
             is_failure=False,
             set_type="WARMUP",
         )
@@ -61,7 +61,7 @@ class TrainingCoachEngineTests(SimpleTestCase):
         decision = calculate_training_coach_decision(
             weight=20,
             reps=8,
-            rir=4,
+            rir=None,
             is_failure=False,
             set_type="WARMUP",
             current_sets=[
@@ -70,7 +70,7 @@ class TrainingCoachEngineTests(SimpleTestCase):
                     "set_type": "WARMUP",
                     "weight_used": 20,
                     "reps_completed": 8,
-                    "rir": 4,
+                    "rir": None,
                     "reached_failure": False,
                 }
             ],

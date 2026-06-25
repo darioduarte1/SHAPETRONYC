@@ -97,15 +97,18 @@ def _int_or_default(value, default):
 
 
 def _compact_set(set_log):
+    set_type = set_log.get("set_type")
+
     return {
         "session_id": set_log.get("workout_session"),
         "date": set_log.get("created_at"),
         "set_number": set_log.get("set_number"),
-        "set_type": set_log.get("set_type"),
+        "set_type": set_type,
         "weight": set_log.get("weight_used"),
         "reps": set_log.get("reps_completed"),
-        "rir": set_log.get("rir"),
-        "failure": set_log.get("reached_failure"),
+        "rir": None if set_type == "WARMUP" else set_log.get("rir"),
+        "failure": False if set_type == "WARMUP" else set_log.get("reached_failure"),
+        "effort_tracking": "not_applicable" if set_type == "WARMUP" else "rir",
         "notes": str(set_log.get("notes", ""))[:160],
         "session_notes": str(set_log.get("session_notes", ""))[:160],
     }
@@ -136,8 +139,9 @@ def _build_llm_context(local_decision, request_context):
         "current_set_result": {
             "weight": request_context.get("weight"),
             "reps": request_context.get("reps"),
-            "rir": request_context.get("rir"),
-            "is_failure": request_context.get("is_failure"),
+            "rir": None if request_context.get("set_type") == "WARMUP" else request_context.get("rir"),
+            "is_failure": False if request_context.get("set_type") == "WARMUP" else request_context.get("is_failure"),
+            "effort_tracking": "not_applicable" if request_context.get("set_type") == "WARMUP" else "rir",
             "notes": request_context.get("notes"),
             "set_type": request_context.get("set_type"),
             "set_number": request_context.get("set_number"),
@@ -168,6 +172,8 @@ def _build_llm_context(local_decision, request_context):
             "allowed_actions": sorted(ALLOWED_ACTIONS),
             "priorities": ["segurança", "técnica", "recuperação", "cumprimento do plano", "progressão"],
             "feedback_overrides_performance": True,
+            "warmup_sets_do_not_use_rir": True,
+            "warmup_sets_assume_load_is_liftable": True,
             "must_return_json": True,
             "must_respect_complete_exercise_guardrail": (
                 local_decision.get("exercise_status") == "complete"
@@ -210,7 +216,9 @@ def _request_openai_training_decision(context, api_key, model):
             "não no final do treino. Usa o histórico dos últimos 15 treinos, as séries já feitas hoje, o objetivo do "
             "utilizador, a faixa de reps, o RIR alvo, fadiga, recuperação e notas. Prioriza sempre segurança, técnica "
             "e recuperação antes de progressão. Se existir conflito entre performance e feedback do utilizador, o "
-            "feedback manda. Só podes escolher uma ação da lista permitida. Não dês aconselhamento médico. "
+            "feedback manda. Séries de aquecimento não usam RIR nem falha; assume que a carga é levantável e decide "
+            "aquecimento apenas por progressão de carga, técnica, histórico e distância até à primeira série normal. "
+            "Só podes escolher uma ação da lista permitida. Não dês aconselhamento médico. "
             "Devolve apenas JSON válido com estas chaves: recommended_weight, target_reps, recommended_rest_seconds, "
             "target_rir, add_set, stop_exercise, do_backoff_set, backoff_weight, fatigue_score, recovery_score, "
             "readiness_score, next_set_type, exercise_status, action, reason, guidance_title, guidance_message, "
@@ -251,7 +259,9 @@ def _request_ollama_training_decision(context, base_url, model):
                     "És o AI Training Coach do SHAPETRONYC. Decide a próxima ação durante um exercício. "
                     "Usa o histórico dos últimos 15 treinos, as séries feitas hoje, objetivo do utilizador, faixa de "
                     "reps, RIR alvo, fadiga, recuperação e notas. Segurança, técnica e recuperação têm prioridade "
-                    "sobre progressão. Só podes escolher uma ação da lista permitida. "
+                    "sobre progressão. Séries de aquecimento não usam RIR nem falha; assume que a carga é levantável "
+                    "e decide aquecimento apenas por progressão de carga, técnica, histórico e distância até à primeira "
+                    "série normal. Só podes escolher uma ação da lista permitida. "
                     "Responde só com JSON válido com as chaves: recommended_weight, target_reps, "
                     "target_rir, add_set, stop_exercise, do_backoff_set, backoff_weight, fatigue_score, "
                     "recovery_score, readiness_score, recommended_rest_seconds, next_set_type, exercise_status, "

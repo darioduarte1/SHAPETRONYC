@@ -658,7 +658,7 @@ def next_warmup_weight(current_weight, first_working_weight):
     return round_recommended_weight(min(target, current_weight + WEIGHT_STEP * 2))
 
 
-def should_continue_warming_up(weight, rir, context):
+def should_continue_warming_up(weight, context):
     first_working_weight = infer_first_working_weight(context, weight)
     completed_warmups = len(
         [set_log for set_log in context["all_current_sets"] if set_log.get("set_type") == "WARMUP"]
@@ -670,7 +670,7 @@ def should_continue_warming_up(weight, rir, context):
     if weight < first_working_weight * 0.65:
         return True
 
-    return rir is not None and rir <= 1 and weight < first_working_weight * 0.8
+    return False
 
 
 def should_stop_exercise(context, planned_sets, readiness_score, fatigue_score):
@@ -806,13 +806,20 @@ def calculate_training_coach_decision(
     target_max_reps = int_or_default(target_max_reps, DEFAULT_TARGET_MAX_REPS)
     target_rir = int_or_default(target_rir, DEFAULT_TARGET_RIR)
     target_reps = target_max_reps
+    is_warmup = set_type == "WARMUP"
+
+    if is_warmup:
+        rir = None
+        is_failure = False
+
+    scoring_reps = target_max_reps if is_warmup else reps
 
     context = build_exercise_context(
         current_sets,
         previous_sets,
         history_sets,
         weight,
-        reps,
+        scoring_reps,
         rir,
         is_failure,
         set_number,
@@ -821,7 +828,7 @@ def calculate_training_coach_decision(
         target_rir,
     )
     fatigue_score = calculate_fatigue_score(
-        reps,
+        scoring_reps,
         rir,
         is_failure,
         notes,
@@ -831,7 +838,7 @@ def calculate_training_coach_decision(
         planned_sets,
     )
     readiness_score = calculate_readiness_score(
-        reps,
+        scoring_reps,
         rir,
         is_failure,
         notes,
@@ -841,7 +848,7 @@ def calculate_training_coach_decision(
         target_rir,
     )
     recovery_score = calculate_recovery_score(notes, context, fatigue_score, user_context)
-    guardrails = safety_guardrails(notes, reps, is_failure, target_min_reps, fatigue_score, context)
+    guardrails = safety_guardrails(notes, scoring_reps, is_failure, target_min_reps, fatigue_score, context)
 
     if guardrails["has_pain_or_risk"] or guardrails["has_bad_technique"] or guardrails["has_stop_request"]:
         return with_decision_metadata(
@@ -864,11 +871,11 @@ def calculate_training_coach_decision(
             guardrails,
         )
 
-    if set_type == "WARMUP":
+    if is_warmup:
         completed_warmups = len([set_log for set_log in current_sets if set_log.get("set_type") == "WARMUP"])
         first_working_weight = infer_first_working_weight(context, weight)
 
-        if should_continue_warming_up(weight, rir, context):
+        if should_continue_warming_up(weight, context):
             recommended_weight = next_warmup_weight(weight, first_working_weight)
 
             return with_decision_metadata(

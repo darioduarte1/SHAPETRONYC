@@ -32,6 +32,10 @@ def is_working_set(set_log):
     return getattr(set_log, "set_type", None) == "WORKING"
 
 
+def is_warmup_set(set_log):
+    return getattr(set_log, "set_type", None) == "WARMUP"
+
+
 def set_reached_target(set_log, target_reps=TARGET_REPS):
     return int(set_log.reps_completed) >= target_reps and not set_log.reached_failure
 
@@ -335,6 +339,35 @@ def calculate_warmups_from_first_working_set(
     ]
 
 
+def preserve_previous_warmup_structure(warmup_sets, recent_session_sets):
+    if not recent_session_sets:
+        return warmup_sets
+
+    previous_warmups = [
+        set_log for set_log in recent_session_sets[0] if is_warmup_set(set_log)
+    ]
+
+    if len(previous_warmups) <= len(warmup_sets):
+        return warmup_sets
+
+    preserved_warmups = list(warmup_sets)
+
+    for previous_warmup in previous_warmups[len(warmup_sets):]:
+        preserved_warmups.append({
+            "recommended_weight": round_recommended_weight(previous_warmup.weight_used),
+            "recommended_reps": int(previous_warmup.reps_completed),
+            "reason": "Aquecimento preservado da sessão anterior para manter a mesma preparação antes das séries normais.",
+            "confidence": "média",
+            "decision_basis": [
+                "A sessão anterior usou mais aquecimentos neste exercício",
+                "A estrutura de aquecimento não deve ser reduzida automaticamente entre treinos",
+            ],
+            "source": "previous_warmup_structure",
+        })
+
+    return preserved_warmups
+
+
 def build_history_based_recommended_sets(
     recent_session_sets,
     planned_working_sets,
@@ -347,6 +380,7 @@ def build_history_based_recommended_sets(
         target_reps,
         exercise_profile,
     )
+    warmup_sets = preserve_previous_warmup_structure(warmup_sets, recent_session_sets)
     recommended_sets = [
         {
             "set_number": index,

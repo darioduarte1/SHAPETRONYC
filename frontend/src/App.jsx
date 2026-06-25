@@ -16,6 +16,7 @@ const EFFORT_OPTIONS = [
   { value: "RIR_2_3", label: "RIR 2/3", color: "#eab308", reachedFailure: false, rir: 2 },
   { value: "RIR_4_PLUS", label: "RIR 4+", color: "#22c55e", reachedFailure: false, rir: 4 },
 ];
+const WARMUP_EFFORT = { value: "WARMUP_DONE", label: "Feita", reachedFailure: false, rir: null };
 
 function App() {
   const [step, setStep] = useState(1);
@@ -125,6 +126,10 @@ function App() {
       return null;
     }
 
+    if (setLog.set_type === "WARMUP") {
+      return null;
+    }
+
     if (setLog.reached_failure) {
       return EFFORT_OPTIONS[0];
     }
@@ -168,6 +173,12 @@ function App() {
     return getExerciseLogs(trainingExerciseId).previous_sets.filter(
       (setLog) => normalizeSetType(setLog.set_type) === setType
     )[typePosition - 1] || null;
+  }
+
+  function getPreviousSetAtDisplayPosition(trainingExerciseId, displaySetNumber) {
+    return getExerciseLogs(trainingExerciseId).previous_sets.find(
+      (setLog) => Number(setLog.set_number) === displaySetNumber
+    ) || null;
   }
 
   function getRecommendedSetRecordForRow(trainingExerciseId, setNumber, setType = null) {
@@ -221,6 +232,7 @@ function App() {
   function getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
     const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
     const currentSet = getCurrentSetForRow(exercise.id, displaySetNumber);
+    const previousSetAtPosition = getPreviousSetAtDisplayPosition(exercise.id, displaySetNumber);
     const recommendedSet = getRecommendedSetRecordForRow(exercise.id, sourceSetNumber);
     const hasCurrentSets = getExerciseLogs(exercise.id).current_sets.length > 0;
 
@@ -228,7 +240,13 @@ function App() {
       return "WARMUP";
     }
 
-    return currentSet?.set_type || setForms[setFormKey]?.set_type || recommendedSet?.set_type || "WORKING";
+    return (
+      currentSet?.set_type ||
+      setForms[setFormKey]?.set_type ||
+      previousSetAtPosition?.set_type ||
+      recommendedSet?.set_type ||
+      "WORKING"
+    );
   }
 
   function getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
@@ -296,6 +314,10 @@ function App() {
   }
 
   function getEffortOptionsForSet(setType, repsCompleted) {
+    if (setType === "WARMUP") {
+      return [];
+    }
+
     return shouldForceFailureEffort(setType, repsCompleted) ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS;
   }
 
@@ -322,15 +344,17 @@ function App() {
   }
 
   function serializeSetForCoach(setLog) {
+    const setType = setLog.set_type || "WORKING";
+
     return {
       workout_session: setLog.workout_session,
       session_id: setLog.workout_session,
       set_number: Number(setLog.set_number),
-      set_type: setLog.set_type,
+      set_type: setType,
       weight_used: Number(setLog.weight_used),
       reps_completed: Number(setLog.reps_completed),
-      rir: setLog.rir,
-      reached_failure: Boolean(setLog.reached_failure),
+      rir: setType === "WARMUP" ? null : setLog.rir,
+      reached_failure: setType === "WARMUP" ? false : Boolean(setLog.reached_failure),
       notes: setLog.notes || "",
       created_at: setLog.created_at,
     };
@@ -1378,9 +1402,15 @@ function App() {
     const plannedValues = getPlannedValuesForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
     const weightUsed = formData.weight_used ?? plannedValues.weight;
     const repsCompleted = formData.reps_completed ?? plannedValues.reps;
-    const selectedEffortOption = shouldForceFailureEffort(setType, repsCompleted)
-      ? EFFORT_OPTIONS[0]
-      : effortOption || EFFORT_OPTIONS[2];
+    const selectedEffortOption = setType === "WARMUP"
+      ? WARMUP_EFFORT
+      : shouldForceFailureEffort(setType, repsCompleted)
+        ? EFFORT_OPTIONS[0]
+        : effortOption || EFFORT_OPTIONS[2];
+    const setRir = setType === "WARMUP" || selectedEffortOption.reachedFailure
+      ? null
+      : selectedEffortOption.rir;
+    const reachedFailure = setType === "WARMUP" ? false : selectedEffortOption.reachedFailure;
     const restSeconds = getRestSecondsForRow(setFormKey);
 
     if (!sessionId) {
@@ -1408,8 +1438,8 @@ function App() {
         target_min_reps: exercise.target_min_reps || TARGET_REPS,
         target_max_reps: exercise.target_max_reps || TARGET_REPS,
         reps_completed: Number(repsCompleted),
-        rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
-        reached_failure: selectedEffortOption.reachedFailure,
+        rir: setRir,
+        reached_failure: reachedFailure,
         notes: formData.notes || "",
       }),
     });
@@ -1479,8 +1509,8 @@ function App() {
       body: JSON.stringify({
         weight: Number(weightUsed),
         reps: Number(repsCompleted),
-        rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
-        is_failure: selectedEffortOption.reachedFailure,
+        rir: setRir,
+        is_failure: reachedFailure,
         notes: formData.notes || "",
         set_type: setType,
         set_number: displaySetNumber,
@@ -3205,7 +3235,13 @@ function App() {
                                               <button
                                                 type="button"
                                                 onClick={() => {
-                                                  if (!isCompleted) {
+                                                  if (isCompleted) {
+                                                    return;
+                                                  }
+
+                                                  if (rowSetType === "WARMUP") {
+                                                    saveSet(item, sourceSetNumber, displaySetNumber, WARMUP_EFFORT);
+                                                  } else {
                                                     toggleCompletionMenu(setFormKey);
                                                   }
                                                 }}
@@ -3235,7 +3271,7 @@ function App() {
                                                 </span>
                                               )}
 
-                                              {openCompletionMenuBySet[setFormKey] && !isCompleted && (
+                                              {openCompletionMenuBySet[setFormKey] && !isCompleted && rowSetType !== "WARMUP" && (
                                                 <div
                                                   style={{
                                                     position: "absolute",

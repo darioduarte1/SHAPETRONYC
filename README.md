@@ -614,6 +614,13 @@ Adicional entregue no Sprint 17:
 - Testes para alternativas por grupo muscular, troca válida e rejeição de troca inválida
 - Ecrã inicial atualizado com entrada em perfil existente por username
 - Ecrã de criação de perfil redesenhado com seleção visual de género, nível e dias por semana
+- Preservação da estrutura de aquecimento entre treinos repetidos
+- Correção para impedir que W2/W3 sejam convertidas em séries normais no treino seguinte
+- Séries de aquecimento sem RIR e sem falha registada
+- API limpa automaticamente RIR/falha em séries `WARMUP`
+- IA local e contexto enviado ao modelo tratam aquecimento sem RIR, usando carga, técnica, histórico e distância até à primeira série normal
+- Check direto em séries de aquecimento no frontend, sem menu de esforço
+- Testes para estrutura de aquecimento preservada e remoção de RIR em `WARMUP`
 
 Próximos passos do Sprint 17:
 - Guardar blocos concluídos quando um novo bloco começa
