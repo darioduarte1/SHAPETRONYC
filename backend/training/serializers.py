@@ -19,6 +19,8 @@ class TrainingWorkoutExerciseSerializer(serializers.ModelSerializer):
     exercise_equipment = serializers.CharField(source="exercise.equipment", read_only=True)
     exercise_localized_name = serializers.CharField(source="exercise.localized_name", read_only=True)
     exercise_image_url = serializers.CharField(source="exercise.image_url", read_only=True)
+    exercise_main_weight_options = serializers.JSONField(source="exercise.main_weight_options", read_only=True)
+    exercise_micro_weight_options = serializers.JSONField(source="exercise.micro_weight_options", read_only=True)
 
     class Meta:
         model = TrainingWorkoutExercise
@@ -32,6 +34,8 @@ class TrainingWorkoutExerciseSerializer(serializers.ModelSerializer):
             "exercise_movement_pattern",
             "exercise_is_compound",
             "exercise_equipment",
+            "exercise_main_weight_options",
+            "exercise_micro_weight_options",
             "sets",
             "target_min_reps",
             "target_max_reps",

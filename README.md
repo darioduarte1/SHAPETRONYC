@@ -622,6 +622,12 @@ Adicional entregue no Sprint 17:
 - IA local e contexto enviado ao modelo tratam aquecimento sem RIR, usando carga, técnica, histórico e distância até à primeira série normal
 - Check direto em séries de aquecimento no frontend, sem menu de esforço
 - Testes para estrutura de aquecimento preservada e remoção de RIR em `WARMUP`
+- Configuração de escala de pesos por exercício, com placas principais e bolachas/extras
+- Recomendações de carga, aquecimento, backoff e progressão ajustadas aos pesos realmente disponíveis na máquina
+- Contexto da IA atualizado com escala de carga do exercício
+- Endpoint de detalhe de exercício para atualizar escala de pesos
+- Botão temporário "Exportar histórico" no programa do atleta
+- Export JSON do atleta com perfil, programas, treinos, exercícios, sessões, séries, memórias, decisões adaptativas e blocos de treino
 
 Próximos passos do Sprint 17:
 - Guardar blocos concluídos quando um novo bloco começa

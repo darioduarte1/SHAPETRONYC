@@ -1,3 +1,9 @@
+from exercises.services.weight_scale import (
+    next_available_weight,
+    previous_available_weight,
+    snap_to_available_weight,
+)
+
 TARGET_REPS = 12
 WEIGHT_STEP = 2.5
 MIN_COMPLETION_RATIO_FOR_LOAD_INCREASE = 0.66
@@ -149,7 +155,7 @@ def calculate_exercise_progression(training_exercise, current_sets):
             {
                 **base_response,
                 "action": "reduce_volume",
-                "recommended_weight": round_recommended_weight(max(last_weight - WEIGHT_STEP, 0)),
+                "recommended_weight": previous_available_weight(last_weight, training_exercise.exercise),
                 "recommended_sets": max(1, planned_sets - 1),
                 "target_rir": max(target_rir, 3),
                 "title": "Reduz volume",
@@ -168,7 +174,7 @@ def calculate_exercise_progression(training_exercise, current_sets):
             {
                 **base_response,
                 "action": "increase_load",
-                "recommended_weight": round_recommended_weight(last_weight + WEIGHT_STEP),
+                "recommended_weight": next_available_weight(last_weight, training_exercise.exercise),
                 "recommended_sets": planned_sets,
                 "target_rir": target_rir,
                 "title": "Sobe carga",
@@ -184,7 +190,7 @@ def calculate_exercise_progression(training_exercise, current_sets):
             {
                 **base_response,
                 "action": "maintain_load",
-                "recommended_weight": round_recommended_weight(last_weight),
+                "recommended_weight": snap_to_available_weight(last_weight, training_exercise.exercise),
                 "recommended_sets": planned_sets,
                 "target_rir": target_rir,
                 "title": "Confirma volume",
@@ -200,7 +206,7 @@ def calculate_exercise_progression(training_exercise, current_sets):
             {
                 **base_response,
                 "action": "maintain_load",
-                "recommended_weight": round_recommended_weight(last_weight),
+                "recommended_weight": snap_to_available_weight(last_weight, training_exercise.exercise),
                 "recommended_sets": planned_sets,
                 "target_rir": max(target_rir, 2),
                 "title": "Mantém carga",
@@ -215,7 +221,7 @@ def calculate_exercise_progression(training_exercise, current_sets):
         {
             **base_response,
             "action": "adjust_target_rir",
-            "recommended_weight": round_recommended_weight(last_weight),
+            "recommended_weight": snap_to_available_weight(last_weight, training_exercise.exercise),
             "recommended_sets": planned_sets,
             "target_reps": TARGET_REPS,
             "target_rir": max(target_rir, 3),

@@ -1,5 +1,11 @@
 import re
 
+from exercises.services.weight_scale import (
+    get_exercise_weight_scale,
+    next_available_weight,
+    snap_to_available_weight,
+)
+
 
 DEFAULT_TARGET_MIN_REPS = 10
 DEFAULT_TARGET_MAX_REPS = 12
@@ -636,17 +642,28 @@ def reduce_weight(weight, percent):
     return round_recommended_weight(weight * (1 - percent))
 
 
+def adjust_recommended_weight(weight, exercise_context, direction="nearest"):
+    return snap_to_available_weight(weight, exercise_context, direction)
+
+
+def increased_working_weight(weight, step, exercise_context):
+    if get_exercise_weight_scale(exercise_context)["configured"]:
+        return next_available_weight(weight, exercise_context)
+
+    return round_recommended_weight(weight + step)
+
+
 def backoff_weight(weight, fatigue_score, is_failure, exercise_context):
     if not bool(exercise_context.get("is_compound")):
-        return reduce_weight(weight, 0.1)
+        return snap_to_available_weight(reduce_weight(weight, 0.1), exercise_context, "down")
 
     if is_failure or fatigue_score >= 60:
-        return reduce_weight(weight, 0.15)
+        return snap_to_available_weight(reduce_weight(weight, 0.15), exercise_context, "down")
 
-    return reduce_weight(weight, 0.1)
+    return snap_to_available_weight(reduce_weight(weight, 0.1), exercise_context, "down")
 
 
-def next_warmup_weight(current_weight, first_working_weight):
+def next_warmup_weight(current_weight, first_working_weight, exercise_context):
     if not first_working_weight:
         return current_weight
 
@@ -655,7 +672,10 @@ def next_warmup_weight(current_weight, first_working_weight):
     if current_weight >= target:
         return current_weight
 
-    return round_recommended_weight(min(target, current_weight + WEIGHT_STEP * 2))
+    return snap_to_available_weight(
+        min(target, current_weight + WEIGHT_STEP * 2),
+        exercise_context,
+    )
 
 
 def should_continue_warming_up(weight, context):
@@ -876,7 +896,7 @@ def calculate_training_coach_decision(
         first_working_weight = infer_first_working_weight(context, weight)
 
         if should_continue_warming_up(weight, context):
-            recommended_weight = next_warmup_weight(weight, first_working_weight)
+            recommended_weight = next_warmup_weight(weight, first_working_weight, exercise_context)
 
             return with_decision_metadata(
                 {
@@ -912,7 +932,7 @@ def calculate_training_coach_decision(
 
         return with_decision_metadata(
             {
-                "recommended_weight": first_working_weight,
+                "recommended_weight": snap_to_available_weight(first_working_weight, exercise_context),
                 "target_reps": target_reps,
                 "recommended_rest_seconds": 90,
                 "next_set_type": "WORKING",
@@ -1014,7 +1034,11 @@ def calculate_training_coach_decision(
 
         return with_decision_metadata(
             {
-                "recommended_weight": reduce_weight(weight, reduction),
+                "recommended_weight": snap_to_available_weight(
+                    reduce_weight(weight, reduction),
+                    exercise_context,
+                    "down",
+                ),
                 "target_reps": target_reps,
                 "recommended_rest_seconds": 150 if reduction <= 0.10 else 180,
                 "next_set_type": "WORKING",
@@ -1149,7 +1173,7 @@ def calculate_training_coach_decision(
 
             return with_decision_metadata(
                 {
-                    "recommended_weight": round_recommended_weight(weight + step),
+                    "recommended_weight": increased_working_weight(weight, step, exercise_context),
                     "target_reps": target_reps,
                     "recommended_rest_seconds": 120,
                     "next_set_type": "WORKING",

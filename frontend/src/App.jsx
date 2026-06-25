@@ -35,6 +35,9 @@ function App() {
   const [substitutionOptionsByExerciseId, setSubstitutionOptionsByExerciseId] = useState({});
   const [openSubstitutionByExerciseId, setOpenSubstitutionByExerciseId] = useState({});
   const [isReplacingExerciseById, setIsReplacingExerciseById] = useState({});
+  const [openWeightScaleByExerciseId, setOpenWeightScaleByExerciseId] = useState({});
+  const [weightScaleFormsByExerciseId, setWeightScaleFormsByExerciseId] = useState({});
+  const [isSavingWeightScaleByExerciseId, setIsSavingWeightScaleByExerciseId] = useState({});
   const [exerciseRowCounts, setExerciseRowCounts] = useState({});
   const [restTimers, setRestTimers] = useState({});
   const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
@@ -413,6 +416,8 @@ function App() {
       target_max_reps: exercise.target_max_reps,
       target_rir: exercise.target_rir,
       planned_sets: exercise.sets,
+      main_weight_options: exercise.exercise_main_weight_options || [],
+      micro_weight_options: exercise.exercise_micro_weight_options || [],
     };
   }
 
@@ -716,6 +721,166 @@ function App() {
         [field]: value,
       },
     });
+  }
+
+  function formatWeightOptions(options) {
+    return (options || []).join(", ");
+  }
+
+  function parseWeightOptions(value) {
+    return String(value || "")
+      .split(/[,;\n]/)
+      .map((item) => item.trim().replace(",", "."))
+      .filter(Boolean)
+      .map(Number)
+      .filter((number) => Number.isFinite(number) && number >= 0);
+  }
+
+  function buildWeightScaleForm(exercise) {
+    return {
+      main_weight_options: formatWeightOptions(exercise.exercise_main_weight_options),
+      micro_weight_options: formatWeightOptions(exercise.exercise_micro_weight_options),
+    };
+  }
+
+  function getWeightScaleForm(exercise) {
+    return weightScaleFormsByExerciseId[exercise.id] || buildWeightScaleForm(exercise);
+  }
+
+  function toggleWeightScaleMenu(exercise) {
+    const shouldOpen = !openWeightScaleByExerciseId[exercise.id];
+
+    setOpenWeightScaleByExerciseId((currentState) => ({
+      ...currentState,
+      [exercise.id]: shouldOpen,
+    }));
+
+    if (shouldOpen && !weightScaleFormsByExerciseId[exercise.id]) {
+      setWeightScaleFormsByExerciseId((currentForms) => ({
+        ...currentForms,
+        [exercise.id]: buildWeightScaleForm(exercise),
+      }));
+    }
+  }
+
+  function updateWeightScaleForm(exercise, field, value) {
+    setWeightScaleFormsByExerciseId((currentForms) => ({
+      ...currentForms,
+      [exercise.id]: {
+        ...getWeightScaleForm(exercise),
+        [field]: value,
+      },
+    }));
+  }
+
+  function updateProgramExerciseScale(trainingExerciseId, data) {
+    setProgram((currentProgram) => {
+      if (!currentProgram) {
+        return currentProgram;
+      }
+
+      return {
+        ...currentProgram,
+        workouts: currentProgram.workouts.map((workout) => ({
+          ...workout,
+          exercises: workout.exercises.map((exercise) => (
+            exercise.id === trainingExerciseId
+              ? {
+                  ...exercise,
+                  exercise_main_weight_options: data.main_weight_options,
+                  exercise_micro_weight_options: data.micro_weight_options,
+                }
+              : exercise
+          )),
+        })),
+      };
+    });
+  }
+
+  async function saveWeightScale(exercise) {
+    const formData = getWeightScaleForm(exercise);
+    const payload = {
+      main_weight_options: parseWeightOptions(formData.main_weight_options),
+      micro_weight_options: parseWeightOptions(formData.micro_weight_options),
+    };
+
+    setIsSavingWeightScaleByExerciseId((currentState) => ({
+      ...currentState,
+      [exercise.id]: true,
+    }));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/exercises/${exercise.exercise}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+        alert("Não consegui guardar a escala de pesos deste exercício.");
+        return;
+      }
+
+      updateProgramExerciseScale(exercise.id, data);
+      setWeightScaleFormsByExerciseId((currentForms) => ({
+        ...currentForms,
+        [exercise.id]: {
+          main_weight_options: formatWeightOptions(data.main_weight_options),
+          micro_weight_options: formatWeightOptions(data.micro_weight_options),
+        },
+      }));
+      setOpenWeightScaleByExerciseId((currentState) => ({
+        ...currentState,
+        [exercise.id]: false,
+      }));
+
+      if (activeSessionByWorkout[exercise.workout]) {
+        await loadExerciseHistory(exercise);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Não consegui contactar o servidor para guardar a escala de pesos.");
+    } finally {
+      setIsSavingWeightScaleByExerciseId((currentState) => ({
+        ...currentState,
+        [exercise.id]: false,
+      }));
+    }
+  }
+
+  async function exportUserTrainingData() {
+    if (!profileId) {
+      alert("Não encontrei o perfil ativo para exportar.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/accounts/profiles/${profileId}/export/`);
+
+      if (!response.ok) {
+        const data = await response.json();
+        console.error(data);
+        alert("Não consegui exportar o histórico deste atleta.");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+
+      link.href = url;
+      link.download = `shapetronyc-${form.username || "athlete"}-${timestamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert("Não consegui contactar o servidor para exportar o histórico.");
+    }
   }
 
   async function loadAthleteDashboard(profileIdOverride = null) {
@@ -1852,7 +2017,16 @@ function App() {
 
       {step === 4 && program && (
         <div>
-          <h2>{program.name}</h2>
+          <div className="program-header-row">
+            <h2>{program.name}</h2>
+            <button
+              type="button"
+              className="export-user-button"
+              onClick={exportUserTrainingData}
+            >
+              Exportar histórico
+            </button>
+          </div>
 
           {athleteDashboard && (
             <section
@@ -2784,9 +2958,12 @@ function App() {
                       const exerciseLogs = getExerciseLogs(item.id);
                       const isOpen = Boolean(openExerciseById[item.id]);
                       const isSubstitutionOpen = Boolean(openSubstitutionByExerciseId[item.id]);
+                      const isWeightScaleOpen = Boolean(openWeightScaleByExerciseId[item.id]);
                       const substitutionData = substitutionOptionsByExerciseId[item.id];
+                      const weightScaleForm = getWeightScaleForm(item);
                       const hasLoggedSets = exerciseLogs.current_sets.length > 0;
                       const isReplacing = Boolean(isReplacingExerciseById[item.id]);
+                      const isSavingWeightScale = Boolean(isSavingWeightScaleByExerciseId[item.id]);
                       const restSeconds = restTimers[item.id] || 0;
                       const rows = getExerciseRows(item);
                       const guidance = getGuidanceForExercise(item, rows, restSeconds);
@@ -2832,7 +3009,58 @@ function App() {
                             >
                               {isReplacing ? "A trocar..." : "Trocar"}
                             </button>
+
+                            <button
+                              className="exercise-scale-button"
+                              onClick={() => toggleWeightScaleMenu(item)}
+                              disabled={isSavingWeightScale}
+                              title="Configurar placas e bolachas desta máquina"
+                            >
+                              Escala
+                            </button>
                           </div>
+
+                          {isWeightScaleOpen && (
+                            <div className="exercise-weight-scale-panel">
+                              <div className="exercise-substitution-header">
+                                <strong>Escala de pesos da máquina</strong>
+                                <span>Usada pela IA para recomendar cargas possíveis.</span>
+                              </div>
+
+                              <div className="exercise-weight-scale-grid">
+                                <label className="profile-field">
+                                  <span>Placas principais</span>
+                                  <input
+                                    value={weightScaleForm.main_weight_options}
+                                    onChange={(event) =>
+                                      updateWeightScaleForm(item, "main_weight_options", event.target.value)
+                                    }
+                                    placeholder="4, 10, 12, 18, 24, 30"
+                                  />
+                                </label>
+
+                                <label className="profile-field">
+                                  <span>Bolachas / extras</span>
+                                  <input
+                                    value={weightScaleForm.micro_weight_options}
+                                    onChange={(event) =>
+                                      updateWeightScaleForm(item, "micro_weight_options", event.target.value)
+                                    }
+                                    placeholder="1, 2, 3"
+                                  />
+                                </label>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="exercise-scale-save-button"
+                                onClick={() => saveWeightScale(item)}
+                                disabled={isSavingWeightScale}
+                              >
+                                {isSavingWeightScale ? "A guardar..." : "Guardar escala"}
+                              </button>
+                            </div>
+                          )}
 
                           {isSubstitutionOpen && !hasLoggedSets && (
                             <div className="exercise-substitution-panel">

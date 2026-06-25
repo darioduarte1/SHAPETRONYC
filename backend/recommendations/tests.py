@@ -247,6 +247,24 @@ class TrainingCoachEngineTests(SimpleTestCase):
         self.assertEqual(decision["target_reps_label"], "6-8")
         self.assertGreater(decision["recommended_weight"], 80)
 
+    def test_uses_machine_weight_scale_for_next_working_set(self):
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=12,
+            rir=3,
+            is_failure=False,
+            set_type="WORKING",
+            exercise_context={
+                "equipment": "Machine",
+                "main_weight_options": [40, 50, 60],
+                "micro_weight_options": [1, 2, 3],
+            },
+        )
+
+        self.assertEqual(decision["action"], "increase_weight")
+        self.assertEqual(decision["recommended_weight"], 51)
+
+
     @override_settings(
         OPENAI_API_KEY="test-key",
         AI_TRAINING_DECISION_PROVIDER="openai",
@@ -429,7 +447,11 @@ class WorkoutProgressionEngineTests(SimpleTestCase):
         return SimpleNamespace(
             id=1,
             exercise_id=10,
-            exercise=SimpleNamespace(name="Bench Press"),
+            exercise=SimpleNamespace(
+                name="Bench Press",
+                main_weight_options=[],
+                micro_weight_options=[],
+            ),
             sets=3,
             target_rir=2,
         )
@@ -460,6 +482,36 @@ class WorkoutProgressionEngineTests(SimpleTestCase):
         self.assertEqual(recommendation["action"], "increase_load")
         self.assertEqual(recommendation["recommended_weight"], 52.5)
         self.assertEqual(recommendation["recommended_sets"], 3)
+
+    def test_next_workout_progression_uses_machine_weight_scale(self):
+        training_exercise = self.make_training_exercise()
+        training_exercise.exercise.main_weight_options = [40, 50, 60]
+        training_exercise.exercise.micro_weight_options = [1, 2, 3]
+
+        recommendation = calculate_exercise_progression(
+            training_exercise,
+            [
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+            ],
+        )
+
+        self.assertEqual(recommendation["action"], "increase_load")
+        self.assertEqual(recommendation["recommended_weight"], 51)
 
     def test_reduces_volume_for_next_workout_after_repeated_misses(self):
         recommendation = calculate_exercise_progression(

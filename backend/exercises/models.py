@@ -27,6 +27,8 @@ class Exercise(models.Model):
     muscle_group = models.CharField(max_length=50)
     equipment = models.CharField(max_length=50)
     image_url = models.CharField(max_length=255, blank=True)
+    main_weight_options = models.JSONField(default=list, blank=True)
+    micro_weight_options = models.JSONField(default=list, blank=True)
 
     movement_pattern = models.CharField(
         max_length=50,

@@ -118,6 +118,32 @@ p {
   text-align: left;
 }
 
+.program-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.export-user-button {
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid rgba(56, 189, 248, 0.46);
+  border-radius: 7px;
+  background: rgba(14, 116, 144, 0.2);
+  color: #bae6fd;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.export-user-button:hover {
+  border-color: rgba(134, 239, 172, 0.5);
+  color: #dcfce7;
+  background: rgba(22, 163, 74, 0.18);
+}
+
 .home-hero-panel,
 .home-action-card {
   border: 1px solid rgba(148, 163, 184, 0.24);
@@ -514,7 +540,7 @@ p {
 
 .exercise-row-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: stretch;
 }
@@ -591,6 +617,31 @@ p {
   cursor: pointer;
 }
 
+.exercise-scale-button {
+  min-width: 86px;
+  min-height: 76px;
+  padding: 0 14px;
+  border: 1px solid rgba(134, 239, 172, 0.38);
+  border-radius: 8px;
+  background: rgba(22, 163, 74, 0.16);
+  color: #bbf7d0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.exercise-scale-button:hover:not(:disabled) {
+  border-color: rgba(56, 189, 248, 0.46);
+  color: #bae6fd;
+  background: rgba(14, 116, 144, 0.2);
+}
+
+.exercise-scale-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .exercise-replace-button:hover:not(:disabled) {
   border-color: rgba(134, 239, 172, 0.5);
   color: #dcfce7;
@@ -608,6 +659,39 @@ p {
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.82);
+}
+
+.exercise-weight-scale-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(134, 239, 172, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 47, 73, 0.38);
+}
+
+.exercise-weight-scale-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.exercise-scale-save-button {
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(134, 239, 172, 0.5);
+  border-radius: 7px;
+  background: #16a34a;
+  color: #f0fdf4;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.exercise-scale-save-button:disabled {
+  cursor: progress;
+  opacity: 0.64;
 }
 
 .exercise-substitution-header {
@@ -742,7 +826,8 @@ p {
     grid-template-columns: 1fr;
   }
 
-  .exercise-replace-button {
+  .exercise-replace-button,
+  .exercise-scale-button {
     min-height: 42px;
     width: 100%;
   }
@@ -753,6 +838,10 @@ p {
   }
 
   .exercise-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-weight-scale-grid {
     grid-template-columns: 1fr;
   }
 }

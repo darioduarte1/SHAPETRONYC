@@ -5,6 +5,8 @@ import urllib.request
 
 from django.conf import settings
 
+from exercises.services.weight_scale import get_exercise_weight_scale, snap_to_available_weight
+
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_TIMEOUT_SECONDS = 20
@@ -288,7 +290,7 @@ def _request_ollama_training_decision(context, base_url, model):
     return json.loads(content)
 
 
-def _normalize_ai_decision(ai_decision, local_decision, model, source):
+def _normalize_ai_decision(ai_decision, local_decision, request_context, model, source):
     if not isinstance(ai_decision, dict):
         return local_decision
 
@@ -348,6 +350,13 @@ def _normalize_ai_decision(ai_decision, local_decision, model, source):
         target_reps = ""
     elif _number_or_none(recommended_weight) is None:
         recommended_weight = local_decision.get("recommended_weight")
+    else:
+        exercise_context = request_context.get("exercise_context", {})
+        if get_exercise_weight_scale(exercise_context)["configured"]:
+            recommended_weight = snap_to_available_weight(
+                recommended_weight,
+                exercise_context,
+            )
 
     reason = ai_decision.get("reason") or local_decision.get("reason")
     guidance_title = ai_decision.get("guidance_title") or local_decision.get("guidance_title")
@@ -448,7 +457,7 @@ def generate_ai_training_decision(local_decision, request_context):
                 "model": ollama_model,
             }
 
-        return _normalize_ai_decision(ai_decision, local_decision, ollama_model, "ollama_training_decision")
+        return _normalize_ai_decision(ai_decision, local_decision, request_context, ollama_model, "ollama_training_decision")
 
     if not api_key:
         return {
@@ -488,4 +497,4 @@ def generate_ai_training_decision(local_decision, request_context):
             "model": model,
         }
 
-    return _normalize_ai_decision(ai_decision, local_decision, model, "openai_training_decision")
+    return _normalize_ai_decision(ai_decision, local_decision, request_context, model, "openai_training_decision")

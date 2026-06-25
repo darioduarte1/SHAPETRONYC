@@ -1,3 +1,5 @@
+from exercises.services.weight_scale import snap_to_available_weight
+
 TARGET_REPS = 12
 WEIGHT_STEP = 2.5
 HISTORY_LIMIT = 15
@@ -324,7 +326,10 @@ def calculate_warmups_from_first_working_set(
 
     return [
         {
-            "recommended_weight": round_recommended_weight(first_weight * warmup_step["ratio"]),
+            "recommended_weight": snap_to_available_weight(
+                first_weight * warmup_step["ratio"],
+                exercise_profile,
+            ),
             "recommended_reps": min(target_reps, warmup_step["reps"]),
             "reason": "Aquecimento progressivo calculado para chegar à primeira série normal com técnica pronta e pouca fadiga.",
             "confidence": first_working_set.get("confidence", "média"),
@@ -337,6 +342,22 @@ def calculate_warmups_from_first_working_set(
         }
         for index, warmup_step in enumerate(warmup_ramp, start=1)
     ]
+
+
+def snap_recommendation_weight(recommendation, exercise_profile=None, direction="nearest"):
+    recommended_weight = number_or_none(recommendation.get("recommended_weight"))
+
+    if recommended_weight is None:
+        return recommendation
+
+    return {
+        **recommendation,
+        "recommended_weight": snap_to_available_weight(
+            recommended_weight,
+            exercise_profile,
+            direction,
+        ),
+    }
 
 
 def preserve_previous_warmup_structure(warmup_sets, recent_session_sets):
@@ -354,7 +375,7 @@ def preserve_previous_warmup_structure(warmup_sets, recent_session_sets):
 
     for previous_warmup in previous_warmups[len(warmup_sets):]:
         preserved_warmups.append({
-            "recommended_weight": round_recommended_weight(previous_warmup.weight_used),
+            "recommended_weight": snap_to_available_weight(previous_warmup.weight_used),
             "recommended_reps": int(previous_warmup.reps_completed),
             "reason": "Aquecimento preservado da sessão anterior para manter a mesma preparação antes das séries normais.",
             "confidence": "média",
@@ -375,6 +396,7 @@ def build_history_based_recommended_sets(
     exercise_profile=None,
 ):
     first_working_set = calculate_first_working_set_from_history(recent_session_sets, target_reps)
+    first_working_set = snap_recommendation_weight(first_working_set, exercise_profile)
     warmup_sets = calculate_warmups_from_first_working_set(
         first_working_set,
         target_reps,

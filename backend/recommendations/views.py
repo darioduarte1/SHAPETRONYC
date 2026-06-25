@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from accounts.models import UserProfile
+from exercises.services.weight_scale import get_exercise_weight_scale
 from training.models import TrainingWorkoutExercise
 
 from .serializers import NextSetRecommendationSerializer
@@ -63,6 +64,9 @@ def build_exercise_context(training_exercise_id, provided_context):
         "planned_sets": training_exercise.sets,
         "workout_id": training_exercise.workout_id,
         "workout_name": training_exercise.workout.name,
+        "main_weight_options": exercise.main_weight_options,
+        "micro_weight_options": exercise.micro_weight_options,
+        "weight_scale": get_exercise_weight_scale(exercise),
     })
 
     return context
