@@ -74,10 +74,10 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 37 testes a passar
+- Backend: 40 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento, memória do atleta e plano adaptativo
+- Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento, memória do atleta, plano adaptativo e decisões adaptativas da Beatriz
 
 ## Estado Atual
 
@@ -106,6 +106,9 @@ Implementado:
 - Plano adaptativo com recomendações por exercício
 - Ações adaptativas fechadas: proteger recuperação, aumentar margem, progredir carga e manter plano
 - Endpoint de plano adaptativo baseado na memória do atleta, dashboard e programa ativo
+- Aplicação controlada de recomendações adaptativas ao plano
+- Histórico auditável de decisões adaptativas aplicadas, adiadas e ignoradas
+- Demo visual da Beatriz com 45 treinos completos em `frontend/public/beatriz-evolution-demo.html`
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
 - IA externa opcional para decisões durante o treino com OpenAI ou Ollama
@@ -113,7 +116,6 @@ Implementado:
 
 Em preparação:
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
-- Aplicação automática controlada das recomendações adaptativas ao plano
 - Polimento da experiência visual do dashboard e análise semanal
 
 ## Fluxo Principal
@@ -139,6 +141,8 @@ Em preparação:
 - `GET /api/training/program/<profile_id>/`
 - `GET /api/training/dashboard/<profile_id>/`
 - `GET /api/training/adaptive-plan/<profile_id>/`
+- `GET /api/training/adaptive-plan/decisions/<profile_id>/`
+- `POST /api/training/adaptive-plan/apply/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -517,27 +521,33 @@ Entregue:
 - Painel "Plano adaptativo" no frontend
 - Evidência visível por recomendação para explicar o motivo da decisão
 - Primeira fase sem mutação automática do plano: a app recomenda, mostra o motivo e mantém o controlo explícito
-- Testes do serviço adaptativo e do endpoint
+- Modelo `AdaptivePlanDecision`
+- Migration `training/migrations/0004_adaptiveplandecision.py`
+- Endpoint `POST /api/training/adaptive-plan/apply/`
+- Endpoint `GET /api/training/adaptive-plan/decisions/<profile_id>/`
+- Botões no frontend para aplicar, adiar ou ignorar recomendações
+- Aplicação controlada de séries e RIR alvo ao exercício selecionado
+- Registo auditável do ajuste de carga sugerido para o próximo treino
+- Histórico "Últimas decisões" no painel do plano adaptativo
+- Testes do serviço adaptativo, endpoints e decisões aplicadas/adiadas
+- Demo visual da Beatriz com 15 Upper, 15 Lower e 15 Full Body
 
-Próximos passos do Sprint 15:
-- Permitir aplicar recomendações selecionadas ao plano
-- Criar histórico de recomendações aceites/ignoradas
+Próximos passos:
 - Adicionar deload sugerido quando a watchlist persiste por vários treinos
 - Gerar feedback semanal com base em memória, consistência e tendência de volume
 
 ## Roadmap
 
-### Sprint 16 - Aplicação Controlada das Recomendações
+### Sprint 16 - Deload e Feedback Semanal
 
 Objetivo:
-Transformar recomendações adaptativas em alterações controladas ao plano, sempre com revisão explícita antes de aplicar.
+Transformar sinais persistentes de fadiga, watchlist e consistência em deloads sugeridos e feedback semanal.
 
 Ideias:
-- Botão para aplicar recomendação por exercício
-- Revisão antes/depois das alterações
-- Histórico de decisões adaptativas
 - Deload assistido
 - Feedback semanal consolidado
+- Revisão da evolução por bloco de treino
+- Alertas quando a progressão deixa de compensar a fadiga
 
 ## Estrutura do Projeto
 

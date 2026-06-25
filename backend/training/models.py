@@ -108,6 +108,55 @@ class AthleteTrainingMemory(models.Model):
         return f"{self.user.username} - {self.exercise.name} - {self.memory_type}"
 
 
+class AdaptivePlanDecision(models.Model):
+    STATUS_CHOICES = [
+        ("APPLIED", "Applied"),
+        ("DEFERRED", "Deferred"),
+        ("IGNORED", "Ignored"),
+    ]
+
+    ACTION_CHOICES = [
+        ("protect_recovery", "Protect recovery"),
+        ("increase_margin", "Increase margin"),
+        ("progress_load", "Progress load"),
+        ("maintain_plan", "Maintain plan"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="adaptive_plan_decisions",
+    )
+    training_exercise = models.ForeignKey(
+        "TrainingWorkoutExercise",
+        on_delete=models.CASCADE,
+        related_name="adaptive_plan_decisions",
+    )
+    exercise = models.ForeignKey(
+        Exercise,
+        on_delete=models.CASCADE,
+        related_name="adaptive_plan_decisions",
+    )
+    workout_name = models.CharField(max_length=100)
+    exercise_name = models.CharField(max_length=100)
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    current_sets = models.PositiveIntegerField()
+    recommended_sets = models.PositiveIntegerField()
+    current_target_rir = models.PositiveIntegerField()
+    recommended_target_rir = models.PositiveIntegerField()
+    load_adjustment = models.FloatField(default=0)
+    message = models.TextField(blank=True)
+    evidence = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.exercise_name} - {self.action} - {self.status}"
+
+
 class WorkoutSession(models.Model):
     STATUS_CHOICES = [
         ("IN_PROGRESS", "In Progress"),

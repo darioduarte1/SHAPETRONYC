@@ -11,10 +11,14 @@ from recommendations.services.workout_progression_engine import calculate_workou
 
 from .serializers import TrainingProgramSerializer, WorkoutSessionSerializer
 from .services.adaptive_plan import build_adaptive_plan
+from .services.adaptive_plan_decisions import (
+    apply_adaptive_plan_recommendation,
+    list_adaptive_plan_decisions,
+)
 from .services.athlete_dashboard import build_athlete_dashboard
 from .services.training_memory import refresh_training_memory
 from .services.training_generator import generate_training_program
-from .models import TrainingProgram, TrainingWorkout, WorkoutSession
+from .models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
 
 
 class GenerateProgramView(APIView):
@@ -185,3 +189,61 @@ class AdaptivePlanView(APIView):
             )
 
         return Response(build_adaptive_plan(profile))
+
+
+class AdaptivePlanDecisionListView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "profile_id": profile.id,
+            "decisions": list_adaptive_plan_decisions(profile),
+        })
+
+
+class ApplyAdaptivePlanRecommendationView(APIView):
+
+    def post(self, request):
+        profile_id = request.data.get("profile_id")
+        training_exercise_id = request.data.get("training_exercise_id")
+        decision_status = request.data.get("status", "APPLIED")
+
+        if not profile_id or not training_exercise_id:
+            return Response(
+                {"error": "profile_id and training_exercise_id are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = apply_adaptive_plan_recommendation(
+                profile,
+                int(training_exercise_id),
+                decision_status,
+            )
+        except (ValueError, TypeError) as error:
+            return Response(
+                {"error": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except TrainingWorkoutExercise.DoesNotExist:
+            return Response(
+                {"error": "Adaptive recommendation not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(result, status=status.HTTP_200_OK)

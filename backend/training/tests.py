@@ -9,6 +9,7 @@ from accounts.models import UserProfile
 from exercises.models import Exercise
 from progression.models import SetLog
 from training.models import (
+    AdaptivePlanDecision,
     AthleteTrainingMemory,
     TrainingProgram,
     TrainingWorkout,
@@ -186,3 +187,71 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["profile_id"], self.profile.id)
         self.assertEqual(response.data["recommendations"][0]["action"], "progress_load")
+
+    def test_apply_adaptive_plan_recommendation_updates_plan_and_records_decision(self):
+        self.training_exercise.target_rir = 1
+        self.training_exercise.save(update_fields=["target_rir"])
+        self.create_completed_session(days_ago=14, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=7, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=1, weight=55, reps=8, rir=None, reached_failure=True)
+        client = APIClient()
+
+        response = client.post(
+            "/api/training/adaptive-plan/apply/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "status": "APPLIED",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.training_exercise.refresh_from_db()
+        self.assertEqual(self.training_exercise.sets, 2)
+        self.assertEqual(self.training_exercise.target_rir, 3)
+        self.assertEqual(AdaptivePlanDecision.objects.count(), 1)
+        self.assertEqual(AdaptivePlanDecision.objects.first().status, "APPLIED")
+
+    def test_defer_adaptive_plan_recommendation_records_without_updating_plan(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+        client = APIClient()
+
+        response = client.post(
+            "/api/training/adaptive-plan/apply/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "status": "DEFERRED",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.training_exercise.refresh_from_db()
+        self.assertEqual(self.training_exercise.sets, 3)
+        self.assertEqual(self.training_exercise.target_rir, 2)
+        self.assertEqual(AdaptivePlanDecision.objects.count(), 1)
+        self.assertEqual(AdaptivePlanDecision.objects.first().status, "DEFERRED")
+
+    def test_adaptive_decision_endpoint_lists_recent_decisions(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+        client = APIClient()
+        client.post(
+            "/api/training/adaptive-plan/apply/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "status": "APPLIED",
+            },
+            format="json",
+        )
+
+        response = client.get(f"/api/training/adaptive-plan/decisions/{self.profile.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["decisions"][0]["action"], "progress_load")

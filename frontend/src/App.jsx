@@ -41,6 +41,8 @@ function App() {
   const [latestAiCoach, setLatestAiCoach] = useState(null);
   const [athleteDashboard, setAthleteDashboard] = useState(null);
   const [adaptivePlan, setAdaptivePlan] = useState(null);
+  const [adaptiveDecisions, setAdaptiveDecisions] = useState([]);
+  const [applyingAdaptiveById, setApplyingAdaptiveById] = useState({});
 
   const [form, setForm] = useState({
     username: "",
@@ -532,6 +534,16 @@ function App() {
     return colors[action] || "#94a3b8";
   }
 
+  function getAdaptiveDecisionStatusLabel(status) {
+    const labels = {
+      APPLIED: "Aplicada",
+      DEFERRED: "Adiada",
+      IGNORED: "Ignorada",
+    };
+
+    return labels[status] || status;
+  }
+
   function getProgressionActionLabel(action) {
     const labels = {
       increase_load: "Subir carga",
@@ -647,6 +659,96 @@ function App() {
 
     setAdaptivePlan(data);
     return data;
+  }
+
+  async function loadAdaptiveDecisions(profileIdOverride = null) {
+    const decisionsProfileId = profileIdOverride || profileId;
+
+    if (!decisionsProfileId) {
+      return [];
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/training/adaptive-plan/decisions/${decisionsProfileId}/`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return [];
+    }
+
+    setAdaptiveDecisions(data.decisions || []);
+    return data.decisions || [];
+  }
+
+  async function recordAdaptiveDecision(recommendation, decisionStatus) {
+    if (!profileId) {
+      alert("Não encontrei o perfil ativo.");
+      return;
+    }
+
+    if (decisionStatus === "APPLIED") {
+      const shouldApply = window.confirm(
+        `Aplicar ajuste em ${recommendation.exercise_name}?\n\nSéries: ${recommendation.current_sets} → ${recommendation.recommended_sets}\nRIR: ${recommendation.current_target_rir} → ${recommendation.recommended_target_rir}\nCarga sugerida: ${recommendation.load_adjustment > 0 ? "+" : ""}${recommendation.load_adjustment}kg`
+      );
+
+      if (!shouldApply) {
+        return;
+      }
+    }
+
+    setApplyingAdaptiveById({
+      ...applyingAdaptiveById,
+      [recommendation.training_exercise]: true,
+    });
+
+    const response = await fetch(`${API_BASE_URL}/api/training/adaptive-plan/apply/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profile_id: profileId,
+        training_exercise_id: recommendation.training_exercise,
+        status: decisionStatus,
+      }),
+    });
+    const data = await response.json();
+
+    setApplyingAdaptiveById((currentState) => ({
+      ...currentState,
+      [recommendation.training_exercise]: false,
+    }));
+
+    if (!response.ok) {
+      console.error(data);
+      alert("Não consegui gravar a decisão adaptativa.");
+      return;
+    }
+
+    if (decisionStatus === "APPLIED") {
+      setProgram((currentProgram) => {
+        if (!currentProgram) {
+          return currentProgram;
+        }
+
+        return {
+          ...currentProgram,
+          workouts: currentProgram.workouts.map((workout) => ({
+            ...workout,
+            exercises: workout.exercises.map((exercise) => (
+              exercise.id === data.updated_exercise.id
+                ? {
+                    ...exercise,
+                    sets: data.updated_exercise.sets,
+                    target_rir: data.updated_exercise.target_rir,
+                  }
+                : exercise
+            )),
+          })),
+        };
+      });
+    }
+
+    await loadAdaptivePlan();
+    await loadAdaptiveDecisions();
   }
 
   function toggleWorkout(workoutId) {
@@ -842,6 +944,7 @@ function App() {
       setOpenSetTypeMenuBySet({});
       loadAthleteDashboard(profileId);
       loadAdaptivePlan(profileId);
+      loadAdaptiveDecisions(profileId);
       setStep(4);
     } catch (error) {
       console.error(error);
@@ -883,6 +986,7 @@ function App() {
     setOpenSetTypeMenuBySet({});
     loadAthleteDashboard();
     loadAdaptivePlan();
+    loadAdaptiveDecisions();
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -927,6 +1031,7 @@ function App() {
     setLatestAiCoach(data.ai_coach_summary || null);
     loadAthleteDashboard();
     loadAdaptivePlan();
+    loadAdaptiveDecisions();
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -1570,6 +1675,60 @@ function App() {
                           ))}
                         </div>
                       )}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "8px",
+                          marginTop: "12px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => recordAdaptiveDecision(recommendation, "APPLIED")}
+                          disabled={Boolean(applyingAdaptiveById[recommendation.training_exercise])}
+                          style={{
+                            padding: "8px 10px",
+                            border: "1px solid #86efac",
+                            borderRadius: "6px",
+                            background: "#166534",
+                            color: "#f0fdf4",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {applyingAdaptiveById[recommendation.training_exercise] ? "A aplicar..." : "Aplicar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => recordAdaptiveDecision(recommendation, "DEFERRED")}
+                          disabled={Boolean(applyingAdaptiveById[recommendation.training_exercise])}
+                          style={{
+                            padding: "8px 10px",
+                            border: "1px solid #475569",
+                            borderRadius: "6px",
+                            background: "rgba(15, 23, 42, 0.8)",
+                            color: "#e2e8f0",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Adiar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => recordAdaptiveDecision(recommendation, "IGNORED")}
+                          disabled={Boolean(applyingAdaptiveById[recommendation.training_exercise])}
+                          style={{
+                            padding: "8px 10px",
+                            border: "1px solid #475569",
+                            borderRadius: "6px",
+                            background: "rgba(15, 23, 42, 0.8)",
+                            color: "#cbd5e1",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Ignorar
+                        </button>
+                      </div>
                     </div>
                   ))}
                 {(adaptivePlan.recommendations || []).filter((recommendation) => recommendation.action !== "maintain_plan").length === 0 && (
@@ -1578,6 +1737,38 @@ function App() {
                   </p>
                 )}
               </div>
+
+              {adaptiveDecisions.length > 0 && (
+                <div style={{ marginTop: "16px" }}>
+                  <strong style={{ color: "#bbf7d0", fontSize: "13px" }}>Últimas decisões</strong>
+                  <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
+                    {adaptiveDecisions.slice(0, 5).map((decision) => (
+                      <div
+                        key={decision.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                          padding: "10px",
+                          border: "1px solid rgba(148, 163, 184, 0.18)",
+                          borderRadius: "6px",
+                          background: "rgba(15, 23, 42, 0.32)",
+                        }}
+                      >
+                        <div>
+                          <strong style={{ fontSize: "13px" }}>{decision.exercise_name}</strong>
+                          <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "12px" }}>
+                            {getAdaptiveActionLabel(decision.action)} · Séries {decision.current_sets} → {decision.recommended_sets} · RIR {decision.current_target_rir} → {decision.recommended_target_rir} · carga {decision.load_adjustment > 0 ? "+" : ""}{decision.load_adjustment}kg
+                          </p>
+                        </div>
+                        <span style={{ color: "#e2e8f0", fontSize: "12px", whiteSpace: "nowrap" }}>
+                          {getAdaptiveDecisionStatusLabel(decision.status)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 

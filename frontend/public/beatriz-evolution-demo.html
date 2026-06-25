@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SHAPETRONYC - Beatriz Evolution</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101113;
+        --panel: #181a1f;
+        --panel-2: #20242a;
+        --text: #f5f5f0;
+        --muted: #a9afba;
+        --line: #343a42;
+        --green: #46c978;
+        --amber: #f2bb45;
+        --blue: #62a8ff;
+        --red: #ef6b6b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 20px;
+        align-items: stretch;
+        margin-bottom: 20px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 34px;
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .panel,
+      .metric,
+      .exercise-card,
+      .memory-card,
+      .recommendation-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .hero {
+        min-height: 280px;
+        padding: 26px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background:
+          linear-gradient(135deg, rgba(70, 201, 120, 0.22), transparent 44%),
+          linear-gradient(45deg, rgba(98, 168, 255, 0.2), transparent 50%),
+          var(--panel);
+      }
+
+      .hero p {
+        color: var(--muted);
+        max-width: 680px;
+        margin-top: 10px;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .identity {
+        padding: 22px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .identity-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .identity-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .identity span:first-child {
+        color: var(--muted);
+      }
+
+      .identity span:last-child {
+        text-align: right;
+        font-weight: 700;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .metric {
+        min-height: 108px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .metric strong {
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .two {
+        grid-template-columns: 0.95fr 1.05fr;
+      }
+
+      .three {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      section {
+        margin-top: 20px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .section-head p {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .chart {
+        padding: 18px;
+        min-height: 286px;
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .style-card {
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .style-card strong {
+        font-size: 26px;
+      }
+
+      .bar-track {
+        width: 100%;
+        height: 10px;
+        background: #2b3038;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        background: var(--green);
+        border-radius: 999px;
+      }
+
+      .exercise-list,
+      .memory-list,
+      .recommendation-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .exercise-card,
+      .memory-card,
+      .recommendation-card {
+        padding: 14px;
+      }
+
+      .exercise-top,
+      .recommendation-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: var(--panel-2);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .tag.green {
+        background: rgba(70, 201, 120, 0.18);
+        color: #8ff0b2;
+      }
+
+      .tag.blue {
+        background: rgba(98, 168, 255, 0.18);
+        color: #b8d7ff;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .delta {
+        color: var(--green);
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .progress-line {
+        display: grid;
+        grid-template-columns: 70px 1fr 70px;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        background: var(--panel);
+      }
+
+      th,
+      td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .evidence {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      @media (max-width: 860px) {
+        header,
+        .two,
+        .three,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="hero panel">
+          <div>
+            <h3>SHAPETRONYC · Sprint 15</h3>
+            <h1>Beatriz · Evolução de 45 treinos</h1>
+            <p>
+              Perfil real criado na base local com 15 treinos Upper, 15 Lower e 15 Full Body.
+              O histórico está construído para testar memória, dashboard e plano adaptativo com progressão consistente.
+            </p>
+          </div>
+          <div class="tag green">Perfil ID 38 · Programa ID 43</div>
+        </div>
+        <aside class="identity panel">
+          <div class="identity-row"><span>Username</span><span>beatriz</span></div>
+          <div class="identity-row"><span>Objetivo</span><span>Hipertrofia</span></div>
+          <div class="identity-row"><span>Nível</span><span>Intermédio</span></div>
+          <div class="identity-row"><span>Experiência</span><span>3-5 anos</span></div>
+          <div class="identity-row"><span>Divisão</span><span>Upper · Lower · Full Body</span></div>
+          <div class="identity-row"><span>Último treino</span><span>22 Jun 2026</span></div>
+        </aside>
+      </header>
+
+      <div class="metrics" id="metrics"></div>
+
+      <section class="grid two">
+        <div>
+          <div class="section-head">
+            <div>
+              <h2>Volume semanal</h2>
+              <p>Últimas 8 semanas registadas no dashboard.</p>
+            </div>
+          </div>
+          <div class="chart panel">
+            <svg id="weeklyChart" viewBox="0 0 680 240" role="img" aria-label="Volume semanal"></svg>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-head">
+            <div>
+              <h2>Distribuição por estilo</h2>
+              <p>15 treinos completos por cada estilo.</p>
+            </div>
+          </div>
+          <div class="grid three" id="styleCards"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Progressão por exercício</h2>
+            <p>Primeira série normal do primeiro treino comparada com a mais recente.</p>
+          </div>
+        </div>
+        <div class="exercise-list" id="exerciseList"></div>
+      </section>
+
+      <section class="grid two">
+        <div>
+          <div class="section-head">
+            <div>
+              <h2>Memória do atleta</h2>
+              <p>Sinais persistentes criados pelo motor de memória.</p>
+            </div>
+          </div>
+          <div class="memory-list" id="memoryList"></div>
+        </div>
+
+        <div>
+          <div class="section-head">
+            <div>
+              <h2>Plano adaptativo</h2>
+              <p>O Sprint 15 recomenda sem alterar automaticamente o plano.</p>
+            </div>
+            <span class="tag blue">9 progressões</span>
+          </div>
+          <div class="recommendation-list" id="recommendationList"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Histórico completo</h2>
+            <p>Todos os 45 treinos completos da Beatriz.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Data</th>
+                <th>Estilo</th>
+                <th>Volume</th>
+                <th>Séries</th>
+                <th>RIR médio</th>
+              </tr>
+            </thead>
+            <tbody id="sessionRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const weeklyVolume = [
+        { week: "2026-W19", volume: 16627.5 },
+        { week: "2026-W20", volume: 23590 },
+        { week: "2026-W21", volume: 18213 },
+        { week: "2026-W22", volume: 24951 },
+        { week: "2026-W23", volume: 20364 },
+        { week: "2026-W24", volume: 29679 },
+        { week: "2026-W25", volume: 21584 },
+        { week: "2026-W26", volume: 7047 },
+      ];
+
+      const byStyle = [
+        { name: "Upper", sessions: 15, volume: 68189, sets: 180, color: "#62a8ff" },
+        { name: "Lower", sessions: 15, volume: 110140, sets: 180, color: "#46c978" },
+        { name: "Full Body", sessions: 15, volume: 84700.5, sets: 180, color: "#f2bb45" },
+      ];
+
+      const exercises = [
+        { exercise: "Leg Press", style: "Lower", sessions: 15, first: 80, latest: 115, change: 35 },
+        { exercise: "Hip Thrust", style: "Full Body", sessions: 15, first: 55, latest: 83, change: 28 },
+        { exercise: "Romanian Deadlift", style: "Lower", sessions: 15, first: 45, latest: 66, change: 21 },
+        { exercise: "Chest Press Machine", style: "Upper", sessions: 15, first: 35, latest: 52.5, change: 17.5 },
+        { exercise: "Lat Pulldown", style: "Upper", sessions: 15, first: 32.5, latest: 50, change: 17.5 },
+        { exercise: "Seated Row", style: "Full Body", sessions: 15, first: 35, latest: 52.5, change: 17.5 },
+        { exercise: "Shoulder Press Machine", style: "Upper", sessions: 15, first: 22.5, latest: 36.5, change: 14 },
+        { exercise: "Leg Curl", style: "Lower", sessions: 15, first: 25, latest: 39, change: 14 },
+        { exercise: "Goblet Squat", style: "Full Body", sessions: 15, first: 22.5, latest: 36.5, change: 14 },
+      ];
+
+      const memories = exercises.map((item) => ({
+        title: `${item.exercise} está a progredir`,
+        summary: `A primeira série subiu ${item.change.toFixed(1)}kg em 15 treino(s) sem falhas recentes.`,
+        evidence: [
+          `Primeira carga registada: ${item.first.toFixed(1)}kg`,
+          `Carga mais recente: ${item.latest.toFixed(1)}kg`,
+          "RIR médio recente: 2.0",
+        ],
+      }));
+
+      const baseVolumes = { Upper: 3595, Lower: 6000, "Full Body": 4497.5 };
+      const finalVolumes = { Upper: 5694, Lower: 9020, "Full Body": 7047 };
+      const styleOrder = ["Upper", "Lower", "Full Body"];
+      const startDate = new Date("2026-03-26T12:00:00");
+      const sessions = [];
+
+      for (let cycle = 0; cycle < 15; cycle += 1) {
+        styleOrder.forEach((style, styleIndex) => {
+          const date = new Date(startDate);
+          date.setDate(startDate.getDate() + cycle * 6 + styleIndex * 2);
+          const progress = cycle / 14;
+          const volume = baseVolumes[style] + (finalVolumes[style] - baseVolumes[style]) * progress;
+          sessions.push({
+            index: sessions.length + 1,
+            date: date.toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" }),
+            style,
+            volume: Math.round(volume * 10) / 10,
+            sets: 12,
+            rir: cycle < 5 ? 3.3 : cycle < 12 ? 2.8 : 2.5,
+          });
+        });
+      }
+
+      const metrics = [
+        ["45", "Treinos completos"],
+        ["263.029,5kg", "Volume total"],
+        ["540", "Séries registadas"],
+        ["0", "Falhas recentes"],
+      ];
+
+      document.getElementById("metrics").innerHTML = metrics
+        .map(([value, label]) => `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`)
+        .join("");
+
+      const maxStyleVolume = Math.max(...byStyle.map((item) => item.volume));
+      document.getElementById("styleCards").innerHTML = byStyle
+        .map(
+          (item) => `
+            <div class="style-card panel">
+              <h3>${item.name}</h3>
+              <strong>${item.sessions} treinos</strong>
+              <span class="muted">${item.volume.toLocaleString("pt-PT")}kg · ${item.sets} séries</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(item.volume / maxStyleVolume) * 100}%; background:${item.color}"></div></div>
+            </div>
+          `
+        )
+        .join("");
+
+      const maxExerciseChange = Math.max(...exercises.map((item) => item.change));
+      document.getElementById("exerciseList").innerHTML = exercises
+        .map(
+          (item) => `
+            <article class="exercise-card">
+              <div class="exercise-top">
+                <div>
+                  <strong>${item.exercise}</strong>
+                  <div class="muted">${item.style} · ${item.sessions} sessões · 12 reps recentes · RIR 2</div>
+                </div>
+                <div class="delta">+${item.change.toFixed(1)}kg</div>
+              </div>
+              <div class="progress-line">
+                <span>${item.first.toFixed(1)}kg</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${(item.change / maxExerciseChange) * 100}%"></div></div>
+                <span>${item.latest.toFixed(1)}kg</span>
+              </div>
+            </article>
+          `
+        )
+        .join("");
+
+      document.getElementById("memoryList").innerHTML = memories
+        .slice(0, 6)
+        .map(
+          (memory) => `
+            <article class="memory-card">
+              <strong>${memory.title}</strong>
+              <p class="evidence">${memory.summary}</p>
+              <p class="evidence">${memory.evidence.join(" · ")}</p>
+            </article>
+          `
+        )
+        .join("");
+
+      document.getElementById("recommendationList").innerHTML = exercises
+        .map(
+          (item) => `
+            <article class="recommendation-card">
+              <div class="recommendation-top">
+                <div>
+                  <strong>${item.exercise}</strong>
+                  <div class="muted">${item.style}</div>
+                </div>
+                <span class="tag green">Progredir carga</span>
+              </div>
+              <p class="evidence">O histórico permite tentar subir um passo de carga mantendo o volume planeado.</p>
+              <p class="evidence">Séries: 3 → 3 · RIR: 2 → 2 · Carga +2.5kg</p>
+            </article>
+          `
+        )
+        .join("");
+
+      document.getElementById("sessionRows").innerHTML = sessions
+        .map(
+          (session) => `
+            <tr>
+              <td>${session.index}</td>
+              <td>${session.date}</td>
+              <td><span class="tag">${session.style}</span></td>
+              <td>${session.volume.toLocaleString("pt-PT")}kg</td>
+              <td>${session.sets}</td>
+              <td>${session.rir.toFixed(1)}</td>
+            </tr>
+          `
+        )
+        .join("");
+
+      const chart = document.getElementById("weeklyChart");
+      const maxWeekly = Math.max(...weeklyVolume.map((item) => item.volume));
+      const points = weeklyVolume.map((item, index) => {
+        const x = 42 + index * 86;
+        const y = 188 - (item.volume / maxWeekly) * 145;
+        return { ...item, x, y };
+      });
+
+      chart.innerHTML = `
+        <line x1="36" y1="190" x2="650" y2="190" stroke="#343a42" />
+        <line x1="36" y1="40" x2="36" y2="190" stroke="#343a42" />
+        <polyline points="${points.map((item) => `${item.x},${item.y}`).join(" ")}" fill="none" stroke="#46c978" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        ${points
+          .map(
+            (item) => `
+              <circle cx="${item.x}" cy="${item.y}" r="6" fill="#46c978" />
+              <text x="${item.x}" y="216" fill="#a9afba" font-size="12" text-anchor="middle">${item.week.replace("2026-", "")}</text>
+              <text x="${item.x}" y="${item.y - 12}" fill="#f5f5f0" font-size="12" text-anchor="middle">${Math.round(item.volume / 1000)}k</text>
+            `
+          )
+          .join("")}
+      `;
+    </script>
+  </body>
+</html>
