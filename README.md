@@ -616,6 +616,7 @@ Adicional entregue no Sprint 17:
 - Ecrã de criação de perfil redesenhado com seleção visual de género, nível e dias por semana
 - Preservação da estrutura de aquecimento entre treinos repetidos
 - Correção para impedir que W2/W3 sejam convertidas em séries normais no treino seguinte
+- Separação entre tipo de série escolhido manualmente e tipo sugerido automaticamente pelo coach, evitando que sugestões automáticas substituam W2/W3 preservadas
 - Séries de aquecimento sem RIR e sem falha registada
 - API limpa automaticamente RIR/falha em séries `WARMUP`
 - IA local e contexto enviado ao modelo tratam aquecimento sem RIR, usando carga, técnica, histórico e distância até à primeira série normal

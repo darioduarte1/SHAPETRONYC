@@ -231,20 +231,22 @@ function App() {
 
   function getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
     const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
+    const rowForm = setForms[setFormKey] || {};
     const currentSet = getCurrentSetForRow(exercise.id, displaySetNumber);
     const previousSetAtPosition = getPreviousSetAtDisplayPosition(exercise.id, displaySetNumber);
     const recommendedSet = getRecommendedSetRecordForRow(exercise.id, sourceSetNumber);
     const hasCurrentSets = getExerciseLogs(exercise.id).current_sets.length > 0;
 
-    if (!currentSet && !setForms[setFormKey]?.set_type && !hasCurrentSets && sourceSetNumber === 1) {
+    if (!currentSet && !rowForm.set_type && !hasCurrentSets && sourceSetNumber === 1) {
       return "WARMUP";
     }
 
     return (
       currentSet?.set_type ||
-      setForms[setFormKey]?.set_type ||
+      (rowForm.set_type_source === "manual" ? rowForm.set_type : null) ||
       previousSetAtPosition?.set_type ||
       recommendedSet?.set_type ||
+      rowForm.set_type ||
       "WORKING"
     );
   }
@@ -862,6 +864,7 @@ function App() {
       setRecommendations({});
       setExerciseLogsById({});
       setExerciseRowCounts({});
+      setSetForms({});
       setRemovedSetByKey({});
       setOpenSetTypeMenuBySet({});
 
@@ -1298,6 +1301,7 @@ function App() {
     setRecommendations({});
     setExerciseLogsById({});
     setExerciseRowCounts({});
+    setSetForms({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
     loadAthleteDashboard();
@@ -1343,6 +1347,7 @@ function App() {
     setOpenWorkoutId(null);
     setOpenExerciseById({});
     setRestTimers({});
+    setSetForms({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
     setLatestWorkoutProgression(data.next_workout_progression || null);
@@ -1385,7 +1390,14 @@ function App() {
   }
 
   function selectSetType(setFormKey, setType) {
-    updateSetForm(setFormKey, "set_type", setType);
+    setSetForms((currentSetForms) => ({
+      ...currentSetForms,
+      [setFormKey]: {
+        ...currentSetForms[setFormKey],
+        set_type: setType,
+        set_type_source: "manual",
+      },
+    }));
     setOpenSetTypeMenuBySet({
       ...openSetTypeMenuBySet,
       [setFormKey]: false,
@@ -1559,6 +1571,7 @@ function App() {
             [nextSetFormKey]: {
               ...currentSetForms[nextSetFormKey],
               set_type: recommendationData.next_set_type,
+              set_type_source: "coach",
               weight_used:
                 recommendationData.recommended_weight === ""
                   ? currentSetForms[nextSetFormKey]?.weight_used
