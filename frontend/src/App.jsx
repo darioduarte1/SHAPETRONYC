@@ -31,6 +31,9 @@ function App() {
   const [openExerciseById, setOpenExerciseById] = useState({});
   const [openWorkoutId, setOpenWorkoutId] = useState(null);
   const [exerciseLogsById, setExerciseLogsById] = useState({});
+  const [substitutionOptionsByExerciseId, setSubstitutionOptionsByExerciseId] = useState({});
+  const [openSubstitutionByExerciseId, setOpenSubstitutionByExerciseId] = useState({});
+  const [isReplacingExerciseById, setIsReplacingExerciseById] = useState({});
   const [exerciseRowCounts, setExerciseRowCounts] = useState({});
   const [restTimers, setRestTimers] = useState({});
   const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
@@ -45,6 +48,9 @@ function App() {
   const [weeklyFeedback, setWeeklyFeedback] = useState(null);
   const [trainingBlock, setTrainingBlock] = useState(null);
   const [applyingAdaptiveById, setApplyingAdaptiveById] = useState({});
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [form, setForm] = useState({
     username: "",
@@ -57,6 +63,27 @@ function App() {
     training_experience: "ONE_TO_THREE",
     days_per_week: 5,
   });
+  const levelGuidance = {
+    BEGINNER: {
+      label: "Beginner",
+      text: "Menos volume, foco em técnica e consistência.",
+    },
+    INTERMEDIATE: {
+      label: "Intermediate",
+      text: "Mais volume, maior frequência e progressão mais desafiante.",
+    },
+    ADVANCED: {
+      label: "Advanced",
+      text: "Mais especialização, maior fadiga e mais atenção à recuperação.",
+    },
+  };
+  const goalLabels = {
+    HYPERTROPHY: "Gain muscle",
+    STRENGTH: "Gain strength",
+    FAT_LOSS: "Lose fat",
+    RECOMPOSITION: "Recomposition",
+    GENERAL_FITNESS: "General fitness",
+  };
 
   useEffect(() => {
     const hasRunningTimer = Object.values(restTimers).some((seconds) => seconds > 0);
@@ -760,6 +787,86 @@ function App() {
     return data;
   }
 
+  async function loginExistingProfile(e) {
+    e.preventDefault();
+
+    const normalizedUsername = loginUsername.trim().toLowerCase();
+
+    if (!normalizedUsername) {
+      setLoginError("Escreve o username do atleta.");
+      return;
+    }
+
+    setLoginError("");
+    setProgramError("");
+    setIsLoggingIn(true);
+
+    try {
+      const profilesResponse = await fetch(`${API_BASE_URL}/api/accounts/profiles/`);
+      const profilesData = await profilesResponse.json();
+
+      if (!profilesResponse.ok) {
+        console.error(profilesData);
+        setLoginError("Não consegui procurar atletas existentes.");
+        return;
+      }
+
+      const profile = profilesData.find(
+        (item) => item.username?.toLowerCase() === normalizedUsername
+      );
+
+      if (!profile) {
+        setLoginError("Não encontrei nenhum atleta com esse username.");
+        return;
+      }
+
+      setUserId(profile.user);
+      setProfileId(profile.id);
+      setForm({
+        username: profile.username,
+        gender: profile.gender,
+        age: profile.age,
+        height_cm: profile.height_cm,
+        weight_kg: profile.weight_kg,
+        goal: profile.goal,
+        level: profile.level,
+        training_experience: profile.training_experience,
+        days_per_week: profile.days_per_week,
+      });
+      setLatestWorkoutProgression(null);
+      setLatestAiCoach(null);
+      setRecommendations({});
+      setExerciseLogsById({});
+      setExerciseRowCounts({});
+      setRemovedSetByKey({});
+      setOpenSetTypeMenuBySet({});
+
+      const programResponse = await fetch(`${API_BASE_URL}/api/training/program/${profile.id}/`);
+      const programData = await programResponse.json();
+
+      if (!programResponse.ok) {
+        setProgram(null);
+        setProgramError("Perfil encontrado. Ainda não existe programa ativo para este atleta.");
+        setStep(3);
+        return;
+      }
+
+      setProgram(programData);
+      setOpenWorkoutId(null);
+      loadAthleteDashboard(profile.id);
+      loadAdaptivePlan(profile.id);
+      loadAdaptiveDecisions(profile.id);
+      loadWeeklyFeedback(profile.id);
+      loadTrainingBlock(profile.id);
+      setStep(4);
+    } catch (error) {
+      console.error(error);
+      setLoginError("Não consegui contactar o servidor para entrar no perfil.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
   async function recordAdaptiveDecision(recommendation, decisionStatus) {
     if (!profileId) {
       alert("Não encontrei o perfil ativo.");
@@ -851,6 +958,107 @@ function App() {
 
     if (isOpening) {
       await loadExerciseHistory(exercise);
+    }
+  }
+
+  function getExerciseImageUrl(exercise) {
+    return exercise.exercise_image_url || "/exercise-screens/IMG_3620.PNG";
+  }
+
+  async function loadExerciseSubstitutions(exercise) {
+    if (substitutionOptionsByExerciseId[exercise.id]) {
+      return substitutionOptionsByExerciseId[exercise.id];
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/training/exercise-substitutions/${exercise.id}/`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      alert("Não consegui carregar alternativas para este exercício.");
+      return null;
+    }
+
+    setSubstitutionOptionsByExerciseId((currentOptions) => ({
+      ...currentOptions,
+      [exercise.id]: data,
+    }));
+
+    return data;
+  }
+
+  async function toggleExerciseSubstitutions(exercise) {
+    const shouldOpen = !openSubstitutionByExerciseId[exercise.id];
+
+    setOpenSubstitutionByExerciseId((currentState) => ({
+      ...currentState,
+      [exercise.id]: shouldOpen,
+    }));
+
+    if (shouldOpen) {
+      await loadExerciseSubstitutions(exercise);
+    }
+  }
+
+  async function replaceExercise(exercise, replacementExerciseId) {
+    setIsReplacingExerciseById((currentState) => ({
+      ...currentState,
+      [exercise.id]: true,
+    }));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/training/replace-exercise/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          training_exercise_id: exercise.id,
+          replacement_exercise_id: replacementExerciseId,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+        alert(data.error || "Não consegui trocar o exercício.");
+        return;
+      }
+
+      setProgram(data);
+      setRecommendations((currentRecommendations) => {
+        const nextRecommendations = { ...currentRecommendations };
+        delete nextRecommendations[exercise.id];
+        return nextRecommendations;
+      });
+      setExerciseLogsById((currentLogs) => {
+        const nextLogs = { ...currentLogs };
+        delete nextLogs[exercise.id];
+        return nextLogs;
+      });
+      setSubstitutionOptionsByExerciseId((currentOptions) => {
+        const nextOptions = { ...currentOptions };
+        delete nextOptions[exercise.id];
+        return nextOptions;
+      });
+      setOpenSubstitutionByExerciseId((currentState) => ({
+        ...currentState,
+        [exercise.id]: false,
+      }));
+      setOpenExerciseById((currentState) => ({
+        ...currentState,
+        [exercise.id]: false,
+      }));
+      await loadAdaptivePlan();
+      await loadAdaptiveDecisions();
+      await loadWeeklyFeedback();
+      await loadTrainingBlock();
+    } catch (error) {
+      console.error(error);
+      alert("Não consegui contactar o servidor para trocar o exercício.");
+    } finally {
+      setIsReplacingExerciseById((currentState) => ({
+        ...currentState,
+        [exercise.id]: false,
+      }));
     }
   }
 
@@ -1349,76 +1557,244 @@ function App() {
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "920px", margin: "0 auto" }}>
+    <div className={step === 1 ? "app-shell home-app-shell" : step === 2 ? "app-shell profile-app-shell" : "app-shell"}>
       <h1>SHAPETRONYC</h1>
 
       {step === 1 && (
-        <div>
-          <h2>Adaptive training built around you</h2>
-          <p>Create your profile and SHAPETRONYC will generate your first training program.</p>
-          <button onClick={() => setStep(2)}>Get Started</button>
+        <div className="home-landing">
+          <section className="home-hero-panel">
+            <span className="profile-kicker">Adaptive training system</span>
+            <h2>Adaptive training built around you</h2>
+            <p>
+              Create a new athlete profile or enter an existing one to continue training with
+              history, memory, weekly feedback and adaptive planning.
+            </p>
+            <div className="home-signal-grid">
+              <div>
+                <strong>AI Coach</strong>
+                <span>set-by-set guidance</span>
+              </div>
+              <div>
+                <strong>Memory</strong>
+                <span>patterns by exercise</span>
+              </div>
+              <div>
+                <strong>Blocks</strong>
+                <span>periodization review</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="home-action-grid">
+            <article className="home-action-card primary">
+              <div>
+                <span className="profile-kicker">New athlete</span>
+                <h2>Create a new profile</h2>
+                <p>
+                  Start from baseline data and let SHAPETRONYC generate the first adaptive program.
+                </p>
+              </div>
+              <button type="button" className="home-primary-button" onClick={() => setStep(2)}>
+                Create new profile
+              </button>
+            </article>
+
+            <form className="home-action-card" onSubmit={loginExistingProfile}>
+              <div>
+                <span className="profile-kicker">Existing athlete</span>
+                <h2>Login</h2>
+                <p>
+                  Enter the athlete username to continue from the saved program, dashboard and
+                  training history.
+                </p>
+              </div>
+              <label className="profile-field">
+                <span>Username</span>
+                <input
+                  value={loginUsername}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  placeholder="e.g. beatriz"
+                />
+              </label>
+              {loginError && <p className="home-error">{loginError}</p>}
+              <button type="submit" className="home-secondary-button" disabled={isLoggingIn}>
+                {isLoggingIn ? "Entering..." : "Enter profile"}
+              </button>
+            </form>
+          </section>
         </div>
       )}
 
       {step === 2 && (
-        <form onSubmit={createProfile}>
-          <h2>Create Profile</h2>
+        <div className="profile-onboarding">
+          <section className="profile-intro-panel">
+            <div>
+              <span className="profile-kicker">Athlete setup</span>
+              <h2>Create Profile</h2>
+              <p>
+                Define the athlete baseline so the training plan starts with the right volume,
+                frequency and progression speed.
+              </p>
+            </div>
 
-          <label>Username</label>
-          <input name="username" value={form.username} onChange={handleChange} required />
+            <div className="profile-preview-card">
+              <span>Current setup</span>
+              <strong>{goalLabels[form.goal]}</strong>
+              <div className="profile-preview-grid">
+                <div>
+                  <span>Level</span>
+                  <strong>{levelGuidance[form.level].label}</strong>
+                </div>
+                <div>
+                  <span>Days</span>
+                  <strong>{form.days_per_week}/week</strong>
+                </div>
+                <div>
+                  <span>Body</span>
+                  <strong>{form.weight_kg}kg</strong>
+                </div>
+                <div>
+                  <span>Age</span>
+                  <strong>{form.age}</strong>
+                </div>
+              </div>
+            </div>
+          </section>
 
-          <label>Gender</label>
-          <select name="gender" value={form.gender} onChange={handleChange}>
-            <option value="MALE">Male</option>
-            <option value="FEMALE">Female</option>
-          </select>
+          <form className="profile-form-card" onSubmit={createProfile}>
+            <div className="profile-form-header">
+              <div>
+                <span className="profile-kicker">New athlete</span>
+                <h2>Build the profile</h2>
+              </div>
+              <button type="submit" className="profile-submit-button">Create Profile</button>
+            </div>
 
-          <label>Age</label>
-          <input name="age" type="number" value={form.age} onChange={handleChange} />
+            <div className="profile-section">
+              <h3>Identity</h3>
+              <div className="profile-grid two">
+                <label className="profile-field">
+                  <span>Username</span>
+                  <input
+                    name="username"
+                    value={form.username}
+                    onChange={handleChange}
+                    required
+                    placeholder="e.g. beatriz"
+                  />
+                </label>
 
-          <label>Height cm</label>
-          <input name="height_cm" type="number" value={form.height_cm} onChange={handleChange} />
+                <div className="profile-field">
+                  <span>Gender</span>
+                  <div className="profile-segmented">
+                    {[
+                      ["MALE", "Male"],
+                      ["FEMALE", "Female"],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={form.gender === value ? "active" : ""}
+                        onClick={() => setForm({ ...form, gender: value })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <label>Weight kg</label>
-          <input name="weight_kg" type="number" value={form.weight_kg} onChange={handleChange} />
+            <div className="profile-section">
+              <h3>Body metrics</h3>
+              <div className="profile-grid three">
+                <label className="profile-field">
+                  <span>Age</span>
+                  <input name="age" type="number" value={form.age} onChange={handleChange} />
+                </label>
 
-          <label>Goal</label>
-          <select name="goal" value={form.goal} onChange={handleChange}>
-            <option value="HYPERTROPHY">Gain muscle</option>
-            <option value="STRENGTH">Gain strength</option>
-            <option value="FAT_LOSS">Lose fat</option>
-            <option value="RECOMPOSITION">Recomposition</option>
-            <option value="GENERAL_FITNESS">General fitness</option>
-          </select>
+                <label className="profile-field">
+                  <span>Height</span>
+                  <div className="profile-input-unit">
+                    <input name="height_cm" type="number" value={form.height_cm} onChange={handleChange} />
+                    <small>cm</small>
+                  </div>
+                </label>
 
-          <label>Level</label>
-          <select name="level" value={form.level} onChange={handleChange}>
-            <option value="BEGINNER">Beginner</option>
-            <option value="INTERMEDIATE">Intermediate</option>
-            <option value="ADVANCED">Advanced</option>
-          </select>
+                <label className="profile-field">
+                  <span>Weight</span>
+                  <div className="profile-input-unit">
+                    <input name="weight_kg" type="number" value={form.weight_kg} onChange={handleChange} />
+                    <small>kg</small>
+                  </div>
+                </label>
+              </div>
+            </div>
 
-          <p><strong>Beginner:</strong> less volume, focus on technique and consistency.</p>
-          <p><strong>Intermediate:</strong> more volume, higher frequency and harder progression.</p>
-          <p><strong>Advanced:</strong> more specialization, higher fatigue and recovery demands.</p>
+            <div className="profile-section">
+              <h3>Training direction</h3>
+              <div className="profile-grid two">
+                <label className="profile-field">
+                  <span>Goal</span>
+                  <select name="goal" value={form.goal} onChange={handleChange}>
+                    <option value="HYPERTROPHY">Gain muscle</option>
+                    <option value="STRENGTH">Gain strength</option>
+                    <option value="FAT_LOSS">Lose fat</option>
+                    <option value="RECOMPOSITION">Recomposition</option>
+                    <option value="GENERAL_FITNESS">General fitness</option>
+                  </select>
+                </label>
 
-          <label>Training Experience</label>
-          <select name="training_experience" value={form.training_experience} onChange={handleChange}>
-            <option value="LESS_THAN_1">Less than 1 year</option>
-            <option value="ONE_TO_THREE">1-3 years</option>
-            <option value="THREE_TO_FIVE">3-5 years</option>
-            <option value="MORE_THAN_FIVE">More than 5 years</option>
-          </select>
+                <label className="profile-field">
+                  <span>Level</span>
+                  <select name="level" value={form.level} onChange={handleChange}>
+                    <option value="BEGINNER">Beginner</option>
+                    <option value="INTERMEDIATE">Intermediate</option>
+                    <option value="ADVANCED">Advanced</option>
+                  </select>
+                </label>
+              </div>
 
-          <label>Days per week</label>
-          <select name="days_per_week" value={form.days_per_week} onChange={handleChange}>
-            {[2, 3, 4, 5, 6, 7].map((day) => (
-              <option key={day} value={day}>{day}</option>
-            ))}
-          </select>
+              <div className="profile-level-note">
+                <strong>{levelGuidance[form.level].label}</strong>
+                <span>{levelGuidance[form.level].text}</span>
+              </div>
+            </div>
 
-          <button type="submit">Create Profile</button>
-        </form>
+            <div className="profile-section">
+              <h3>Availability</h3>
+              <div className="profile-grid two">
+                <label className="profile-field">
+                  <span>Training Experience</span>
+                  <select name="training_experience" value={form.training_experience} onChange={handleChange}>
+                    <option value="LESS_THAN_1">Less than 1 year</option>
+                    <option value="ONE_TO_THREE">1-3 years</option>
+                    <option value="THREE_TO_FIVE">3-5 years</option>
+                    <option value="MORE_THAN_FIVE">More than 5 years</option>
+                  </select>
+                </label>
+
+                <div className="profile-field">
+                  <span>Days per week</span>
+                  <div className="profile-day-picker">
+                    {[2, 3, 4, 5, 6, 7].map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        className={Number(form.days_per_week) === day ? "active" : ""}
+                        onClick={() => setForm({ ...form, days_per_week: day })}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" className="profile-submit-button mobile">Create Profile</button>
+          </form>
+        </div>
       )}
 
       {step === 3 && (
@@ -2364,6 +2740,10 @@ function App() {
                     {activeSessionId && workout.exercises.map((item) => {
                       const exerciseLogs = getExerciseLogs(item.id);
                       const isOpen = Boolean(openExerciseById[item.id]);
+                      const isSubstitutionOpen = Boolean(openSubstitutionByExerciseId[item.id]);
+                      const substitutionData = substitutionOptionsByExerciseId[item.id];
+                      const hasLoggedSets = exerciseLogs.current_sets.length > 0;
+                      const isReplacing = Boolean(isReplacingExerciseById[item.id]);
                       const restSeconds = restTimers[item.id] || 0;
                       const rows = getExerciseRows(item);
                       const guidance = getGuidanceForExercise(item, rows, restSeconds);
@@ -2376,19 +2756,80 @@ function App() {
                             padding: "14px 0",
                           }}
                         >
-                          <button
-                            onClick={() => toggleExercise(item)}
-                            style={{
-                              width: "100%",
-                              textAlign: "left",
-                              padding: "12px",
-                              fontSize: "16px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {isOpen ? "▼" : "▶"} {item.exercise_name}
-                          </button>
+                          <div className="exercise-row-shell">
+                            <button
+                              className="exercise-main-button"
+                              onClick={() => toggleExercise(item)}
+                            >
+                              <img
+                                className="exercise-row-image"
+                                src={getExerciseImageUrl(item)}
+                                alt={item.exercise_localized_name || item.exercise_name}
+                              />
+                              <span className="exercise-row-copy">
+                                <span className="exercise-row-title">
+                                  <span aria-hidden="true">{isOpen ? "▼" : "▶"}</span>
+                                  {item.exercise_name}
+                                </span>
+                                <span className="exercise-row-meta">
+                                  {item.exercise_localized_name || item.exercise_muscle_group}
+                                  {" · "}
+                                  {item.exercise_muscle_group}
+                                  {" · "}
+                                  {item.exercise_equipment}
+                                </span>
+                              </span>
+                            </button>
+
+                            <button
+                              className="exercise-replace-button"
+                              onClick={() => toggleExerciseSubstitutions(item)}
+                              disabled={hasLoggedSets || isReplacing}
+                              title={hasLoggedSets ? "Termina este exercício antes de trocar." : "Trocar por outro exercício do mesmo grupo muscular"}
+                            >
+                              {isReplacing ? "A trocar..." : "Trocar"}
+                            </button>
+                          </div>
+
+                          {isSubstitutionOpen && !hasLoggedSets && (
+                            <div className="exercise-substitution-panel">
+                              <div className="exercise-substitution-header">
+                                <strong>Alternativas para {item.exercise_muscle_group}</strong>
+                                <span>Só aparecem exercícios do mesmo grupo muscular.</span>
+                              </div>
+
+                              {!substitutionData && (
+                                <p className="exercise-substitution-empty">A carregar alternativas...</p>
+                              )}
+
+                              {substitutionData?.options?.length === 0 && (
+                                <p className="exercise-substitution-empty">
+                                  Ainda não existem alternativas registadas para este grupo.
+                                </p>
+                              )}
+
+                              <div className="exercise-option-grid">
+                                {substitutionData?.options?.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    className="exercise-option-card"
+                                    onClick={() => replaceExercise(item, option.id)}
+                                    disabled={isReplacing}
+                                  >
+                                    <img
+                                      src={option.image_url || "/exercise-screens/IMG_3620.PNG"}
+                                      alt={option.localized_name || option.name}
+                                    />
+                                    <span>
+                                      <strong>{option.name}</strong>
+                                      <small>{option.localized_name || option.equipment}</small>
+                                      <small>{option.equipment} · {option.movement_pattern}</small>
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {isOpen && (
                             <div style={{ marginTop: "12px" }}>

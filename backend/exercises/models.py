@@ -23,8 +23,10 @@ class Exercise(models.Model):
     ]
 
     name = models.CharField(max_length=100)
+    localized_name = models.CharField(max_length=120, blank=True)
     muscle_group = models.CharField(max_length=50)
     equipment = models.CharField(max_length=50)
+    image_url = models.CharField(max_length=255, blank=True)
 
     movement_pattern = models.CharField(
         max_length=50,

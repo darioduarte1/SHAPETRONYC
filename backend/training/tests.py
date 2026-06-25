@@ -335,3 +335,77 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(response.data["profile_id"], self.profile.id)
         self.assertEqual(response.data["block"]["status"], "ACTIVE")
         self.assertEqual(len(response.data["history"]), 1)
+
+    def test_exercise_substitution_options_are_limited_to_same_muscle_group(self):
+        Exercise.objects.create(
+            name="Smith Machine Bench Press",
+            localized_name="Supino no Smith (Máquina)",
+            muscle_group="Chest",
+            equipment="Machine",
+            movement_pattern="HORIZONTAL_PUSH",
+            is_compound=True,
+        )
+        Exercise.objects.create(
+            name="Leg Press Test",
+            localized_name="Leg Press",
+            muscle_group="Quadriceps",
+            equipment="Machine",
+            movement_pattern="SQUAT",
+            is_compound=True,
+        )
+        client = APIClient()
+
+        response = client.get(f"/api/training/exercise-substitutions/{self.training_exercise.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        option_names = {option["name"] for option in response.data["options"]}
+        self.assertIn("Smith Machine Bench Press", option_names)
+        self.assertNotIn("Leg Press Test", option_names)
+
+    def test_replace_training_exercise_accepts_same_muscle_group(self):
+        replacement = Exercise.objects.create(
+            name="Smith Machine Bench Press",
+            localized_name="Supino no Smith (Máquina)",
+            muscle_group="Chest",
+            equipment="Machine",
+            movement_pattern="HORIZONTAL_PUSH",
+            is_compound=True,
+        )
+        client = APIClient()
+
+        response = client.post(
+            "/api/training/replace-exercise/",
+            {
+                "training_exercise_id": self.training_exercise.id,
+                "replacement_exercise_id": replacement.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.training_exercise.refresh_from_db()
+        self.assertEqual(self.training_exercise.exercise_id, replacement.id)
+
+    def test_replace_training_exercise_rejects_different_muscle_group(self):
+        replacement = Exercise.objects.create(
+            name="Leg Press Test",
+            localized_name="Leg Press",
+            muscle_group="Quadriceps",
+            equipment="Machine",
+            movement_pattern="SQUAT",
+            is_compound=True,
+        )
+        client = APIClient()
+
+        response = client.post(
+            "/api/training/replace-exercise/",
+            {
+                "training_exercise_id": self.training_exercise.id,
+                "replacement_exercise_id": replacement.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.training_exercise.refresh_from_db()
+        self.assertNotEqual(self.training_exercise.exercise_id, replacement.id)

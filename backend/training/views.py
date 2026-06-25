@@ -19,8 +19,10 @@ from .services.athlete_dashboard import build_athlete_dashboard
 from .services.training_memory import refresh_training_memory
 from .services.training_generator import generate_training_program
 from .services.training_blocks import build_training_block, list_training_blocks
+from .services.exercise_substitution import get_substitution_options, replace_training_exercise
 from .services.weekly_feedback import build_weekly_feedback
 from .models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
+from exercises.models import Exercise
 
 
 class GenerateProgramView(APIView):
@@ -280,3 +282,63 @@ class TrainingBlockView(APIView):
             **build_training_block(profile),
             "history": list_training_blocks(profile),
         })
+
+
+class ExerciseSubstitutionOptionsView(APIView):
+
+    def get(self, request, training_exercise_id):
+        try:
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+            )
+        except TrainingWorkoutExercise.DoesNotExist:
+            return Response(
+                {"error": "Training exercise not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "training_exercise": training_exercise.id,
+            "exercise": training_exercise.exercise_id,
+            "muscle_group": training_exercise.exercise.muscle_group,
+            "options": get_substitution_options(training_exercise),
+        })
+
+
+class ReplaceTrainingExerciseView(APIView):
+
+    def post(self, request):
+        training_exercise_id = request.data.get("training_exercise_id")
+        replacement_exercise_id = request.data.get("replacement_exercise_id")
+
+        if not training_exercise_id or not replacement_exercise_id:
+            return Response(
+                {"error": "training_exercise_id and replacement_exercise_id are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+            )
+            updated_training_exercise = replace_training_exercise(
+                training_exercise,
+                int(replacement_exercise_id),
+            )
+        except (ValueError, TypeError) as error:
+            return Response(
+                {"error": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except TrainingWorkoutExercise.DoesNotExist:
+            return Response(
+                {"error": "Training exercise not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exercise.DoesNotExist:
+            return Response(
+                {"error": "Replacement exercise not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(TrainingProgramSerializer(updated_training_exercise.workout.program).data)

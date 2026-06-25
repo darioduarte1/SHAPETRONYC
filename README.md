@@ -599,11 +599,28 @@ Entregue:
 - Painel "Bloco de treino" no frontend
 - Testes do serviço e endpoint
 
+Adicional entregue no Sprint 17:
+- Catálogo expandido de exercícios com nome localizado em português e imagem associada
+- Migrations `exercises/migrations/0003_exercise_image_localized_name.py` e `exercises/migrations/0004_exercise_crop_image_urls.py`
+- Campos `localized_name` e `image_url` no modelo `Exercise`
+- Imagens dos exercícios guardadas em `frontend/public/exercise-screens/` e recortes em `frontend/public/exercise-crops/`
+- Endpoint `GET /api/training/exercise-substitutions/<training_exercise_id>/`
+- Endpoint `POST /api/training/replace-exercise/`
+- Serviço `training/services/exercise_substitution.py`
+- Substituição de exercício limitada ao mesmo grupo muscular
+- Bloqueio de trocas depois de existirem séries registadas nesse exercício durante a sessão
+- Foto do exercício apresentada na linha do treino
+- Painel de alternativas no frontend com imagem, nome, equipamento e padrão de movimento
+- Testes para alternativas por grupo muscular, troca válida e rejeição de troca inválida
+- Ecrã inicial atualizado com entrada em perfil existente por username
+- Ecrã de criação de perfil redesenhado com seleção visual de género, nível e dias por semana
+
 Próximos passos do Sprint 17:
 - Guardar blocos concluídos quando um novo bloco começa
 - Comparar bloco atual com bloco anterior
 - Aplicar semana de deload ao plano e medir retorno pós-deload
 - Criar recomendações de novo bloco com base na resposta do atleta
+- Rever/substituir imagens dos exercícios quando forem enviadas versões finais
 
 ## Roadmap
 
