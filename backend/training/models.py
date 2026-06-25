@@ -157,6 +157,47 @@ class AdaptivePlanDecision(models.Model):
         return f"{self.user.username} - {self.exercise_name} - {self.action} - {self.status}"
 
 
+class TrainingBlock(models.Model):
+    STATUS_CHOICES = [
+        ("ACTIVE", "Active"),
+        ("COMPLETED", "Completed"),
+    ]
+
+    PHASE_CHOICES = [
+        ("BUILD", "Build"),
+        ("DELOAD", "Deload"),
+        ("RETURN", "Return"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="training_blocks",
+    )
+    program = models.ForeignKey(
+        TrainingProgram,
+        on_delete=models.CASCADE,
+        related_name="training_blocks",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
+    phase = models.CharField(max_length=20, choices=PHASE_CHOICES, default="BUILD")
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    planned_weeks = models.PositiveIntegerField(default=4)
+    summary = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-start_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name} - {self.status}"
+
+
 class WorkoutSession(models.Model):
     STATUS_CHOICES = [
         ("IN_PROGRESS", "In Progress"),

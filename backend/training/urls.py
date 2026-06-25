@@ -7,6 +7,7 @@ from .views import (
     AthleteDashboardView,
     GenerateProgramView,
     TrainingProgramDetailView,
+    TrainingBlockView,
     StartWorkoutSessionView,
     FinishWorkoutSessionView,
     WorkoutSessionListView,
@@ -21,6 +22,7 @@ urlpatterns = [
     path("adaptive-plan/decisions/<int:profile_id>/", AdaptivePlanDecisionListView.as_view()),
     path("adaptive-plan/apply/", ApplyAdaptivePlanRecommendationView.as_view()),
     path("weekly-feedback/<int:profile_id>/", WeeklyFeedbackView.as_view()),
+    path("training-blocks/<int:profile_id>/", TrainingBlockView.as_view()),
 
     path("start-session/", StartWorkoutSessionView.as_view()),
     path("finish-session/", FinishWorkoutSessionView.as_view()),

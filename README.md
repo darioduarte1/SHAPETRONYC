@@ -74,7 +74,7 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 43 testes a passar
+- Backend: 46 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
 - Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento, memória do atleta, plano adaptativo e decisões adaptativas da Beatriz
@@ -111,6 +111,8 @@ Implementado:
 - Feedback semanal com leitura de fadiga, watchlist, RIR recente e tendência de volume
 - Sugestão de deload quando há sinais persistentes de recuperação
 - Protocolo de deload com volume reduzido, RIR alvo e motivos visíveis
+- Blocos de treino com fase atual, volume semanal, RIR médio e recomendação de periodização
+- Histórico persistente de blocos de treino por atleta
 - Demo visual da Beatriz com 45 treinos completos em `frontend/public/beatriz-evolution-demo.html`
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
@@ -148,6 +150,7 @@ Em preparação:
 - `GET /api/training/adaptive-plan/decisions/<profile_id>/`
 - `POST /api/training/adaptive-plan/apply/`
 - `GET /api/training/weekly-feedback/<profile_id>/`
+- `GET /api/training/training-blocks/<profile_id>/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -563,24 +566,57 @@ Entregue:
 - Painel "Feedback semanal" no frontend
 - Testes do serviço e endpoint
 
-Próximos passos do Sprint 16:
+Próximos passos:
 - Aplicar deload sugerido ao plano com confirmação explícita
 - Guardar histórico de semanas de deload
-- Criar revisão por bloco de treino
 - Melhorar a visualização semanal no dashboard
-
-## Roadmap
 
 ### Sprint 17 - Blocos de Treino e Periodização
 
 Objetivo:
 Organizar a evolução do atleta em blocos, com revisão de semanas de carga, deload e retorno à progressão.
 
+Entregue:
+- Modelo `TrainingBlock`
+- Migration `training/migrations/0005_trainingblock.py`
+- Serviço `training/services/training_blocks.py`
+- Endpoint `GET /api/training/training-blocks/<profile_id>/`
+- Criação/atualização automática do bloco ativo a partir dos treinos recentes
+- Janela inicial de bloco com 4 semanas
+- Fases de bloco:
+  - `BUILD`
+  - `DELOAD`
+  - `RETURN`
+- Resumo do bloco:
+  - treinos concluídos
+  - volume total
+  - séries totais
+  - falhas
+  - RIR médio
+  - volume semanal
+- Recomendação de periodização por fase
+- Integração com o feedback semanal para mudar fase quando há deload recomendado
+- Painel "Bloco de treino" no frontend
+- Testes do serviço e endpoint
+
+Próximos passos do Sprint 17:
+- Guardar blocos concluídos quando um novo bloco começa
+- Comparar bloco atual com bloco anterior
+- Aplicar semana de deload ao plano e medir retorno pós-deload
+- Criar recomendações de novo bloco com base na resposta do atleta
+
+## Roadmap
+
+### Sprint 18 - Periodização Aplicada
+
+Objetivo:
+Transformar blocos e feedback semanal em alterações aplicáveis ao plano ao longo de ciclos completos.
+
 Ideias:
-- Histórico de blocos de treino
-- Semana de deload aplicada ao plano
+- Encerrar bloco e abrir novo bloco
 - Comparação pré e pós-deload
-- Recomendações de novo bloco com base na resposta do atleta
+- Ajustes por bloco para volume, carga e RIR
+- Revisão de resposta individual por exercício
 
 ## Estrutura do Projeto
 

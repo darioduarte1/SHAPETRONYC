@@ -43,6 +43,7 @@ function App() {
   const [adaptivePlan, setAdaptivePlan] = useState(null);
   const [adaptiveDecisions, setAdaptiveDecisions] = useState([]);
   const [weeklyFeedback, setWeeklyFeedback] = useState(null);
+  const [trainingBlock, setTrainingBlock] = useState(null);
   const [applyingAdaptiveById, setApplyingAdaptiveById] = useState({});
 
   const [form, setForm] = useState({
@@ -565,6 +566,26 @@ function App() {
     return labels[status] || "Feedback semanal";
   }
 
+  function getTrainingBlockPhaseLabel(phase) {
+    const labels = {
+      BUILD: "Build",
+      DELOAD: "Deload",
+      RETURN: "Retorno",
+    };
+
+    return labels[phase] || "Bloco";
+  }
+
+  function getTrainingBlockPhaseColor(phase) {
+    const colors = {
+      BUILD: "#86efac",
+      DELOAD: "#fbbf24",
+      RETURN: "#38bdf8",
+    };
+
+    return colors[phase] || "#94a3b8";
+  }
+
   function getProgressionActionLabel(action) {
     const labels = {
       increase_load: "Subir carga",
@@ -720,6 +741,25 @@ function App() {
     return data;
   }
 
+  async function loadTrainingBlock(profileIdOverride = null) {
+    const blockProfileId = profileIdOverride || profileId;
+
+    if (!blockProfileId) {
+      return null;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/training/training-blocks/${blockProfileId}/`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return null;
+    }
+
+    setTrainingBlock(data);
+    return data;
+  }
+
   async function recordAdaptiveDecision(recommendation, decisionStatus) {
     if (!profileId) {
       alert("Não encontrei o perfil ativo.");
@@ -790,6 +830,7 @@ function App() {
     await loadAdaptivePlan();
     await loadAdaptiveDecisions();
     await loadWeeklyFeedback();
+    await loadTrainingBlock();
   }
 
   function toggleWorkout(workoutId) {
@@ -987,6 +1028,7 @@ function App() {
       loadAdaptivePlan(profileId);
       loadAdaptiveDecisions(profileId);
       loadWeeklyFeedback(profileId);
+      loadTrainingBlock(profileId);
       setStep(4);
     } catch (error) {
       console.error(error);
@@ -1030,6 +1072,7 @@ function App() {
     loadAdaptivePlan();
     loadAdaptiveDecisions();
     loadWeeklyFeedback();
+    loadTrainingBlock();
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -1076,6 +1119,7 @@ function App() {
     loadAdaptivePlan();
     loadAdaptiveDecisions();
     loadWeeklyFeedback();
+    loadTrainingBlock();
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -1624,6 +1668,135 @@ function App() {
                     </p>
                   )}
                 </div>
+              </div>
+            </section>
+          )}
+
+          {trainingBlock && (
+            <section
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                background: "rgba(15, 23, 42, 0.72)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: getTrainingBlockPhaseColor(trainingBlock.block?.phase),
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      letterSpacing: "0",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Bloco de treino
+                  </div>
+                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>
+                    {trainingBlock.block?.name || "Sem bloco ativo"}
+                  </h3>
+                  <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
+                    {trainingBlock.summary?.phase_recommendation?.message || "Termina mais treinos para formar um bloco."}
+                  </p>
+                </div>
+                <span
+                  style={{
+                    color: getTrainingBlockPhaseColor(trainingBlock.block?.phase),
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {getTrainingBlockPhaseLabel(trainingBlock.block?.phase)}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                  gap: "10px",
+                  marginTop: "14px",
+                }}
+              >
+                <div>
+                  <strong>{trainingBlock.summary?.completed_sessions || 0}</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>treinos no bloco</p>
+                </div>
+                <div>
+                  <strong>{formatNumber(trainingBlock.summary?.total_volume || 0)} kg</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>volume do bloco</p>
+                </div>
+                <div>
+                  <strong>{trainingBlock.summary?.total_failures || 0}</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>falhas no bloco</p>
+                </div>
+                <div>
+                  <strong>{trainingBlock.summary?.average_rir ?? "-"}</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>RIR médio</p>
+                </div>
+              </div>
+
+              {trainingBlock.summary?.weekly_volume?.length > 0 && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${trainingBlock.summary.weekly_volume.length}, minmax(44px, 1fr))`,
+                    gap: "8px",
+                    alignItems: "end",
+                    height: "120px",
+                    marginTop: "14px",
+                  }}
+                >
+                  {trainingBlock.summary.weekly_volume.map((week) => {
+                    const maxVolume = Math.max(
+                      ...trainingBlock.summary.weekly_volume.map((item) => Number(item.volume) || 0),
+                      1
+                    );
+                    const height = Math.max(8, (Number(week.volume) / maxVolume) * 82);
+
+                    return (
+                      <div key={week.week} style={{ display: "grid", gap: "6px", alignItems: "end" }}>
+                        <div
+                          title={`${week.week}: ${formatNumber(week.volume)} kg`}
+                          style={{
+                            height: `${height}px`,
+                            borderRadius: "5px 5px 2px 2px",
+                            background: getTrainingBlockPhaseColor(trainingBlock.block?.phase),
+                          }}
+                        />
+                        <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "bold" }}>
+                          {week.week.split("-")[1]}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div
+                style={{
+                  marginTop: "14px",
+                  padding: "12px",
+                  border: "1px solid rgba(148, 163, 184, 0.18)",
+                  borderRadius: "8px",
+                  background: "rgba(15, 23, 42, 0.38)",
+                }}
+              >
+                <strong>{trainingBlock.summary?.phase_recommendation?.title}</strong>
+                <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "13px" }}>
+                  {trainingBlock.summary?.phase_recommendation?.next_step}
+                </p>
               </div>
             </section>
           )}

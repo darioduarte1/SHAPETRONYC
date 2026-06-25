@@ -18,6 +18,7 @@ from .services.adaptive_plan_decisions import (
 from .services.athlete_dashboard import build_athlete_dashboard
 from .services.training_memory import refresh_training_memory
 from .services.training_generator import generate_training_program
+from .services.training_blocks import build_training_block, list_training_blocks
 from .services.weekly_feedback import build_weekly_feedback
 from .models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
 
@@ -262,3 +263,20 @@ class WeeklyFeedbackView(APIView):
             )
 
         return Response(build_weekly_feedback(profile))
+
+
+class TrainingBlockView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            **build_training_block(profile),
+            "history": list_training_blocks(profile),
+        })

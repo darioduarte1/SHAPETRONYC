@@ -11,6 +11,7 @@ from progression.models import SetLog
 from training.models import (
     AdaptivePlanDecision,
     AthleteTrainingMemory,
+    TrainingBlock,
     TrainingProgram,
     TrainingWorkout,
     TrainingWorkoutExercise,
@@ -19,6 +20,7 @@ from training.models import (
 from training.services.athlete_dashboard import build_athlete_dashboard
 from training.services.adaptive_plan import build_adaptive_plan
 from training.services.training_memory import refresh_training_memory
+from training.services.training_blocks import build_training_block
 from training.services.weekly_feedback import build_weekly_feedback
 
 
@@ -294,3 +296,42 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["profile_id"], self.profile.id)
         self.assertTrue(response.data["deload"]["recommended"])
+
+    def test_training_block_builds_active_block_from_recent_sessions(self):
+        self.create_completed_session(days_ago=21, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=14, weight=52.5, reps=12, rir=2)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+
+        block = build_training_block(self.profile)
+
+        self.assertEqual(block["block"]["status"], "ACTIVE")
+        self.assertEqual(block["block"]["phase"], "BUILD")
+        self.assertEqual(block["summary"]["completed_sessions"], 4)
+        self.assertEqual(TrainingBlock.objects.count(), 1)
+        self.assertEqual(TrainingBlock.objects.first().phase, "BUILD")
+
+    def test_training_block_switches_to_deload_phase_when_feedback_requires_it(self):
+        self.create_completed_session(days_ago=21, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=14, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=7, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=1, weight=52.5, reps=8, rir=None, reached_failure=True)
+
+        block = build_training_block(self.profile)
+
+        self.assertEqual(block["block"]["phase"], "DELOAD")
+        self.assertEqual(block["summary"]["weekly_feedback_status"], "deload_recommended")
+        self.assertTrue(block["weekly_feedback"]["deload"]["recommended"])
+
+    def test_training_block_endpoint_returns_history(self):
+        self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=7, weight=52.5, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=55, reps=12, rir=2)
+        client = APIClient()
+
+        response = client.get(f"/api/training/training-blocks/{self.profile.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["profile_id"], self.profile.id)
+        self.assertEqual(response.data["block"]["status"], "ACTIVE")
+        self.assertEqual(len(response.data["history"]), 1)
