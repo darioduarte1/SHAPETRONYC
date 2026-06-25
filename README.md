@@ -74,7 +74,7 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 40 testes a passar
+- Backend: 43 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
 - Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento, memória do atleta, plano adaptativo e decisões adaptativas da Beatriz
@@ -108,6 +108,9 @@ Implementado:
 - Endpoint de plano adaptativo baseado na memória do atleta, dashboard e programa ativo
 - Aplicação controlada de recomendações adaptativas ao plano
 - Histórico auditável de decisões adaptativas aplicadas, adiadas e ignoradas
+- Feedback semanal com leitura de fadiga, watchlist, RIR recente e tendência de volume
+- Sugestão de deload quando há sinais persistentes de recuperação
+- Protocolo de deload com volume reduzido, RIR alvo e motivos visíveis
 - Demo visual da Beatriz com 45 treinos completos em `frontend/public/beatriz-evolution-demo.html`
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
@@ -116,6 +119,7 @@ Implementado:
 
 Em preparação:
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
+- Aplicação controlada do deload ao plano
 - Polimento da experiência visual do dashboard e análise semanal
 
 ## Fluxo Principal
@@ -143,6 +147,7 @@ Em preparação:
 - `GET /api/training/adaptive-plan/<profile_id>/`
 - `GET /api/training/adaptive-plan/decisions/<profile_id>/`
 - `POST /api/training/adaptive-plan/apply/`
+- `GET /api/training/weekly-feedback/<profile_id>/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -532,22 +537,50 @@ Entregue:
 - Testes do serviço adaptativo, endpoints e decisões aplicadas/adiadas
 - Demo visual da Beatriz com 15 Upper, 15 Lower e 15 Full Body
 
-Próximos passos:
-- Adicionar deload sugerido quando a watchlist persiste por vários treinos
-- Gerar feedback semanal com base em memória, consistência e tendência de volume
-
-## Roadmap
-
 ### Sprint 16 - Deload e Feedback Semanal
 
 Objetivo:
 Transformar sinais persistentes de fadiga, watchlist e consistência em deloads sugeridos e feedback semanal.
 
+Entregue:
+- Serviço `training/services/weekly_feedback.py`
+- Endpoint `GET /api/training/weekly-feedback/<profile_id>/`
+- Feedback semanal calculado a partir do dashboard, memória e sessões recentes
+- Estados semanais:
+  - progressão saudável
+  - monitorizar recuperação
+  - deload recomendado
+- Detecção de sinais de deload:
+  - falhas recentes acumuladas
+  - exercício em watchlist com risco elevado
+  - várias memórias persistentes de atenção
+  - padrão de esforço perto da falha
+- Protocolo sugerido de deload:
+  - 1 semana
+  - volume total a cerca de 70%
+  - RIR alvo 3+
+  - evitar falha muscular
+- Painel "Feedback semanal" no frontend
+- Testes do serviço e endpoint
+
+Próximos passos do Sprint 16:
+- Aplicar deload sugerido ao plano com confirmação explícita
+- Guardar histórico de semanas de deload
+- Criar revisão por bloco de treino
+- Melhorar a visualização semanal no dashboard
+
+## Roadmap
+
+### Sprint 17 - Blocos de Treino e Periodização
+
+Objetivo:
+Organizar a evolução do atleta em blocos, com revisão de semanas de carga, deload e retorno à progressão.
+
 Ideias:
-- Deload assistido
-- Feedback semanal consolidado
-- Revisão da evolução por bloco de treino
-- Alertas quando a progressão deixa de compensar a fadiga
+- Histórico de blocos de treino
+- Semana de deload aplicada ao plano
+- Comparação pré e pós-deload
+- Recomendações de novo bloco com base na resposta do atleta
 
 ## Estrutura do Projeto
 

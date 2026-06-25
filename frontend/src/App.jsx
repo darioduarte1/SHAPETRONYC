@@ -42,6 +42,7 @@ function App() {
   const [athleteDashboard, setAthleteDashboard] = useState(null);
   const [adaptivePlan, setAdaptivePlan] = useState(null);
   const [adaptiveDecisions, setAdaptiveDecisions] = useState([]);
+  const [weeklyFeedback, setWeeklyFeedback] = useState(null);
   const [applyingAdaptiveById, setApplyingAdaptiveById] = useState({});
 
   const [form, setForm] = useState({
@@ -544,6 +545,26 @@ function App() {
     return labels[status] || status;
   }
 
+  function getWeeklyFeedbackStatusColor(status) {
+    const colors = {
+      deload_recommended: "#fbbf24",
+      monitor: "#38bdf8",
+      progressing: "#86efac",
+    };
+
+    return colors[status] || "#94a3b8";
+  }
+
+  function getWeeklyFeedbackStatusLabel(status) {
+    const labels = {
+      deload_recommended: "Deload recomendado",
+      monitor: "Monitorizar",
+      progressing: "Progressão saudável",
+    };
+
+    return labels[status] || "Feedback semanal";
+  }
+
   function getProgressionActionLabel(action) {
     const labels = {
       increase_load: "Subir carga",
@@ -680,6 +701,25 @@ function App() {
     return data.decisions || [];
   }
 
+  async function loadWeeklyFeedback(profileIdOverride = null) {
+    const feedbackProfileId = profileIdOverride || profileId;
+
+    if (!feedbackProfileId) {
+      return null;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/training/weekly-feedback/${feedbackProfileId}/`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(data);
+      return null;
+    }
+
+    setWeeklyFeedback(data);
+    return data;
+  }
+
   async function recordAdaptiveDecision(recommendation, decisionStatus) {
     if (!profileId) {
       alert("Não encontrei o perfil ativo.");
@@ -749,6 +789,7 @@ function App() {
 
     await loadAdaptivePlan();
     await loadAdaptiveDecisions();
+    await loadWeeklyFeedback();
   }
 
   function toggleWorkout(workoutId) {
@@ -945,6 +986,7 @@ function App() {
       loadAthleteDashboard(profileId);
       loadAdaptivePlan(profileId);
       loadAdaptiveDecisions(profileId);
+      loadWeeklyFeedback(profileId);
       setStep(4);
     } catch (error) {
       console.error(error);
@@ -987,6 +1029,7 @@ function App() {
     loadAthleteDashboard();
     loadAdaptivePlan();
     loadAdaptiveDecisions();
+    loadWeeklyFeedback();
 
     workout.exercises.forEach((exercise) => {
       loadExerciseHistory(exercise, data.id);
@@ -1032,6 +1075,7 @@ function App() {
     loadAthleteDashboard();
     loadAdaptivePlan();
     loadAdaptiveDecisions();
+    loadWeeklyFeedback();
 
     alert(`Workout finished: ${data.workout_name}`);
   }
@@ -1581,6 +1625,119 @@ function App() {
                   )}
                 </div>
               </div>
+            </section>
+          )}
+
+          {weeklyFeedback && (
+            <section
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                background: "rgba(30, 41, 59, 0.72)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: getWeeklyFeedbackStatusColor(weeklyFeedback.status),
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      letterSpacing: "0",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Feedback semanal
+                  </div>
+                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>{weeklyFeedback.title}</h3>
+                  <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>{weeklyFeedback.summary}</p>
+                </div>
+                <span
+                  style={{
+                    color: getWeeklyFeedbackStatusColor(weeklyFeedback.status),
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {getWeeklyFeedbackStatusLabel(weeklyFeedback.status)}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "10px",
+                  marginTop: "14px",
+                }}
+              >
+                <div>
+                  <strong>{weeklyFeedback.signals?.recent_session_count || 0}</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>treinos recentes</p>
+                </div>
+                <div>
+                  <strong>{weeklyFeedback.signals?.recent_failure_count || 0}</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>falhas recentes</p>
+                </div>
+                <div>
+                  <strong>{weeklyFeedback.signals?.watchlist_count || 0}</strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>exercícios a vigiar</p>
+                </div>
+                <div>
+                  <strong>
+                    {weeklyFeedback.signals?.volume_trend?.change_percent > 0 ? "+" : ""}
+                    {weeklyFeedback.signals?.volume_trend?.change_percent || 0}%
+                  </strong>
+                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>tendência volume</p>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
+                {(weeklyFeedback.feedback || []).map((item) => (
+                  <p key={item} style={{ margin: 0, color: "#cbd5e1", fontSize: "13px" }}>
+                    {item}
+                  </p>
+                ))}
+              </div>
+
+              {weeklyFeedback.deload?.recommended && (
+                <div
+                  style={{
+                    marginTop: "14px",
+                    padding: "12px",
+                    border: "1px solid rgba(251, 191, 36, 0.35)",
+                    borderRadius: "8px",
+                    background: "rgba(120, 53, 15, 0.28)",
+                  }}
+                >
+                  <strong style={{ color: "#fde68a" }}>Protocolo de deload sugerido</strong>
+                  <p style={{ margin: "6px 0 0", color: "#fef3c7", fontSize: "13px" }}>
+                    {weeklyFeedback.deload.duration} · volume a {Math.round((weeklyFeedback.deload.volume_multiplier || 0) * 100)}% · RIR alvo {weeklyFeedback.deload.target_rir}+
+                  </p>
+                  <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
+                    {(weeklyFeedback.deload.protocol || []).map((item) => (
+                      <p key={item} style={{ margin: 0, color: "#fde68a", fontSize: "12px" }}>
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                  {weeklyFeedback.deload.reasons?.length > 0 && (
+                    <p style={{ margin: "8px 0 0", color: "#fbbf24", fontSize: "12px" }}>
+                      Motivo: {weeklyFeedback.deload.reasons.join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
             </section>
           )}
 

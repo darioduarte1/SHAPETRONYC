@@ -10,6 +10,7 @@ from .views import (
     StartWorkoutSessionView,
     FinishWorkoutSessionView,
     WorkoutSessionListView,
+    WeeklyFeedbackView,
 )
 
 urlpatterns = [
@@ -19,6 +20,7 @@ urlpatterns = [
     path("adaptive-plan/<int:profile_id>/", AdaptivePlanView.as_view()),
     path("adaptive-plan/decisions/<int:profile_id>/", AdaptivePlanDecisionListView.as_view()),
     path("adaptive-plan/apply/", ApplyAdaptivePlanRecommendationView.as_view()),
+    path("weekly-feedback/<int:profile_id>/", WeeklyFeedbackView.as_view()),
 
     path("start-session/", StartWorkoutSessionView.as_view()),
     path("finish-session/", FinishWorkoutSessionView.as_view()),

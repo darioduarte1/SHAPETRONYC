@@ -19,6 +19,7 @@ from training.models import (
 from training.services.athlete_dashboard import build_athlete_dashboard
 from training.services.adaptive_plan import build_adaptive_plan
 from training.services.training_memory import refresh_training_memory
+from training.services.weekly_feedback import build_weekly_feedback
 
 
 class AthleteDashboardTests(TestCase):
@@ -255,3 +256,41 @@ class AthleteDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["decisions"][0]["action"], "progress_load")
+
+    def test_weekly_feedback_recommends_deload_from_repeated_recovery_signals(self):
+        self.create_completed_session(days_ago=21, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=14, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=7, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=1, weight=52.5, reps=8, rir=None, reached_failure=True)
+
+        feedback = build_weekly_feedback(self.profile)
+
+        self.assertEqual(feedback["status"], "deload_recommended")
+        self.assertTrue(feedback["deload"]["recommended"])
+        self.assertEqual(feedback["deload"]["volume_multiplier"], 0.7)
+        self.assertEqual(feedback["deload"]["target_rir"], 3)
+        self.assertIn("falhas recentes acumuladas", feedback["deload"]["reasons"])
+
+    def test_weekly_feedback_marks_progressing_when_no_recovery_signals(self):
+        self.create_completed_session(days_ago=21, weight=50, reps=12, rir=3)
+        self.create_completed_session(days_ago=14, weight=52.5, reps=12, rir=2)
+        self.create_completed_session(days_ago=7, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=1, weight=57.5, reps=12, rir=2)
+
+        feedback = build_weekly_feedback(self.profile)
+
+        self.assertEqual(feedback["status"], "progressing")
+        self.assertFalse(feedback["deload"]["recommended"])
+        self.assertEqual(feedback["signals"]["recent_failure_count"], 0)
+
+    def test_weekly_feedback_endpoint_returns_deload_state(self):
+        self.create_completed_session(days_ago=14, weight=55, reps=12, rir=2)
+        self.create_completed_session(days_ago=7, weight=55, reps=8, rir=None, reached_failure=True)
+        self.create_completed_session(days_ago=1, weight=55, reps=8, rir=None, reached_failure=True)
+        client = APIClient()
+
+        response = client.get(f"/api/training/weekly-feedback/{self.profile.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["profile_id"], self.profile.id)
+        self.assertTrue(response.data["deload"]["recommended"])
