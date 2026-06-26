@@ -10,39 +10,234 @@ from recommendations.services.workout_progression_engine import calculate_exerci
 
 
 class ProgressionEngineTests(SimpleTestCase):
-    def test_increases_load_after_12_reps_with_reserve(self):
+    def test_does_not_increase_without_registered_weight_scale(self):
+        recommendation = calculate_next_set(weight=50, reps=12, rir=3)
+
+        self.assertEqual(recommendation["recommended_weight"], 50)
+        self.assertEqual(recommendation["target_reps"], 12)
+        self.assertIn("escala", recommendation["guidance_title"].lower())
+
+    def test_keeps_load_when_12_reps_are_normal_work(self):
         recommendation = calculate_next_set(weight=50, reps=12, rir=2)
 
-        self.assertEqual(recommendation["recommended_weight"], 51.0)
-        self.assertEqual(recommendation["target_reps"], 12)
-
-    def test_keeps_load_when_12_reps_are_close_to_failure(self):
-        recommendation = calculate_next_set(weight=50, reps=12, rir=1)
-
         self.assertEqual(recommendation["recommended_weight"], 50)
         self.assertEqual(recommendation["target_reps"], 12)
 
-    def test_reduces_load_when_missing_12_reps_near_failure(self):
-        recommendation = calculate_next_set(weight=50, reps=10, rir=1)
+    def test_reduces_load_when_failure_is_below_target_range(self):
+        recommendation = calculate_next_set(weight=50, reps=9, rir=0, is_failure=True)
 
-        self.assertEqual(recommendation["recommended_weight"], 50)
+        self.assertEqual(recommendation["recommended_weight"], 46.0)
         self.assertEqual(recommendation["target_reps"], 12)
 
 
 class TrainingCoachEngineTests(SimpleTestCase):
-    def test_working_set_below_target_is_treated_as_failure(self):
+    def test_productive_failure_at_top_of_range_does_not_stop_exercise(self):
+        decision = calculate_training_coach_decision(
+            weight=36.6,
+            reps=12,
+            rir=None,
+            is_failure=True,
+            set_type="WORKING",
+            current_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 36.6,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 36.6,
+                    "reps_completed": 12,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+            ],
+            target_min_reps=10,
+            target_max_reps=12,
+            total_sets=3,
+        )
+
+        self.assertEqual(decision["context"]["failure_class"], "productive_failure")
+        self.assertEqual(decision["action"], "maintain_or_small_backoff")
+        self.assertEqual(decision["recommended_weight"], 34.5)
+        self.assertEqual(decision["target_reps"], 12)
+        self.assertFalse(decision["stop_exercise"])
+        self.assertEqual(decision["exercise_status"], "continue")
+
+    def test_acceptable_failure_inside_range_continues_with_caution(self):
         decision = calculate_training_coach_decision(
             weight=50,
             reps=10,
             rir=None,
             is_failure=True,
             set_type="WORKING",
+            current_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 8,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+            ],
+            total_sets=3,
         )
 
-        self.assertEqual(decision["action"], "decrease_weight")
-        self.assertEqual(decision["recommended_weight"], 45.0)
+        self.assertEqual(decision["context"]["failure_class"], "acceptable_failure")
+        self.assertEqual(decision["action"], "maintain_or_small_backoff")
+        self.assertEqual(decision["recommended_weight"], 47.5)
         self.assertEqual(decision["target_reps"], 12)
+        self.assertFalse(decision["stop_exercise"])
         self.assertEqual(decision["next_set_type"], "WORKING")
+
+    def test_bad_failure_below_range_reduces_load_or_stops(self):
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=8,
+            rir=None,
+            is_failure=True,
+            set_type="WORKING",
+            current_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 8,
+                    "rir": None,
+                    "reached_failure": True,
+                },
+            ],
+            total_sets=3,
+        )
+
+        self.assertEqual(decision["context"]["failure_class"], "bad_failure")
+        self.assertEqual(decision["action"], "decrease_weight")
+        self.assertEqual(decision["recommended_weight"], 44.0)
+
+    def test_decision_includes_structured_engine_state_and_scores(self):
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=12,
+            rir=2,
+            is_failure=False,
+            set_type="WORKING",
+            current_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 2,
+                    "reached_failure": False,
+                },
+            ],
+            total_sets=3,
+            exercise_context={
+                "exercise_name": "Chest Press Machine",
+                "movement_pattern": "HORIZONTAL_PUSH",
+                "equipment": "Machine",
+                "is_compound": True,
+            },
+            session_context={"total_sets_completed_in_session": 4},
+        )
+
+        self.assertIn(decision["exercise_state"], {"CONTINUE", "FINAL_SET", "ADJUST_LOAD"})
+        self.assertEqual(decision["valid_working_sets"], 1)
+        self.assertEqual(decision["minimum_valid_sets"], 3)
+        self.assertEqual(decision["context"]["exercise_priority"], "PRIMARY")
+        self.assertEqual(decision["context"]["exercise_type"], "COMPOUND")
+        self.assertIn("local_fatigue_score", decision)
+        self.assertIn("global_fatigue_score", decision)
+        self.assertIn("stimulus_score", decision)
+        self.assertIn("fatigue_cost", decision)
+        self.assertIn("confidence_score", decision)
+
+    def test_primary_exercise_can_add_fourth_set_after_three_strong_valid_sets(self):
+        current_sets = [
+            {
+                "set_number": 1,
+                "set_type": "WORKING",
+                "weight_used": 50,
+                "reps_completed": 12,
+                "rir": 3,
+                "reached_failure": False,
+            },
+            {
+                "set_number": 2,
+                "set_type": "WORKING",
+                "weight_used": 50,
+                "reps_completed": 12,
+                "rir": 2,
+                "reached_failure": False,
+            },
+            {
+                "set_number": 3,
+                "set_type": "WORKING",
+                "weight_used": 50,
+                "reps_completed": 12,
+                "rir": 2,
+                "reached_failure": False,
+            },
+        ]
+
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=12,
+            rir=2,
+            is_failure=False,
+            set_type="WORKING",
+            current_sets=current_sets,
+            total_sets=3,
+            exercise_context={
+                "exercise_name": "Chest Press Machine",
+                "movement_pattern": "HORIZONTAL_PUSH",
+                "equipment": "Machine",
+                "is_compound": True,
+            },
+        )
+
+        self.assertEqual(decision["exercise_state"], "ADD_VOLUME")
+        self.assertTrue(decision["add_set"])
+        self.assertEqual(decision["maximum_allowed_sets"], 4)
+
+    def test_finisher_ends_after_three_sets_without_clear_need_for_extra_volume(self):
+        current_sets = [
+            {
+                "set_number": index,
+                "set_type": "WORKING",
+                "weight_used": 20,
+                "reps_completed": 12,
+                "rir": 2,
+                "reached_failure": False,
+            }
+            for index in range(1, 4)
+        ]
+
+        decision = calculate_training_coach_decision(
+            weight=20,
+            reps=12,
+            rir=2,
+            is_failure=False,
+            set_type="WORKING",
+            current_sets=current_sets,
+            total_sets=3,
+            exercise_context={
+                "exercise_name": "Cable Fly",
+                "movement_pattern": "ISOLATION",
+                "equipment": "Cable",
+                "is_compound": False,
+                "exercise_order_in_workout": 5,
+            },
+        )
+
+        self.assertEqual(decision["context"]["exercise_priority"], "FINISHER")
+        self.assertEqual(decision["exercise_state"], "END_EXERCISE")
+        self.assertFalse(decision["add_set"])
 
     def test_warmup_does_not_progress_load(self):
         decision = calculate_training_coach_decision(
@@ -116,7 +311,7 @@ class TrainingCoachEngineTests(SimpleTestCase):
                     "set_number": 1,
                     "set_type": "WORKING",
                     "weight_used": 50,
-                    "reps_completed": 10,
+                    "reps_completed": 8,
                     "rir": None,
                     "reached_failure": True,
                 },
@@ -131,9 +326,9 @@ class TrainingCoachEngineTests(SimpleTestCase):
             ],
         )
 
-        self.assertEqual(decision["action"], "stop_exercise")
-        self.assertEqual(decision["next_set_type"], "COMPLETE")
-        self.assertEqual(decision["exercise_status"], "complete")
+        self.assertEqual(decision["action"], "decrease_weight")
+        self.assertEqual(decision["next_set_type"], "WORKING")
+        self.assertEqual(decision["exercise_status"], "continue")
         self.assertEqual(decision["context"]["consecutive_working_misses"], 2)
 
     def test_stabilizes_load_after_previous_miss(self):
@@ -148,7 +343,7 @@ class TrainingCoachEngineTests(SimpleTestCase):
                     "set_number": 1,
                     "set_type": "WORKING",
                     "weight_used": 50,
-                    "reps_completed": 10,
+                    "reps_completed": 8,
                     "rir": None,
                     "reached_failure": True,
                 },
@@ -171,7 +366,7 @@ class TrainingCoachEngineTests(SimpleTestCase):
         decision = calculate_training_coach_decision(
             weight=50,
             reps=12,
-            rir=2,
+            rir=3,
             is_failure=False,
             set_type="WORKING",
             set_number=1,
@@ -233,13 +428,18 @@ class TrainingCoachEngineTests(SimpleTestCase):
         decision = calculate_training_coach_decision(
             weight=80,
             reps=8,
-            rir=2,
+            rir=3,
             is_failure=False,
             set_type="WORKING",
             target_min_reps=6,
             target_max_reps=8,
             target_rir=2,
-            exercise_context={"movement_pattern": "SQUAT", "is_compound": True},
+            exercise_context={
+                "movement_pattern": "SQUAT",
+                "is_compound": True,
+                "main_weight_options": [80, 85],
+                "micro_weight_options": [],
+            },
         )
 
         self.assertEqual(decision["action"], "increase_weight")
@@ -263,6 +463,102 @@ class TrainingCoachEngineTests(SimpleTestCase):
 
         self.assertEqual(decision["action"], "increase_weight")
         self.assertEqual(decision["recommended_weight"], 51)
+
+    def test_machine_jump_above_10_percent_requires_rir_4(self):
+        decision = calculate_training_coach_decision(
+            weight=46,
+            reps=12,
+            rir=3,
+            is_failure=False,
+            set_type="WORKING",
+            exercise_context={
+                "equipment": "Machine",
+                "main_weight_options": [46, 52],
+                "micro_weight_options": [],
+            },
+        )
+
+        self.assertEqual(decision["action"], "maintain_weight")
+        self.assertEqual(decision["recommended_weight"], 46)
+
+        strong_decision = calculate_training_coach_decision(
+            weight=46,
+            reps=12,
+            rir=4,
+            is_failure=False,
+            set_type="WORKING",
+            exercise_context={
+                "equipment": "Machine",
+                "main_weight_options": [46, 52],
+                "micro_weight_options": [],
+            },
+        )
+
+        self.assertEqual(strong_decision["action"], "increase_weight")
+        self.assertEqual(strong_decision["recommended_weight"], 52)
+
+    def test_machine_does_not_increase_without_registered_next_weight(self):
+        decision = calculate_training_coach_decision(
+            weight=46,
+            reps=12,
+            rir=4,
+            is_failure=False,
+            set_type="WORKING",
+            exercise_context={
+                "equipment": "Machine",
+                "main_weight_options": [46],
+                "micro_weight_options": [],
+            },
+        )
+
+        self.assertEqual(decision["action"], "maintain_weight")
+        self.assertEqual(decision["recommended_weight"], 46)
+
+    def test_requests_weight_scale_when_performance_allows_possible_increase(self):
+        decision = calculate_training_coach_decision(
+            weight=50,
+            reps=12,
+            rir=4,
+            is_failure=False,
+            set_type="WORKING",
+            exercise_context={
+                "equipment": "Machine",
+                "main_weight_options": [],
+                "micro_weight_options": [],
+            },
+        )
+
+        self.assertEqual(decision["action"], "maintain_weight")
+        self.assertEqual(decision["recommended_weight"], 50)
+        self.assertIn("escala", decision["guidance_title"].lower())
+        self.assertIn("escala de pesos", " ".join(decision["decision_basis"]).lower())
+
+    def test_recent_failure_at_next_weight_blocks_increase(self):
+        decision = calculate_training_coach_decision(
+            weight=46,
+            reps=12,
+            rir=3,
+            is_failure=False,
+            set_type="WORKING",
+            exercise_context={
+                "equipment": "Machine",
+                "main_weight_options": [46, 47],
+                "micro_weight_options": [],
+            },
+            history_sets=[
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 47,
+                    "reps_completed": 8,
+                    "rir": 0,
+                    "reached_failure": True,
+                }
+            ],
+        )
+
+        self.assertEqual(decision["action"], "maintain_weight")
+        self.assertEqual(decision["recommended_weight"], 46)
 
 
     @override_settings(
@@ -344,7 +640,9 @@ class TrainingCoachEngineTests(SimpleTestCase):
         self.assertEqual(decision["source"], "ollama_training_decision")
         self.assertEqual(decision["llm_status"], "llm_enabled")
         self.assertEqual(decision["model"], "qwen3:8b")
-        self.assertEqual(decision["recommended_weight"], "40")
+        self.assertEqual(decision["recommended_weight"], 37.5)
+        self.assertTrue(decision["guardrail_applied"])
+        self.assertIn("12 reps", decision["guardrail_reason"])
 
     @override_settings(
         AI_TRAINING_DECISION_PROVIDER="ollama",
@@ -457,19 +755,30 @@ class WorkoutProgressionEngineTests(SimpleTestCase):
         )
 
     def test_increases_load_for_next_workout_after_clean_sets(self):
+        training_exercise = self.make_training_exercise()
+        training_exercise.exercise.main_weight_options = [50, 52.5]
+
         recommendation = calculate_exercise_progression(
-            self.make_training_exercise(),
+            training_exercise,
             [
                 {
                     "set_number": 1,
                     "set_type": "WORKING",
                     "weight_used": 50,
                     "reps_completed": 12,
-                    "rir": 2,
+                    "rir": 3,
                     "reached_failure": False,
                 },
                 {
                     "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 3,
                     "set_type": "WORKING",
                     "weight_used": 50,
                     "reps_completed": 12,
@@ -501,6 +810,14 @@ class WorkoutProgressionEngineTests(SimpleTestCase):
                 },
                 {
                     "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 3,
                     "set_type": "WORKING",
                     "weight_used": 50,
                     "reps_completed": 12,
@@ -560,6 +877,41 @@ class WorkoutProgressionEngineTests(SimpleTestCase):
         self.assertEqual(recommendation["recommended_weight"], 50)
         self.assertEqual(recommendation["source"], "hybrid_local_workout_progression")
         self.assertEqual(recommendation["progression_context"]["completed_ratio"], 0.33)
+
+    def test_next_workout_requests_scale_when_clean_sets_have_no_registered_weights(self):
+        recommendation = calculate_exercise_progression(
+            self.make_training_exercise(),
+            [
+                {
+                    "set_number": 1,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 2,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+                {
+                    "set_number": 3,
+                    "set_type": "WORKING",
+                    "weight_used": 50,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                },
+            ],
+        )
+
+        self.assertEqual(recommendation["action"], "maintain_load")
+        self.assertIn("escala", recommendation["title"].lower())
+        self.assertIn("escala de pesos", " ".join(recommendation["decision_basis"]).lower())
 
 
 class AiCoachEngineTests(SimpleTestCase):

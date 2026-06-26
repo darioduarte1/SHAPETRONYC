@@ -38,6 +38,9 @@ function App() {
   const [openWeightScaleByExerciseId, setOpenWeightScaleByExerciseId] = useState({});
   const [weightScaleFormsByExerciseId, setWeightScaleFormsByExerciseId] = useState({});
   const [isSavingWeightScaleByExerciseId, setIsSavingWeightScaleByExerciseId] = useState({});
+  const [calibrationFormsByExerciseId, setCalibrationFormsByExerciseId] = useState({});
+  const [isSavingCalibrationByExerciseId, setIsSavingCalibrationByExerciseId] = useState({});
+  const [completedCalibrationByExerciseId, setCompletedCalibrationByExerciseId] = useState({});
   const [exerciseRowCounts, setExerciseRowCounts] = useState({});
   const [restTimers, setRestTimers] = useState({});
   const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
@@ -159,7 +162,96 @@ function App() {
       history_sets: [],
       previous_session: null,
       recommended_sets: [],
+      calibration: null,
     };
+  }
+
+  function getCalibrationState(exercise) {
+    return getExerciseLogs(exercise.id).calibration || {
+      needs_calibration: true,
+      scale_configured: Boolean((exercise.exercise_main_weight_options || []).length),
+      estimated_working_weight: null,
+      confidence: "baixa",
+      calibration_sets: [],
+      next_step: null,
+      reason: "baseline_required",
+      message: "Este exercício ainda precisa de calibração.",
+    };
+  }
+
+  function getCalibrationColorMeta(colorOrReps) {
+    const value = String(colorOrReps || "").toLowerCase();
+    const reps = Number(colorOrReps);
+
+    if (value === "red" || (Number.isFinite(reps) && reps > 0 && reps <= 8)) {
+      return {
+        key: "red",
+        label: "Vermelho",
+        text: "falha antes das 8 reps",
+        color: "#fecaca",
+        background: "rgba(127, 29, 29, 0.28)",
+        border: "rgba(248, 113, 113, 0.45)",
+      };
+    }
+
+    if (value === "orange" || (Number.isFinite(reps) && reps >= 9 && reps <= 12)) {
+      return {
+        key: "orange",
+        label: "Laranja",
+        text: "entre 9 e 12 reps",
+        color: "#fed7aa",
+        background: "rgba(154, 52, 18, 0.26)",
+        border: "rgba(251, 146, 60, 0.45)",
+      };
+    }
+
+    if (value === "yellow" || (Number.isFinite(reps) && reps >= 13 && reps <= 14)) {
+      return {
+        key: "yellow",
+        label: "Amarelo",
+        text: "entre 13 e 14 reps",
+        color: "#fef08a",
+        background: "rgba(113, 63, 18, 0.24)",
+        border: "rgba(250, 204, 21, 0.45)",
+      };
+    }
+
+    if (value === "green" || (Number.isFinite(reps) && reps >= 15)) {
+      return {
+        key: "green",
+        label: "Verde",
+        text: "acima de 15 reps",
+        color: "#bbf7d0",
+        background: "rgba(20, 83, 45, 0.25)",
+        border: "rgba(74, 222, 128, 0.45)",
+      };
+    }
+
+    return null;
+  }
+
+  function getCalibrationColorOptions() {
+    return [
+      getCalibrationColorMeta("red"),
+      getCalibrationColorMeta("orange"),
+      getCalibrationColorMeta("yellow"),
+      getCalibrationColorMeta("green"),
+    ];
+  }
+
+  function getCalibrationColorReps(color) {
+    const repsByColor = {
+      red: 7,
+      orange: 11,
+      yellow: 14,
+      green: 16,
+    };
+
+    return repsByColor[color] || "";
+  }
+
+  function exerciseNeedsCalibration(exercise) {
+    return Boolean(getCalibrationState(exercise).needs_calibration);
   }
 
   function getCurrentSetForRow(trainingExerciseId, setNumber) {
@@ -207,10 +299,14 @@ function App() {
 
   function getExerciseRowCount(exercise) {
     const logs = getExerciseLogs(exercise.id);
+    const recommendedWarmupCount = logs.recommended_sets.filter(
+      (setRecommendation) => setRecommendation.set_type === "WARMUP"
+    ).length;
+    const plannedRows = exercise.sets + Math.max(1, recommendedWarmupCount);
 
     return Math.max(
       exerciseRowCounts[exercise.id] || 0,
-      exercise.sets + 1,
+      plannedRows,
       logs.previous_sets.length,
       logs.current_sets.length,
       logs.recommended_sets.length,
@@ -380,15 +476,7 @@ function App() {
   }
 
   function getExerciseTargetLabel(exercise) {
-    if (!exercise.target_min_reps || !exercise.target_max_reps) {
-      return `${TARGET_REPS}`;
-    }
-
-    if (exercise.target_min_reps === exercise.target_max_reps) {
-      return `${exercise.target_max_reps}`;
-    }
-
-    return `${exercise.target_min_reps}-${exercise.target_max_reps}`;
+    return `${exercise.target_max_reps || TARGET_REPS}`;
   }
 
   function buildUserCoachContext() {
@@ -480,7 +568,7 @@ function App() {
     );
     const recommendedWeight = plannedValues.weight || latestRecommendation?.recommended_weight;
     const recommendedReps = plannedValues.reps || latestRecommendation?.target_reps;
-    const targetLabel = latestRecommendation?.target_reps_label || getExerciseTargetLabel(exercise);
+    const targetLabel = getExerciseTargetLabel(exercise);
     const hasLoadTarget = recommendedWeight !== "" && recommendedWeight !== undefined && recommendedReps;
     const loadCue = hasLoadTarget
       ? `Aponta para ${recommendedWeight}kg x ${targetLabel} reps.`
@@ -736,11 +824,72 @@ function App() {
       .filter((number) => Number.isFinite(number) && number >= 0);
   }
 
+  function parseDecimalInput(value) {
+    return Number(String(value || "").replace(",", "."));
+  }
+
+  function buildMicroWeightRows(options) {
+    const groupedWeights = new Map();
+
+    (options || []).forEach((option) => {
+      const weight = typeof option === "object" ? parseDecimalInput(option.weight) : parseDecimalInput(option);
+      const count = typeof option === "object" ? parseDecimalInput(option.count || 1) : 1;
+
+      if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(count) || count <= 0) {
+        return;
+      }
+
+      groupedWeights.set(weight, (groupedWeights.get(weight) || 0) + count);
+    });
+
+    const rows = Array.from(groupedWeights.entries()).map(([weight, count]) => ({
+      weight,
+      count,
+    }));
+
+    return rows.length ? rows : [{ count: "", weight: "" }];
+  }
+
+  function serializeMicroWeightRows(rows) {
+    return (rows || [])
+      .map((row) => ({
+        count: parseDecimalInput(row.count),
+        weight: parseDecimalInput(row.weight),
+      }))
+      .filter((row) =>
+        Number.isFinite(row.count) &&
+        Number.isFinite(row.weight) &&
+        row.count > 0 &&
+        row.weight > 0
+      );
+  }
+
   function buildWeightScaleForm(exercise) {
     return {
       main_weight_options: formatWeightOptions(exercise.exercise_main_weight_options),
-      micro_weight_options: formatWeightOptions(exercise.exercise_micro_weight_options),
+      micro_weight_options: buildMicroWeightRows(exercise.exercise_micro_weight_options),
     };
+  }
+
+  function getCalibrationForm(exercise) {
+    const calibrationState = getCalibrationState(exercise);
+
+    return calibrationFormsByExerciseId[exercise.id] || {
+      weight_used: calibrationState.next_step?.recommended_weight || calibrationState.estimated_working_weight || "",
+      result_color: "",
+      rir: 0,
+      notes: "",
+    };
+  }
+
+  function updateCalibrationForm(exercise, field, value) {
+    setCalibrationFormsByExerciseId((currentForms) => ({
+      ...currentForms,
+      [exercise.id]: {
+        ...getCalibrationForm(exercise),
+        [field]: value,
+      },
+    }));
   }
 
   function getWeightScaleForm(exercise) {
@@ -773,6 +922,46 @@ function App() {
     }));
   }
 
+  function updateMicroWeightScaleRow(exercise, rowIndex, field, value) {
+    const currentRows = getWeightScaleForm(exercise).micro_weight_options || [];
+
+    setWeightScaleFormsByExerciseId((currentForms) => ({
+      ...currentForms,
+      [exercise.id]: {
+        ...getWeightScaleForm(exercise),
+        micro_weight_options: currentRows.map((row, index) => (
+          index === rowIndex ? { ...row, [field]: value } : row
+        )),
+      },
+    }));
+  }
+
+  function addMicroWeightScaleRow(exercise) {
+    setWeightScaleFormsByExerciseId((currentForms) => ({
+      ...currentForms,
+      [exercise.id]: {
+        ...getWeightScaleForm(exercise),
+        micro_weight_options: [
+          ...(getWeightScaleForm(exercise).micro_weight_options || []),
+          { count: "", weight: "" },
+        ],
+      },
+    }));
+  }
+
+  function removeMicroWeightScaleRow(exercise, rowIndex) {
+    const currentRows = getWeightScaleForm(exercise).micro_weight_options || [];
+    const nextRows = currentRows.filter((_, index) => index !== rowIndex);
+
+    setWeightScaleFormsByExerciseId((currentForms) => ({
+      ...currentForms,
+      [exercise.id]: {
+        ...getWeightScaleForm(exercise),
+        micro_weight_options: nextRows.length ? nextRows : [{ count: "", weight: "" }],
+      },
+    }));
+  }
+
   function updateProgramExerciseScale(trainingExerciseId, data) {
     setProgram((currentProgram) => {
       if (!currentProgram) {
@@ -801,7 +990,7 @@ function App() {
     const formData = getWeightScaleForm(exercise);
     const payload = {
       main_weight_options: parseWeightOptions(formData.main_weight_options),
-      micro_weight_options: parseWeightOptions(formData.micro_weight_options),
+      micro_weight_options: serializeMicroWeightRows(formData.micro_weight_options),
     };
 
     setIsSavingWeightScaleByExerciseId((currentState) => ({
@@ -810,7 +999,7 @@ function App() {
     }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/exercises/${exercise.exercise}/`, {
+      const response = await fetch(`${API_BASE_URL}/api/training/exercise-weight-scale/${profileId}/${exercise.id}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -828,7 +1017,7 @@ function App() {
         ...currentForms,
         [exercise.id]: {
           main_weight_options: formatWeightOptions(data.main_weight_options),
-          micro_weight_options: formatWeightOptions(data.micro_weight_options),
+          micro_weight_options: buildMicroWeightRows(data.micro_weight_options),
         },
       }));
       setOpenWeightScaleByExerciseId((currentState) => ({
@@ -844,6 +1033,93 @@ function App() {
       alert("Não consegui contactar o servidor para guardar a escala de pesos.");
     } finally {
       setIsSavingWeightScaleByExerciseId((currentState) => ({
+        ...currentState,
+        [exercise.id]: false,
+      }));
+    }
+  }
+
+  async function saveExerciseCalibration(exercise) {
+    const formData = getCalibrationForm(exercise);
+    const calibrationState = getCalibrationState(exercise);
+    const calibrationRestSeconds = restTimers[exercise.id] || 0;
+
+    if (!calibrationState.scale_configured) {
+      alert("Preenche primeiro a escala da máquina antes de guardar séries experimentais.");
+      return;
+    }
+
+    if (calibrationRestSeconds > 0) {
+      return;
+    }
+
+    if (!formData.weight_used || !formData.result_color) {
+      alert("Preenche o peso e escolhe a cor da série experimental.");
+      return;
+    }
+
+    setIsSavingCalibrationByExerciseId((currentState) => ({
+      ...currentState,
+      [exercise.id]: true,
+    }));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/training/exercise-calibration/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_id: profileId,
+          training_exercise_id: exercise.id,
+          weight_used: Number(formData.weight_used),
+          result_color: formData.result_color,
+          reps_completed: getCalibrationColorReps(formData.result_color),
+          rir: 0,
+          reached_failure: true,
+          notes: formData.notes || "",
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+        alert("Não consegui guardar a calibração deste exercício.");
+        return;
+      }
+
+      setExerciseLogsById((currentLogs) => ({
+        ...currentLogs,
+        [exercise.id]: {
+          ...getExerciseLogs(exercise.id),
+          calibration: data,
+        },
+      }));
+      setCalibrationFormsByExerciseId((currentForms) => ({
+        ...currentForms,
+        [exercise.id]: {
+          weight_used: data.next_step?.recommended_weight || data.estimated_working_weight || formData.weight_used,
+          result_color: "",
+          rir: 0,
+          notes: "",
+        },
+      }));
+      setRestTimers((currentTimers) => ({
+        ...currentTimers,
+        [exercise.id]: data.next_step?.action === "calibration_complete" ? 0 : DEFAULT_REST_SECONDS,
+      }));
+
+      if (data.next_step?.action === "calibration_complete" || !data.needs_calibration) {
+        setCompletedCalibrationByExerciseId((currentState) => ({
+          ...currentState,
+          [exercise.id]: true,
+        }));
+      }
+
+      await loadExerciseHistory(exercise);
+    } catch (error) {
+      console.error(error);
+      alert("Não consegui contactar o servidor para guardar a calibração.");
+    } finally {
+      setIsSavingCalibrationByExerciseId((currentState) => ({
         ...currentState,
         [exercise.id]: false,
       }));
@@ -1030,6 +1306,7 @@ function App() {
       setExerciseLogsById({});
       setExerciseRowCounts({});
       setSetForms({});
+      setCompletedCalibrationByExerciseId({});
       setRemovedSetByKey({});
       setOpenSetTypeMenuBySet({});
 
@@ -1422,6 +1699,8 @@ function App() {
       setRecommendations({});
       setExerciseLogsById({});
       setExerciseRowCounts({});
+      setCalibrationFormsByExerciseId({});
+      setCompletedCalibrationByExerciseId({});
       setRemovedSetByKey({});
       setOpenSetTypeMenuBySet({});
       loadAthleteDashboard(profileId);
@@ -1466,6 +1745,8 @@ function App() {
     setRecommendations({});
     setExerciseLogsById({});
     setExerciseRowCounts({});
+    setCalibrationFormsByExerciseId({});
+    setCompletedCalibrationByExerciseId({});
     setSetForms({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
@@ -1513,6 +1794,7 @@ function App() {
     setOpenExerciseById({});
     setRestTimers({});
     setSetForms({});
+    setCompletedCalibrationByExerciseId({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
     setLatestWorkoutProgression(data.next_workout_progression || null);
@@ -1729,27 +2011,49 @@ function App() {
       if (recommendationData.exercise_status !== "complete") {
         const nextSourceSetNumber = sourceSetNumber + 1;
         const nextSetFormKey = getSetFormKey(exercise.id, nextSourceSetNumber);
+        const nextDisplaySetNumber = displaySetNumber + 1;
+        const nextPlannedValues = getPlannedValuesForExerciseRow(
+          exercise,
+          rows,
+          nextSourceSetNumber,
+          nextDisplaySetNumber
+        );
 
         if (recommendationData.next_set_type && recommendationData.next_set_type !== "COMPLETE") {
-          setSetForms((currentSetForms) => ({
-            ...currentSetForms,
-            [nextSetFormKey]: {
-              ...currentSetForms[nextSetFormKey],
-              set_type: recommendationData.next_set_type,
-              set_type_source: "coach",
-              weight_used:
-                recommendationData.recommended_weight === ""
-                  ? currentSetForms[nextSetFormKey]?.weight_used
-                  : recommendationData.recommended_weight,
-              reps_completed:
-                recommendationData.target_reps === ""
-                  ? currentSetForms[nextSetFormKey]?.reps_completed
-                  : getRepsInputValue(
-                      recommendationData.target_reps,
-                      exercise.target_max_reps || TARGET_REPS
-                    ),
-            },
-          }));
+          setSetForms((currentSetForms) => {
+            const existingNextWeight = currentSetForms[nextSetFormKey]?.weight_used;
+            const existingNextReps = currentSetForms[nextSetFormKey]?.reps_completed;
+            const nextWeightValue =
+              existingNextWeight !== undefined && existingNextWeight !== ""
+                ? existingNextWeight
+                : nextPlannedValues.weight !== undefined && nextPlannedValues.weight !== ""
+                  ? nextPlannedValues.weight
+                  : recommendationData.recommended_weight === ""
+                    ? existingNextWeight
+                    : recommendationData.recommended_weight;
+            const nextRepsValue =
+              existingNextReps !== undefined && existingNextReps !== ""
+                ? existingNextReps
+                : nextPlannedValues.reps !== undefined && nextPlannedValues.reps !== ""
+                  ? nextPlannedValues.reps
+                  : recommendationData.target_reps === ""
+                    ? existingNextReps
+                    : getRepsInputValue(
+                        recommendationData.target_reps,
+                        exercise.target_max_reps || TARGET_REPS
+                      );
+
+            return {
+              ...currentSetForms,
+              [nextSetFormKey]: {
+                ...currentSetForms[nextSetFormKey],
+                set_type: recommendationData.next_set_type,
+                set_type_source: "coach",
+                weight_used: nextWeightValue,
+                reps_completed: nextRepsValue,
+              },
+            };
+          });
         }
 
         setExerciseRowCounts((currentCounts) => ({
@@ -1762,6 +2066,140 @@ function App() {
         }));
       }
     }
+  }
+
+  async function undoSet(exercise, sourceSetNumber, displaySetNumber) {
+    const rows = getExerciseRows(exercise);
+    const currentExerciseLogs = getExerciseLogs(exercise.id);
+    const currentSet = currentExerciseLogs.current_sets.find(
+      (setLog) => Number(setLog.set_number) === displaySetNumber
+    );
+    const onlyUndoCurrentSet = currentSet?.set_type === "WARMUP";
+    const setLogsToRemove = currentExerciseLogs.current_sets.filter(
+      (setLog) => onlyUndoCurrentSet
+        ? Number(setLog.set_number) === displaySetNumber
+        : Number(setLog.set_number) >= displaySetNumber
+    );
+
+    if (!setLogsToRemove.length) {
+      return;
+    }
+
+    const deleteResponses = await Promise.all(
+      setLogsToRemove.map((setLog) =>
+        fetch(`${API_BASE_URL}/api/progression/set-logs/${setLog.id}/`, {
+          method: "DELETE",
+        })
+      )
+    );
+
+    if (deleteResponses.some((response) => !response.ok)) {
+      alert("Não consegui desfazer a série. Tenta novamente.");
+      return;
+    }
+
+    setExerciseLogsById((currentLogs) => {
+      const logsForExercise = currentLogs[exercise.id] || currentExerciseLogs;
+
+      return {
+        ...currentLogs,
+        [exercise.id]: {
+          ...logsForExercise,
+          current_sets: logsForExercise.current_sets.filter(
+            (setLog) => onlyUndoCurrentSet
+              ? Number(setLog.set_number) !== displaySetNumber
+              : Number(setLog.set_number) < displaySetNumber
+          ),
+        },
+      };
+    });
+
+    setSetForms((currentSetForms) => {
+      const nextSetForms = { ...currentSetForms };
+
+      rows.forEach((row) => {
+        if (
+          onlyUndoCurrentSet
+            ? row.displaySetNumber === displaySetNumber
+            : row.displaySetNumber >= displaySetNumber
+        ) {
+          delete nextSetForms[getSetFormKey(exercise.id, row.sourceSetNumber)];
+        }
+      });
+
+      if (currentSet) {
+        nextSetForms[getSetFormKey(exercise.id, sourceSetNumber)] = {
+          weight_used: currentSet.weight_used,
+          reps_completed: currentSet.reps_completed,
+          notes: currentSet.notes || "",
+          set_type: currentSet.set_type,
+          set_type_source: "manual",
+        };
+      }
+
+      return nextSetForms;
+    });
+
+    if (!onlyUndoCurrentSet) {
+      setRecommendations((currentRecommendations) => {
+        const nextRecommendations = { ...currentRecommendations };
+        delete nextRecommendations[exercise.id];
+        return nextRecommendations;
+      });
+    }
+
+    setRestTimers((currentTimers) => ({
+      ...currentTimers,
+      [exercise.id]: 0,
+    }));
+
+    setOpenCompletionMenuBySet((currentMenus) => {
+      const nextMenus = { ...currentMenus };
+
+      rows.forEach((row) => {
+        if (
+          onlyUndoCurrentSet
+            ? row.displaySetNumber === displaySetNumber
+            : row.displaySetNumber >= displaySetNumber
+        ) {
+          delete nextMenus[getSetFormKey(exercise.id, row.sourceSetNumber)];
+        }
+      });
+
+      return nextMenus;
+    });
+
+    setOpenRestMenuBySet((currentMenus) => {
+      const nextMenus = { ...currentMenus };
+
+      rows.forEach((row) => {
+        if (
+          onlyUndoCurrentSet
+            ? row.displaySetNumber === displaySetNumber
+            : row.displaySetNumber >= displaySetNumber
+        ) {
+          delete nextMenus[getSetFormKey(exercise.id, row.sourceSetNumber)];
+        }
+      });
+
+      return nextMenus;
+    });
+
+    setOpenSetTypeMenuBySet((currentMenus) => {
+      const nextMenus = { ...currentMenus };
+
+      rows.forEach((row) => {
+        if (
+          onlyUndoCurrentSet
+            ? row.displaySetNumber === displaySetNumber
+            : row.displaySetNumber >= displaySetNumber
+        ) {
+          delete nextMenus[getSetFormKey(exercise.id, row.sourceSetNumber)];
+        }
+      });
+
+      return nextMenus;
+    });
   }
 
   return (
@@ -2961,10 +3399,17 @@ function App() {
                       const isWeightScaleOpen = Boolean(openWeightScaleByExerciseId[item.id]);
                       const substitutionData = substitutionOptionsByExerciseId[item.id];
                       const weightScaleForm = getWeightScaleForm(item);
+                      const calibrationState = getCalibrationState(item);
+                      const calibrationForm = getCalibrationForm(item);
+                      const needsCalibration = exerciseNeedsCalibration(item);
+                      const calibrationCompletedToday = Boolean(completedCalibrationByExerciseId[item.id]);
+                      const blocksNormalTraining = needsCalibration || calibrationCompletedToday;
                       const hasLoggedSets = exerciseLogs.current_sets.length > 0;
                       const isReplacing = Boolean(isReplacingExerciseById[item.id]);
                       const isSavingWeightScale = Boolean(isSavingWeightScaleByExerciseId[item.id]);
+                      const isSavingCalibration = Boolean(isSavingCalibrationByExerciseId[item.id]);
                       const restSeconds = restTimers[item.id] || 0;
+                      const calibrationInputsLocked = !calibrationState.scale_configured || restSeconds > 0 || isSavingCalibration;
                       const rows = getExerciseRows(item);
                       const guidance = getGuidanceForExercise(item, rows, restSeconds);
 
@@ -2997,6 +3442,7 @@ function App() {
                                   {item.exercise_muscle_group}
                                   {" · "}
                                   {item.exercise_equipment}
+                                  {needsCalibration ? " · Calibração necessária" : ""}
                                 </span>
                               </span>
                             </button>
@@ -3039,16 +3485,50 @@ function App() {
                                   />
                                 </label>
 
-                                <label className="profile-field">
+                                <div className="profile-field">
                                   <span>Bolachas / extras</span>
-                                  <input
-                                    value={weightScaleForm.micro_weight_options}
-                                    onChange={(event) =>
-                                      updateWeightScaleForm(item, "micro_weight_options", event.target.value)
-                                    }
-                                    placeholder="1, 2, 3"
-                                  />
-                                </label>
+                                  <div className="exercise-micro-weight-list">
+                                    {(weightScaleForm.micro_weight_options || []).map((microWeightRow, rowIndex) => (
+                                      <div className="exercise-micro-weight-row" key={`${rowIndex}-${microWeightRow.weight}`}>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          step="1"
+                                          value={microWeightRow.count}
+                                          onChange={(event) =>
+                                            updateMicroWeightScaleRow(item, rowIndex, "count", event.target.value)
+                                          }
+                                          placeholder="Qtd."
+                                        />
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          min="0"
+                                          value={microWeightRow.weight}
+                                          onChange={(event) =>
+                                            updateMicroWeightScaleRow(item, rowIndex, "weight", event.target.value)
+                                          }
+                                          placeholder="Kg"
+                                        />
+                                        <button
+                                          type="button"
+                                          className="exercise-micro-weight-remove"
+                                          onClick={() => removeMicroWeightScaleRow(item, rowIndex)}
+                                          title="Remover bolacha"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="exercise-micro-weight-add"
+                                    onClick={() => addMicroWeightScaleRow(item)}
+                                  >
+                                    + Adicionar bolacha
+                                  </button>
+                                </div>
                               </div>
 
                               <button
@@ -3108,7 +3588,169 @@ function App() {
                                 Target: {item.sets} sets | {TARGET_REPS} reps | RIR {item.target_rir}
                               </p>
 
-                              {exerciseLogs.previous_session && (
+                              {needsCalibration && (
+                                <div className="exercise-calibration-panel">
+                                  <div className="exercise-substitution-header">
+                                    <strong>Treino experimental obrigatório</strong>
+                                    <span>Série {calibrationState.next_step?.set_number || 1} de {calibrationState.protocol?.target_sets || 3}</span>
+                                  </div>
+
+                                  <p className="exercise-calibration-copy">
+                                    O objetivo não é treinar: é descobrir o peso que leva à falha técnica perto da rep 12.
+                                    Faz 3 séries até ao máximo possível com técnica limpa; a app ajusta a carga a cada série.
+                                  </p>
+
+                                  {!calibrationState.scale_configured && (
+                                    <div className="exercise-calibration-warning">
+                                      <span>Preenche primeiro a escala da máquina para a IA saber os saltos reais disponíveis.</span>
+                                      <button type="button" onClick={() => toggleWeightScaleMenu(item)}>
+                                        Abrir escala
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {calibrationState.calibration_sets?.length > 0 && (
+                                    <div className="exercise-calibration-history">
+                                      {calibrationState.calibration_sets.map((setLog, index) => {
+                                        const colorMeta = getCalibrationColorMeta(setLog.result_color || setLog.reps_completed);
+
+                                        return (
+                                          <span
+                                            key={`${setLog.weight_used}-${index}`}
+                                            style={{
+                                              borderColor: colorMeta?.border,
+                                              background: colorMeta?.background,
+                                              color: colorMeta?.color,
+                                            }}
+                                          >
+                                            S{index + 1}: {setLog.weight_used}kg · {colorMeta?.label || "resultado registado"}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {calibrationState.next_step && (
+                                    <p className="exercise-calibration-estimate">
+                                      Próxima série experimental:{" "}
+                                      {calibrationState.next_step.recommended_weight
+                                        ? `${calibrationState.next_step.recommended_weight}kg`
+                                        : "preencher escala"}{" "}
+                                      · até falha técnica
+                                      <br />
+                                      {calibrationState.next_step.message}
+                                    </p>
+                                  )}
+
+                                  {restSeconds > 0 && needsCalibration && (
+                                    <div className="exercise-calibration-warning">
+                                      <span>Descanso obrigatório antes da próxima série experimental.</span>
+                                      <strong>{formatTimer(restSeconds)}</strong>
+                                    </div>
+                                  )}
+
+                                  <div className="exercise-calibration-grid">
+                                    <label className="profile-field">
+                                      <span>Peso usado</span>
+                                      <input
+                                        type="number"
+                                        step="0.5"
+                                        value={calibrationForm.weight_used}
+                                        disabled={calibrationInputsLocked}
+                                        onChange={(event) =>
+                                          updateCalibrationForm(item, "weight_used", event.target.value)
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+
+                                  <div className="exercise-calibration-color-scale">
+                                    {getCalibrationColorOptions().map((colorOption) => (
+                                      <button
+                                        key={colorOption.key}
+                                        type="button"
+                                        disabled={calibrationInputsLocked}
+                                        className={`exercise-calibration-color-chip ${colorOption.key} ${
+                                          calibrationForm.result_color === colorOption.key ? "selected" : ""
+                                        }`}
+                                        onClick={() =>
+                                          updateCalibrationForm(item, "result_color", colorOption.key)
+                                        }
+                                      >
+                                        <strong>{colorOption.label}</strong>
+                                        {colorOption.text}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {getCalibrationColorMeta(calibrationForm.result_color) && (
+                                    <p
+                                      className="exercise-calibration-estimate"
+                                      style={{
+                                        borderColor: getCalibrationColorMeta(calibrationForm.result_color).border,
+                                        background: getCalibrationColorMeta(calibrationForm.result_color).background,
+                                        color: getCalibrationColorMeta(calibrationForm.result_color).color,
+                                      }}
+                                    >
+                                      Resultado: {getCalibrationColorMeta(calibrationForm.result_color).label} ·{" "}
+                                      {getCalibrationColorMeta(calibrationForm.result_color).text}
+                                    </p>
+                                  )}
+
+                                  <label className="profile-field">
+                                    <span>Notas da calibração</span>
+                                    <input
+                                      value={calibrationForm.notes}
+                                      disabled={calibrationInputsLocked}
+                                      onChange={(event) =>
+                                        updateCalibrationForm(item, "notes", event.target.value)
+                                      }
+                                      placeholder="Ex: técnica fácil, máquina pesada, amplitude controlada"
+                                    />
+                                  </label>
+
+                                  {calibrationState.estimated_working_weight && (
+                                    <p className="exercise-calibration-estimate">
+                                      Peso estimado atual: {calibrationState.estimated_working_weight}kg · confiança {calibrationState.confidence}
+                                    </p>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    className="exercise-scale-save-button"
+                                    onClick={() => saveExerciseCalibration(item)}
+                                    disabled={calibrationInputsLocked}
+                                  >
+                                    {!calibrationState.scale_configured
+                                      ? "Preenche a escala primeiro"
+                                      : restSeconds > 0
+                                      ? `Aguarda ${formatTimer(restSeconds)}`
+                                      : isSavingCalibration
+                                        ? "A guardar..."
+                                        : "Guardar série experimental"}
+                                  </button>
+                                </div>
+                              )}
+
+                              {calibrationCompletedToday && (
+                                <div className="exercise-calibration-panel">
+                                  <div className="exercise-substitution-header">
+                                    <strong>Máquina concluída por hoje</strong>
+                                    <span>Treino experimental fechado</span>
+                                  </div>
+                                  <p className="exercise-calibration-copy">
+                                    Já temos os dados necessários desta máquina. Hoje não há séries normais aqui;
+                                    segue para a próxima máquina do treino.
+                                  </p>
+                                  {calibrationState.estimated_working_weight && (
+                                    <p className="exercise-calibration-estimate">
+                                      Peso padrão estimado para o próximo treino: {calibrationState.estimated_working_weight}kg.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {!blocksNormalTraining && exerciseLogs.previous_session && (
                                 <p style={{ marginTop: "8px", color: "#777" }}>
                                   Anterior: {exerciseLogs.previous_session.workout_name}
                                 </p>
@@ -3116,6 +3758,7 @@ function App() {
 
                               <div
                                 style={{
+                                  display: blocksNormalTraining ? "none" : "block",
                                   marginTop: "12px",
                                   padding: "16px",
                                   border: "1px solid #334155",
@@ -3225,7 +3868,7 @@ function App() {
                                 )}
                               </div>
 
-                              <div style={{ overflowX: "auto", marginTop: "12px" }}>
+                              <div style={{ display: blocksNormalTraining ? "none" : "block", overflowX: "auto", marginTop: "12px" }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
                                   <thead>
                                     <tr style={{ color: "#777", textTransform: "uppercase", fontSize: "13px" }}>
@@ -3475,8 +4118,10 @@ function App() {
                                             >
                                               <button
                                                 type="button"
+                                                title={isCompleted ? "Desfazer série" : "Guardar série"}
                                                 onClick={() => {
                                                   if (isCompleted) {
+                                                    undoSet(item, sourceSetNumber, displaySetNumber);
                                                     return;
                                                   }
 
@@ -3494,7 +4139,7 @@ function App() {
                                                   background: isCompleted ? "#16a34a" : "transparent",
                                                   color: isCompleted ? "#fff" : "#cbd5e1",
                                                   fontWeight: "bold",
-                                                  cursor: isCompleted ? "default" : "pointer",
+                                                  cursor: "pointer",
                                                 }}
                                               >
                                                 ✓
@@ -3559,9 +4204,11 @@ function App() {
                                 </table>
                               </div>
 
-                              <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
-                                + Adicionar Série
-                              </button>
+                              {!blocksNormalTraining && (
+                                <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
+                                  + Adicionar Série
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

@@ -6,12 +6,16 @@ def number_or_none(value):
         return None
 
     try:
-        return float(value)
+        return float(str(value).replace(",", "."))
     except (TypeError, ValueError):
         return None
 
 
 def round_weight(weight):
+    return round(float(max(weight, 0)), 2)
+
+
+def round_default_weight(weight):
     return round(float(max(weight, 0)) * 2) / 2
 
 
@@ -32,6 +36,42 @@ def normalize_weight_options(values):
     return sorted(set(normalized_values))
 
 
+def normalize_micro_weight_options(values):
+    if not isinstance(values, list):
+        return []
+
+    normalized_values = []
+
+    for value in values:
+        if isinstance(value, dict):
+            weight = number_or_none(value.get("weight"))
+            count = number_or_none(value.get("count"))
+
+            if weight is None or count is None or weight <= 0 or count <= 0:
+                continue
+
+            normalized_values.extend([round_weight(weight)] * int(count))
+            continue
+
+        number = number_or_none(value)
+
+        if number is None or number <= 0:
+            continue
+
+        normalized_values.append(round_weight(number))
+
+    return sorted(normalized_values)
+
+
+def build_micro_weight_sums(micro_weights):
+    sums = {0}
+
+    for micro_weight in micro_weights:
+        sums.update({round_weight(current_sum + micro_weight) for current_sum in sums})
+
+    return sorted(sums)
+
+
 def get_exercise_weight_scale(exercise_or_context):
     if not exercise_or_context:
         return {
@@ -49,20 +89,20 @@ def get_exercise_weight_scale(exercise_or_context):
         micro_options = getattr(exercise_or_context, "micro_weight_options", [])
 
     main_weights = normalize_weight_options(main_options)
-    micro_weights = normalize_weight_options(micro_options)
+    micro_weights = normalize_micro_weight_options(micro_options)
+    micro_weight_sums = build_micro_weight_sums(micro_weights)
     available_weights = []
 
     for main_weight in main_weights:
-        available_weights.append(main_weight)
-
-        for micro_weight in micro_weights:
-            available_weights.append(round_weight(main_weight + micro_weight))
+        for micro_weight_sum in micro_weight_sums:
+            available_weights.append(round_weight(main_weight + micro_weight_sum))
 
     available_weights = sorted(set(available_weights))
 
     return {
         "main_weight_options": main_weights,
         "micro_weight_options": micro_weights,
+        "micro_weight_sums": [weight_sum for weight_sum in micro_weight_sums if weight_sum > 0],
         "available_weights": available_weights,
         "configured": bool(available_weights),
     }
@@ -78,7 +118,7 @@ def snap_to_available_weight(target_weight, exercise_or_context=None, direction=
     available_weights = scale["available_weights"]
 
     if not available_weights:
-        return round_weight(target)
+        return round_default_weight(target)
 
     if direction == "up":
         candidates = [weight for weight in available_weights if weight > target]
@@ -103,7 +143,7 @@ def next_available_weight(current_weight, exercise_or_context=None):
     scale = get_exercise_weight_scale(exercise_or_context)
 
     if not scale["available_weights"]:
-        return round_weight(current + DEFAULT_WEIGHT_STEP)
+        return round_default_weight(current + DEFAULT_WEIGHT_STEP)
 
     return snap_to_available_weight(current, exercise_or_context, "up")
 
@@ -117,6 +157,6 @@ def previous_available_weight(current_weight, exercise_or_context=None):
     scale = get_exercise_weight_scale(exercise_or_context)
 
     if not scale["available_weights"]:
-        return round_weight(max(0, current - DEFAULT_WEIGHT_STEP))
+        return round_default_weight(max(0, current - DEFAULT_WEIGHT_STEP))
 
     return snap_to_available_weight(current, exercise_or_context, "down")

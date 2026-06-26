@@ -74,10 +74,9 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 46 testes a passar
-- Frontend: lint a passar
+- Backend: 72 testes a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso, incluindo dashboard, histórico por exercício, ramp-up progressivo de aquecimento, memória do atleta, plano adaptativo e decisões adaptativas da Beatriz
+- Motor de recomendações: 34 testes a passar
 
 ## Estado Atual
 
@@ -95,7 +94,13 @@ Implementado:
 - Aquecimento calculado a partir da primeira série normal prevista
 - Ramp-up progressivo com múltiplos aquecimentos quando a carga e o exercício justificam
 - AI Coach série a série com ações fechadas e guardrails
-- Scores de fadiga, recuperação e prontidão
+- Scores de fadiga local, fadiga global, estímulo, custo de fadiga, recuperação e prontidão
+- Estados estruturados por exercício: continuar, ajustar carga, backoff, série final, adicionar volume, terminar, safety stop e deload requerido
+- Classificação de exercício por prioridade: principal, secundário, acessório e finisher
+- Regra transversal das 3 séries de trabalho válidas antes de terminar um exercício, salvo risco de segurança
+- Classificação de séries como produtivas, fracas, inválidas por segurança ou aquecimento
+- Classificação contextual da falha: produtiva, aceitável, má ou perigosa
+- Ajuste de carga sempre adaptado à escala real da máquina do exercício
 - Interpretação de feedback do utilizador durante o treino
 - Timer de descanso
 - Dropdowns por dia e por exercício
@@ -118,6 +123,10 @@ Implementado:
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
 - IA externa opcional para decisões durante o treino com OpenAI ou Ollama
 - Demo visual do Sprint 12 em `frontend/public/sprint12-ai-demo.html`
+- Treino experimental obrigatório por exercício quando o atleta ainda não tem dados fiáveis
+- Escala de pesos por atleta e exercício, com placas principais e múltiplas bolachas/extras
+- Bloqueio do treino normal até existir escala da máquina e calibração inicial
+- Botão de check reversível: desfazer uma série apaga o registo e limpa decisões dependentes
 
 Em preparação:
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
@@ -141,6 +150,12 @@ Em preparação:
 - `POST /api/accounts/create-user/`
 - `GET /api/accounts/profiles/`
 - `POST /api/accounts/profiles/`
+- `GET /api/accounts/profiles/<profile_id>/export/`
+
+### Exercises
+- `GET /api/exercises/`
+- `GET /api/exercises/<id>/`
+- `PATCH /api/exercises/<id>/`
 
 ### Training
 - `POST /api/training/generate-program/`
@@ -151,6 +166,10 @@ Em preparação:
 - `POST /api/training/adaptive-plan/apply/`
 - `GET /api/training/weekly-feedback/<profile_id>/`
 - `GET /api/training/training-blocks/<profile_id>/`
+- `GET /api/training/exercise-calibration/<profile_id>/<training_exercise_id>/`
+- `POST /api/training/exercise-calibration/`
+- `GET /api/training/exercise-weight-scale/<profile_id>/<training_exercise_id>/`
+- `PATCH /api/training/exercise-weight-scale/<profile_id>/<training_exercise_id>/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -158,6 +177,7 @@ Em preparação:
 ### Progression
 - `GET /api/progression/set-logs/`
 - `POST /api/progression/set-logs/`
+- `DELETE /api/progression/set-logs/<id>/`
 - `GET /api/progression/exercise-history/`
 
 ### Recommendations
@@ -610,6 +630,78 @@ Adicional entregue no Sprint 17:
 - Substituição de exercício limitada ao mesmo grupo muscular
 - Bloqueio de trocas depois de existirem séries registadas nesse exercício durante a sessão
 - Foto do exercício apresentada na linha do treino
+
+### Sprint 18 - Calibração Inicial e Motor de Decisão por Exercício
+
+Objetivo:
+Evitar recomendações aleatórias quando o atleta ainda não tem histórico e transformar o primeiro contacto com cada máquina num treino experimental controlado.
+
+Entregue:
+- Modelo `ExerciseCalibration`
+- Modelo `UserExerciseWeightScale`
+- Migrations `training/migrations/0006_exercisecalibration.py` e `training/migrations/0007_userexerciseweightscale.py`
+- Serviço `training/services/exercise_calibration.py`
+- Serviço `training/services/user_exercise_weight_scale.py`
+- Escala de pesos guardada por atleta e exercício, não globalmente no atleta
+- Escala com placas principais e múltiplas bolachas/extras com quantidade e peso decimal
+- Bloqueio do treino normal quando o exercício ainda precisa de calibração
+- Bloqueio do treino experimental até a escala da máquina estar preenchida
+- Protocolo experimental de 3 séries com seleção por cor:
+  - vermelho: falha antes das 8 reps
+  - laranja: entre 9 e 12 reps
+  - amarelo: entre 13 e 14 reps
+  - verde: acima de 15 reps
+- Timer fixo de 2 minutos entre séries experimentais
+- Conclusão da máquina após calibração no dia atual, sem passar automaticamente para treino normal
+- Primeira sessão normal após calibração pré-preenche apenas aquecimento e primeira série de trabalho
+- Séries seguintes são calculadas apenas após o desempenho real da série anterior
+- Botão de check reversível para corrigir séries registadas
+- Endpoint de remoção de `SetLog` para desfazer séries confirmadas
+- Regra especial: desfazer aquecimento não apaga a primeira série normal, porque ela vem do histórico/calibração
+
+Motor de decisão atualizado:
+- Regra central: antes de 3 séries de trabalho válidas, adaptar carga em vez de terminar, salvo segurança
+- Classificação de falha:
+  - `productive_failure`
+  - `acceptable_failure`
+  - `bad_failure`
+  - `danger_failure`
+- Classificação de série:
+  - `valid_productive_set`
+  - `valid_weak_set`
+  - `invalid_safety_set`
+  - `warmup_set`
+- Ajustes de carga por zona relativa à faixa alvo:
+  - muito abaixo: reduzir 25-35%
+  - abaixo: reduzir 10-25%
+  - ligeiramente abaixo: manter ou reduzir 5-10%
+  - dentro da faixa: manter ou pequeno backoff se necessário
+  - acima da faixa: subir progressivamente
+- Todos os pesos recomendados são ajustados à escala real da máquina
+- Estados estruturados do exercício:
+  - `CONTINUE`
+  - `ADJUST_LOAD`
+  - `BACKOFF`
+  - `FINAL_SET`
+  - `ADD_VOLUME`
+  - `END_EXERCISE`
+  - `SAFETY_STOP`
+  - `DELOAD_REQUIRED`
+- Classificação de prioridade do exercício:
+  - `PRIMARY`
+  - `SECONDARY`
+  - `ACCESSORY`
+  - `FINISHER`
+- Limites de séries por prioridade, tipo de exercício e nível do atleta
+- Scores adicionais:
+  - fadiga local
+  - fadiga global
+  - estímulo estimado
+  - custo de fadiga
+  - confiança numérica
+- Guardrails da IA atualizados para impedir que falha no topo da faixa termine o exercício cedo demais
+- Quarta, quinta e sexta séries dependem de prioridade, histórico, fadiga e rácio estímulo/fadiga
+- Testes cobrindo calibração, escala, desfazer séries, falha contextual, limites de volume e estados estruturados
 - Painel de alternativas no frontend com imagem, nome, equipamento e padrão de movimento
 - Testes para alternativas por grupo muscular, troca válida e rejeição de troca inválida
 - Ecrã inicial atualizado com entrada em perfil existente por username
@@ -626,6 +718,25 @@ Adicional entregue no Sprint 17:
 - Recomendações de carga, aquecimento, backoff e progressão ajustadas aos pesos realmente disponíveis na máquina
 - Contexto da IA atualizado com escala de carga do exercício
 - Endpoint de detalhe de exercício para atualizar escala de pesos
+- Regras de progressão da IA revistas:
+  - objetivo central passa a ser 12 reps consistentes com RIR controlado
+  - subir carga exige 12 reps, RIR >= 3, sem falha, sem dor, técnica boa e próximo peso disponível na escala registada
+  - saltos de máquina acima de 10% só são aceites com RIR >= 4
+  - sem escala de pesos registada para o exercício, a IA não inventa incrementos e mantém a carga
+  - 12 reps com RIR 1-2 mantêm a carga para consolidar
+  - menos de 10 reps, falha, RIR 0 ou queda grande de reps baixam carga ou terminam o exercício
+  - falhas recentes no próximo peso bloqueiam nova subida
+  - quando a performance permitiria avaliar subida mas a escala está vazia, a app mantém a carga e pede ao atleta para preencher a escala
+  - séries extra só são sugeridas quando o plano foi cumprido com margem clara e histórico sem excesso de fadiga
+- Guardrails da IA impedem que OpenAI/Ollama subam carga quando o motor local não autorizou progressão
+- Modelo `ExerciseCalibration` para guardar baseline por atleta e exercício
+- Migration `training/migrations/0006_exercisecalibration.py`
+- Serviço `training/services/exercise_calibration.py`
+- Bloqueio do treino normal quando o atleta ainda não tem peso de trabalho fiável no exercício
+- Modo experimental de calibração com registo de peso, reps, RIR e notas
+- Calibração só fica válida quando existe escala de pesos preenchida
+- Recomendações iniciais pós-calibração usam o peso de trabalho estimado em vez de valores genéricos
+- Export JSON inclui calibrações de exercício do atleta
 - Botão temporário "Exportar histórico" no programa do atleta
 - Export JSON do atleta com perfil, programas, treinos, exercícios, sessões, séries, memórias, decisões adaptativas e blocos de treino
 
@@ -675,8 +786,16 @@ SHAPETRONYC/
 
 Decisões atuais:
 - O alvo principal de progressão é 12 reps.
-- O incremento padrão de carga é 2.5kg.
-- Séries abaixo de 12 reps em série normal são tratadas como sinal de falha ou fadiga.
+- Exercícios sem histórico fiável ficam bloqueados para treino normal até existir calibração inicial.
+- A calibração inicial pede escala da máquina e uma ou mais séries experimentais controladas.
+- O peso de trabalho inicial vem da calibração do atleta naquele exercício, não de valores genéricos.
+- A subida de carga exige 12 reps com RIR >= 3, sem falha, sem dor, boa técnica e próximo peso disponível na escala registada do exercício.
+- Sem escala de pesos registada, a IA não cria incrementos de carga ao acaso.
+- Se a performance sugerir possível subida mas a escala estiver vazia, a app pede ao atleta para preencher placas e bolachas antes de decidir.
+- Saltos de carga acima de 10% exigem RIR >= 4.
+- 12 reps com RIR 1-2 mantêm a carga.
+- Menos de 10 reps, falha muscular, RIR 0 ou queda de reps >= 25% são sinal para baixar carga ou terminar o exercício.
+- Séries de 10-11 reps sem falha consolidam antes de progredir.
 - Séries de aquecimento não devem gerar progressão direta de carga.
 - Drop sets são registadas, mas não são usadas como base principal para progressão do próximo treino.
 

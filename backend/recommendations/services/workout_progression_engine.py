@@ -1,4 +1,5 @@
 from exercises.services.weight_scale import (
+    get_exercise_weight_scale,
     next_available_weight,
     previous_available_weight,
     snap_to_available_weight,
@@ -7,6 +8,7 @@ from exercises.services.weight_scale import (
 TARGET_REPS = 12
 WEIGHT_STEP = 2.5
 MIN_COMPLETION_RATIO_FOR_LOAD_INCREASE = 0.66
+LARGE_MACHINE_JUMP_RATIO = 0.10
 
 
 def round_recommended_weight(weight):
@@ -51,14 +53,49 @@ def set_missed_target(set_log):
     reps = number_or_none(set_log.get("reps_completed"))
     rir = number_or_none(set_log.get("rir"))
 
-    return bool(set_log.get("reached_failure")) or reps is not None and reps < TARGET_REPS or rir is not None and rir <= 1
+    return bool(set_log.get("reached_failure")) or reps is not None and reps < 10 or rir is not None and rir <= 0
 
 
 def set_has_reserve(set_log):
     reps = number_or_none(set_log.get("reps_completed"))
     rir = number_or_none(set_log.get("rir"))
 
-    return reps is not None and reps >= TARGET_REPS and rir is not None and rir >= 2
+    return reps is not None and reps >= TARGET_REPS and rir is not None and rir >= 3 and not bool(set_log.get("reached_failure"))
+
+
+def is_machine_or_stack_exercise(exercise):
+    equipment = str(getattr(exercise, "equipment", "") or "").lower()
+
+    return any(keyword in equipment for keyword in ["machine", "máquina", "maquina", "cable", "polia"])
+
+
+def next_weight_available(weight, exercise):
+    scale = get_exercise_weight_scale(exercise)
+
+    if scale["configured"]:
+        return next_available_weight(weight, exercise) > weight
+
+    return False
+
+
+def weight_scale_missing(exercise):
+    return not get_exercise_weight_scale(exercise)["configured"]
+
+
+def next_weight_jump_ratio(weight, exercise):
+    next_weight = next_available_weight(weight, exercise)
+
+    if not weight or next_weight <= weight:
+        return 0
+
+    return (next_weight - weight) / weight
+
+
+def clean_completed_target_sets(working_sets):
+    return [
+        set_log for set_log in working_sets
+        if set_has_reserve(set_log)
+    ]
 
 
 def summarize_working_sets(working_sets, planned_sets):
@@ -69,7 +106,7 @@ def summarize_working_sets(working_sets, planned_sets):
         for set_log in working_sets
     ]
     missed_sets = [set_log for set_log in working_sets if set_missed_target(set_log)]
-    reserve_sets = [set_log for set_log in working_sets if set_has_reserve(set_log)]
+    reserve_sets = clean_completed_target_sets(working_sets)
     completed_ratio = round(len(working_sets) / planned_sets, 2) if planned_sets else 0
 
     return {
@@ -166,10 +203,18 @@ def calculate_exercise_progression(training_exercise, current_sets):
             ["Falhas ou misses em metade ou mais das séries normais", "Prioridade: recuperação e qualidade técnica"],
         )
 
-    if (
+    can_increase = (
         len(reserve_sets) == len(working_sets)
-        and completed_ratio >= MIN_COMPLETION_RATIO_FOR_LOAD_INCREASE
-    ):
+        and len(working_sets) >= planned_sets
+        and completed_ratio >= 1
+        and next_weight_available(last_weight, training_exercise.exercise)
+        and (
+            next_weight_jump_ratio(last_weight, training_exercise.exercise) <= LARGE_MACHINE_JUMP_RATIO
+            or all((number_or_none(set_log.get("rir")) or 0) >= 4 for set_log in working_sets)
+        )
+    )
+
+    if can_increase:
         return with_progression_metadata(
             {
                 **base_response,
@@ -179,10 +224,26 @@ def calculate_exercise_progression(training_exercise, current_sets):
                 "target_rir": target_rir,
                 "title": "Sobe carga",
                 "message": "No próximo treino, aumenta a carga mantendo o mesmo volume.",
-                "reason": "As séries normais registadas chegaram às 12 reps com margem e o volume foi suficiente para justificar progressão.",
+                "reason": "Todas as séries normais planeadas chegaram às 12 reps com RIR suficiente e existe próximo peso disponível.",
             },
             summary,
-            ["Todas as séries normais registadas chegaram ao alvo", "RIR com margem", "Volume suficiente para progressão"],
+            ["Todas as séries normais planeadas chegaram ao alvo", "RIR >= 3", "Próximo peso disponível respeitado"],
+        )
+
+    if len(reserve_sets) == len(working_sets) and weight_scale_missing(training_exercise.exercise):
+        return with_progression_metadata(
+            {
+                **base_response,
+                "action": "maintain_load",
+                "recommended_weight": snap_to_available_weight(last_weight, training_exercise.exercise),
+                "recommended_sets": planned_sets,
+                "target_rir": target_rir,
+                "title": "Regista a escala",
+                "message": "A performance sugere possível progressão, mas primeiro é preciso preencher a escala de pesos deste exercício.",
+                "reason": "Sem pesos disponíveis registados, a IA não pode confirmar qual é o próximo salto real.",
+            },
+            summary,
+            ["Séries com margem", "Subida bloqueada por escala de pesos em falta"],
         )
 
     if len(reserve_sets) == len(working_sets):
@@ -194,11 +255,11 @@ def calculate_exercise_progression(training_exercise, current_sets):
                 "recommended_sets": planned_sets,
                 "target_rir": target_rir,
                 "title": "Confirma volume",
-                "message": "A performance foi boa, mas faltam séries suficientes para subir com confiança. Repete a carga no próximo treino.",
-                "reason": "O exercício teve margem, mas o volume registado ficou abaixo do mínimo para uma progressão segura.",
+                "message": "A performance foi boa, mas ainda não cumpre todos os critérios para subir. Repete a carga no próximo treino.",
+                "reason": "A subida só acontece com todas as séries planeadas completas, RIR suficiente e próximo peso disponível.",
             },
             summary,
-            ["Séries com margem", "Volume registado insuficiente para subir carga"],
+            ["Séries com margem", "Critérios completos de progressão ainda não foram cumpridos"],
         )
 
     if missed_sets:

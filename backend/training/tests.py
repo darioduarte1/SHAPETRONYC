@@ -11,10 +11,12 @@ from progression.models import SetLog
 from training.models import (
     AdaptivePlanDecision,
     AthleteTrainingMemory,
+    ExerciseCalibration,
     TrainingBlock,
     TrainingProgram,
     TrainingWorkout,
     TrainingWorkoutExercise,
+    UserExerciseWeightScale,
     WorkoutSession,
 )
 from training.services.athlete_dashboard import build_athlete_dashboard
@@ -92,6 +94,206 @@ class AthleteDashboardTests(TestCase):
         )
 
         return session
+
+    def test_new_exercise_history_requires_calibration(self):
+        self.exercise.main_weight_options = [20, 30, 40]
+        self.exercise.micro_weight_options = [1, 2]
+        self.exercise.save(update_fields=["main_weight_options", "micro_weight_options"])
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="IN_PROGRESS",
+        )
+        client = APIClient()
+
+        response = client.get(
+            "/api/progression/exercise-history/",
+            {
+                "profile_id": self.profile.id,
+                "exercise_id": self.exercise.id,
+                "training_exercise_id": self.training_exercise.id,
+                "session_id": session.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["calibration"]["needs_calibration"])
+        self.assertEqual(response.data["calibration"]["reason"], "scale_required")
+        self.assertFalse(response.data["calibration"]["scale_configured"])
+        self.assertEqual(response.data["calibration"]["scale"]["main_weight_options"], [])
+        self.assertEqual(response.data["calibration"]["next_step"]["action"], "fill_scale")
+
+    def test_weight_scale_endpoint_stores_scale_for_current_athlete_only(self):
+        other_user = User.objects.create_user(username="other_scale_user")
+        other_profile = UserProfile.objects.create(
+            user=other_user,
+            gender="MALE",
+            age=30,
+            height_cm=180,
+            weight_kg=80,
+            goal="HYPERTROPHY",
+            level="BEGINNER",
+            training_experience="LESS_THAN_ONE",
+            days_per_week=3,
+        )
+        TrainingProgram.objects.create(
+            user=other_user,
+            name="Other Program",
+            goal="HYPERTROPHY",
+            level="BEGINNER",
+            days_per_week=3,
+        )
+        client = APIClient()
+
+        response = client.patch(
+            f"/api/training/exercise-weight-scale/{self.profile.id}/{self.training_exercise.id}/",
+            {
+                "main_weight_options": [20, 30, 40],
+                "micro_weight_options": [1, 2],
+            },
+            format="json",
+        )
+        own_history = client.get(
+            "/api/progression/exercise-history/",
+            {
+                "profile_id": self.profile.id,
+                "exercise_id": self.exercise.id,
+                "training_exercise_id": self.training_exercise.id,
+            },
+        )
+        other_history = client.get(
+            "/api/progression/exercise-history/",
+            {
+                "profile_id": other_profile.id,
+                "exercise_id": self.exercise.id,
+                "training_exercise_id": self.training_exercise.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["main_weight_options"], [20.0, 30.0, 40.0])
+        self.assertTrue(own_history.data["calibration"]["scale_configured"])
+        self.assertFalse(other_history.data["calibration"]["scale_configured"])
+
+    def test_calibration_endpoint_requires_scale_before_storing_baseline(self):
+        client = APIClient()
+
+        response = client.post(
+            "/api/training/exercise-calibration/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "weight_used": 40,
+                "result_color": "orange",
+                "rir": 3,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["reason"], "scale_required")
+        self.assertEqual(ExerciseCalibration.objects.count(), 0)
+
+    def test_working_set_api_is_blocked_until_exercise_is_calibrated(self):
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="IN_PROGRESS",
+        )
+        client = APIClient()
+
+        response = client.post(
+            "/api/progression/set-logs/",
+            {
+                "user": self.user.id,
+                "workout_session": session.id,
+                "training_exercise": self.training_exercise.id,
+                "exercise": self.exercise.id,
+                "set_number": 1,
+                "set_type": "WORKING",
+                "weight_used": 40,
+                "target_min_reps": 10,
+                "target_max_reps": 12,
+                "reps_completed": 12,
+                "rir": 2,
+                "reached_failure": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("calibration", response.data)
+        self.assertEqual(response.data["reason"][0], "scale_required")
+
+    def test_calibrated_exercise_unlocks_initial_recommended_sets(self):
+        UserExerciseWeightScale.objects.create(
+            user=self.user,
+            exercise=self.exercise,
+            main_weight_options=[20, 30, 40, 50],
+            micro_weight_options=[1, 2],
+        )
+        client = APIClient()
+
+        first_response = client.post(
+            "/api/training/exercise-calibration/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "weight_used": 40,
+                "result_color": "green",
+                "rir": 0,
+                "reached_failure": True,
+            },
+            format="json",
+        )
+        second_response = client.post(
+            "/api/training/exercise-calibration/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "weight_used": first_response.data["next_step"]["recommended_weight"],
+                "result_color": "orange",
+                "rir": 0,
+                "reached_failure": True,
+            },
+            format="json",
+        )
+        calibration_response = client.post(
+            "/api/training/exercise-calibration/",
+            {
+                "profile_id": self.profile.id,
+                "training_exercise_id": self.training_exercise.id,
+                "weight_used": second_response.data["next_step"]["recommended_weight"],
+                "result_color": "orange",
+                "rir": 0,
+                "reached_failure": True,
+            },
+            format="json",
+        )
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="IN_PROGRESS",
+        )
+        history_response = client.get(
+            "/api/progression/exercise-history/",
+            {
+                "profile_id": self.profile.id,
+                "exercise_id": self.exercise.id,
+                "training_exercise_id": self.training_exercise.id,
+                "session_id": session.id,
+            },
+        )
+
+        self.assertEqual(calibration_response.status_code, 200)
+        self.assertFalse(calibration_response.data["needs_calibration"])
+        self.assertEqual(calibration_response.data["set_count"], 3)
+        self.assertEqual(calibration_response.data["next_step"]["action"], "calibration_complete")
+        self.assertFalse(history_response.data["calibration"]["needs_calibration"])
+        self.assertEqual(len(history_response.data["recommended_sets"]), 2)
+        self.assertEqual(history_response.data["recommended_sets"][0]["set_type"], "WARMUP")
+        self.assertEqual(history_response.data["recommended_sets"][1]["set_type"], "WORKING")
+        self.assertEqual(history_response.data["recommended_sets"][1]["source"], "exercise_calibration")
 
     def test_dashboard_summarizes_volume_progression_and_watchlist(self):
         self.create_completed_session(days_ago=14, weight=50, reps=12, rir=3)

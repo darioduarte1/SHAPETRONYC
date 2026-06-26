@@ -413,25 +413,16 @@ def build_history_based_recommended_sets(
     ]
     warmup_count = len(warmup_sets)
 
-    for set_number in range(1, planned_working_sets + 1):
-        if set_number == 1:
-            set_recommendation = first_working_set
-        else:
-            set_recommendation = {
-                **first_working_set,
-                "reason": "Esta série começa pela previsão do histórico e será ajustada depois das séries anteriores de hoje.",
-                "decision_basis": [
-                    *first_working_set.get("decision_basis", []),
-                    "Será recalculada com o desempenho da sessão atual",
-                ],
-            }
-
-        recommended_sets.append(
-            {
-                "set_number": warmup_count + set_number,
-                "set_type": "WORKING",
-                **set_recommendation,
-            }
-        )
+    recommended_sets.append(
+        {
+            "set_number": warmup_count + 1,
+            "set_type": "WORKING",
+            **first_working_set,
+            "decision_basis": [
+                *first_working_set.get("decision_basis", []),
+                "Só a primeira série normal é pré-preenchida no início do treino",
+            ],
+        }
+    )
 
     return recommended_sets

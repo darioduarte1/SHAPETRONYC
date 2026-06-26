@@ -7,9 +7,11 @@ from accounts.models import UserProfile
 from exercises.models import Exercise
 from progression.models import SetLog
 from training.models import (
+    ExerciseCalibration,
     TrainingProgram,
     TrainingWorkout,
     TrainingWorkoutExercise,
+    UserExerciseWeightScale,
     WorkoutSession,
 )
 
@@ -95,6 +97,10 @@ class UserProfileEndpointTests(TestCase):
             equipment="Machine",
             movement_pattern="HORIZONTAL_PUSH",
             is_compound=True,
+        )
+        UserExerciseWeightScale.objects.create(
+            user=user,
+            exercise=exercise,
             main_weight_options=[10, 20, 30],
             micro_weight_options=[1, 2],
         )
@@ -124,6 +130,21 @@ class UserProfileEndpointTests(TestCase):
             rir=2,
             reached_failure=False,
         )
+        ExerciseCalibration.objects.create(
+            user=user,
+            exercise=exercise,
+            status="CALIBRATED",
+            estimated_working_weight=20,
+            confidence="média",
+            calibration_sets=[
+                {
+                    "weight_used": 20,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                }
+            ],
+        )
 
         response = self.client.get(f"/api/accounts/profiles/{profile.id}/export/")
 
@@ -138,3 +159,4 @@ class UserProfileEndpointTests(TestCase):
             data["programs"][0]["workouts"][0]["exercises"][0]["main_weight_options"],
             [10, 20, 30],
         )
+        self.assertEqual(data["exercise_calibrations"][0]["estimated_working_weight"], 20)

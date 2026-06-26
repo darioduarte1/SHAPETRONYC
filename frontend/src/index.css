@@ -144,6 +144,124 @@ p {
   background: rgba(22, 163, 74, 0.18);
 }
 
+.exercise-calibration-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.18);
+  text-align: left;
+}
+
+.exercise-calibration-copy,
+.exercise-calibration-estimate {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.exercise-calibration-color-scale {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.exercise-calibration-color-chip {
+  min-height: 54px;
+  padding: 8px;
+  border: 1px solid;
+  border-radius: 7px;
+  font-size: 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exercise-calibration-color-chip strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+
+.exercise-calibration-color-chip.selected {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.exercise-calibration-color-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.exercise-calibration-color-chip.red {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+.exercise-calibration-color-chip.orange {
+  border-color: rgba(251, 146, 60, 0.45);
+  background: rgba(154, 52, 18, 0.26);
+  color: #fed7aa;
+}
+
+.exercise-calibration-color-chip.yellow {
+  border-color: rgba(250, 204, 21, 0.45);
+  background: rgba(113, 63, 18, 0.24);
+  color: #fef08a;
+}
+
+.exercise-calibration-color-chip.green {
+  border-color: rgba(74, 222, 128, 0.45);
+  background: rgba(20, 83, 45, 0.25);
+  color: #bbf7d0;
+}
+
+.exercise-calibration-warning {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 8px;
+  color: #fde68a;
+  background: rgba(113, 63, 18, 0.24);
+}
+
+.exercise-calibration-warning button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 7px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fef3c7;
+  cursor: pointer;
+}
+
+.exercise-calibration-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exercise-calibration-history span {
+  padding: 6px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 7px;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.46);
+  font-size: 13px;
+}
+
+.exercise-calibration-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .home-hero-panel,
 .home-action-card {
   border: 1px solid rgba(148, 163, 184, 0.24);
@@ -673,6 +791,49 @@ p {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.exercise-micro-weight-list {
+  display: grid;
+  gap: 8px;
+}
+
+.exercise-micro-weight-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.6fr) minmax(92px, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.exercise-micro-weight-row input {
+  width: 100%;
+}
+
+.exercise-micro-weight-remove {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 7px;
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecaca;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.exercise-micro-weight-add {
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(125, 211, 252, 0.38);
+  border-radius: 7px;
+  background: rgba(14, 165, 233, 0.14);
+  color: #e0f2fe;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .exercise-scale-save-button {

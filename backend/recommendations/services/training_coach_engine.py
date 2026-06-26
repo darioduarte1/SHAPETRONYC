@@ -3,6 +3,7 @@ import re
 from exercises.services.weight_scale import (
     get_exercise_weight_scale,
     next_available_weight,
+    previous_available_weight,
     snap_to_available_weight,
 )
 
@@ -15,12 +16,21 @@ HIGH_READINESS_SCORE = 70
 MEDIUM_READINESS_SCORE = 50
 MAX_EXTRA_PRODUCTIVE_SETS = 1
 MIN_WORKING_SETS_BEFORE_STOP = 2
+LARGE_MACHINE_JUMP_RATIO = 0.10
+LOW_RISK_MOVEMENT_PATTERNS = {"isolation"}
+LOW_RISK_EQUIPMENT_KEYWORDS = {"dumbbell", "halter", "cable", "polia"}
+PRIMARY_PATTERNS = {"horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull", "squat", "hinge"}
+ACCESSORY_PATTERNS = {"isolation", "core"}
+FINISHER_KEYWORDS = {"fly", "pushdown", "curl", "raise", "extension", "calf", "crunch"}
+SAFE_ACCESSORY_KEYWORDS = {"pec deck", "lateral raise", "leg extension", "leg curl", "triceps", "biceps", "calf"}
 
 ALLOWED_ACTIONS = {
     "increase_weight",
     "maintain_weight",
     "decrease_weight",
     "add_set",
+    "maintain_or_small_backoff",
+    "small_backoff",
     "stop_exercise",
     "do_backoff_set",
     "skip_backoff_set",
@@ -29,6 +39,17 @@ ALLOWED_ACTIONS = {
     "increase_volume",
     "flag_pain_or_risk",
     "suggest_exercise_replacement",
+}
+
+EXERCISE_STATES = {
+    "CONTINUE",
+    "ADJUST_LOAD",
+    "BACKOFF",
+    "FINAL_SET",
+    "ADD_VOLUME",
+    "END_EXERCISE",
+    "SAFETY_STOP",
+    "DELOAD_REQUIRED",
 }
 
 PAIN_OR_RISK_KEYWORDS = [
@@ -106,6 +127,18 @@ NO_INCREASE_KEYWORDS = [
     "nao aumentes",
 ]
 
+POSITIVE_FEEDBACK_KEYWORDS = [
+    "fácil",
+    "facil",
+    "controlado",
+    "podia fazer mais",
+    "boa técnica",
+    "boa tecnica",
+    "leve",
+    "energia boa",
+    "senti bem",
+]
+
 
 def normalize_text(value):
     return str(value or "").lower().strip()
@@ -145,6 +178,10 @@ def has_stop_request(notes):
 
 def has_no_increase_request(notes):
     return notes_include(notes, NO_INCREASE_KEYWORDS)
+
+
+def has_positive_feedback(notes):
+    return notes_include(notes, POSITIVE_FEEDBACK_KEYWORDS)
 
 
 def has_negative_feedback(notes):
@@ -208,7 +245,32 @@ def is_working_set(set_log):
 def set_reached_failure(set_log, target_min_reps=DEFAULT_TARGET_MIN_REPS):
     reps = number_or_none(set_log.get("reps_completed"))
 
-    return bool(set_log.get("reached_failure")) or reps is not None and reps < target_min_reps
+    return reps is not None and reps < target_min_reps
+
+
+def classify_failure(reps, is_failure, notes, target_min_reps, target_max_reps, context=None):
+    if has_pain_or_risk(notes) or has_bad_technique(notes) or has_stop_request(notes):
+        return "danger_failure"
+
+    if not is_failure:
+        if reps < target_min_reps:
+            return "bad_failure"
+
+        return "none"
+
+    performance_drop = context.get("performance_drop_percent", 0) if context else 0
+
+    if reps >= target_max_reps and performance_drop < 30:
+        return "productive_failure"
+
+    if reps >= target_min_reps and performance_drop < 30:
+        return "acceptable_failure"
+
+    return "bad_failure"
+
+
+def failure_is_bad(failure_class):
+    return failure_class in {"bad_failure", "danger_failure"}
 
 
 def set_has_reserve(set_log, target_max_reps=DEFAULT_TARGET_MAX_REPS, target_rir=DEFAULT_TARGET_RIR):
@@ -224,8 +286,48 @@ def set_has_reserve(set_log, target_max_reps=DEFAULT_TARGET_MAX_REPS, target_rir
     )
 
 
+def set_is_target_with_rir(set_log, minimum_rir, target_max_reps=DEFAULT_TARGET_MAX_REPS):
+    reps = number_or_none(set_log.get("reps_completed"))
+    rir = number_or_none(set_log.get("rir"))
+
+    return (
+        reps is not None
+        and reps >= target_max_reps
+        and rir is not None
+        and rir >= minimum_rir
+        and not bool(set_log.get("reached_failure"))
+    )
+
+
+def classify_set_validity(set_log):
+    if set_log.get("set_type") == "WARMUP":
+        return "warmup_set"
+
+    notes = " ".join([
+        str(set_log.get("notes", "")),
+        str(set_log.get("session_notes", "")),
+    ])
+    reps = number_or_none(set_log.get("reps_completed")) or 0
+
+    if has_pain_or_risk(notes) or has_bad_technique(notes) or has_stop_request(notes):
+        return "invalid_safety_set"
+
+    if reps <= 3 and not bool(set_log.get("reached_failure")):
+        return "valid_weak_set" if has_positive_feedback(notes) else "invalid_safety_set"
+
+    if reps < DEFAULT_TARGET_MIN_REPS:
+        return "valid_weak_set"
+
+    return "valid_productive_set"
+
+
+def is_valid_working_set(set_log):
+    return classify_set_validity(set_log) in {"valid_productive_set", "valid_weak_set"}
+
+
 def summarize_working_sets(sets, target_min_reps, target_max_reps, target_rir):
     working_sets = [set_log for set_log in sets if is_working_set(set_log)]
+    valid_working_sets = [set_log for set_log in working_sets if is_valid_working_set(set_log)]
     missed_sets = [
         set_log
         for set_log in working_sets
@@ -243,6 +345,7 @@ def summarize_working_sets(sets, target_min_reps, target_max_reps, target_rir):
 
     return {
         "working_set_count": len(working_sets),
+        "valid_working_set_count": len(valid_working_sets),
         "missed_set_count": len(missed_sets),
         "reserve_set_count": len(reserve_sets),
         "failure_count": len([set_log for set_log in working_sets if set_log.get("reached_failure")]),
@@ -316,6 +419,35 @@ def summarize_history(history_sets, target_min_reps, target_max_reps, target_rir
     }
 
 
+def count_recent_failures_at_weight(history_sets, weight):
+    target_weight = number_or_none(weight)
+
+    if target_weight is None:
+        return 0
+
+    matching_sets = [
+        set_log for set_log in history_sets[:60]
+        if is_working_set(set_log)
+        and number_or_none(set_log.get("weight_used")) == target_weight
+    ]
+
+    return len([
+        set_log for set_log in matching_sets
+        if (number_or_none(set_log.get("reps_completed")) or 0) < DEFAULT_TARGET_MIN_REPS
+    ])
+
+
+def best_current_working_reps(current_sets):
+    reps_values = [
+        number_or_none(set_log.get("reps_completed"))
+        for set_log in current_sets
+        if is_working_set(set_log)
+    ]
+    clean_values = [value for value in reps_values if value is not None]
+
+    return max(clean_values) if clean_values else None
+
+
 def find_previous_matching_set(previous_sets, set_number):
     if set_number is None:
         return None
@@ -378,6 +510,7 @@ def build_exercise_context(
     target_rir,
 ):
     working_sets = [set_log for set_log in current_sets if is_working_set(set_log)]
+    valid_working_sets = [set_log for set_log in working_sets if is_valid_working_set(set_log)]
     consecutive_working_misses = 0
 
     for set_log in reversed(working_sets):
@@ -391,6 +524,7 @@ def build_exercise_context(
     return {
         "completed_set_count": len(current_sets),
         "working_set_count": len(working_sets),
+        "valid_working_set_count": len(valid_working_sets),
         "consecutive_working_misses": consecutive_working_misses,
         "previous_working_set": working_sets[-2] if len(working_sets) >= 2 else None,
         "last_two_working_sets": working_sets[-2:],
@@ -408,18 +542,26 @@ def build_exercise_context(
             previous_matching_set,
         ),
         "previous_matching_set": previous_matching_set,
+        "best_current_reps": best_current_working_reps(current_sets),
     }
 
 
-def calculate_fatigue_score(reps, rir, is_failure, notes, context, target_min_reps, target_rir, planned_sets):
+def calculate_fatigue_score(reps, rir, is_failure, notes, context, target_min_reps, target_max_reps, target_rir, planned_sets):
     score = 20
     performance_drop = context["performance_drop_percent"]
+    failure_class = classify_failure(reps, is_failure, notes, target_min_reps, target_max_reps, context)
 
     if reps < target_min_reps:
         score += 20
 
-    if is_failure:
+    if failure_class == "productive_failure":
+        score += 8
+    elif failure_class == "acceptable_failure":
+        score += 12
+    elif failure_class == "bad_failure":
         score += 20
+    elif failure_class == "danger_failure":
+        score += 40
 
     if rir is not None:
         if rir <= 0 and target_rir >= 2:
@@ -450,6 +592,7 @@ def calculate_fatigue_score(reps, rir, is_failure, notes, context, target_min_re
 
 def calculate_readiness_score(reps, rir, is_failure, notes, context, target_min_reps, target_max_reps, target_rir):
     score = 55
+    failure_class = classify_failure(reps, is_failure, notes, target_min_reps, target_max_reps, context)
 
     if reps >= target_max_reps:
         score += 15
@@ -458,8 +601,14 @@ def calculate_readiness_score(reps, rir, is_failure, notes, context, target_min_
     else:
         score -= 24
 
-    if is_failure:
+    if failure_class == "productive_failure":
+        score -= 8
+    elif failure_class == "acceptable_failure":
+        score -= 12
+    elif failure_class == "bad_failure":
         score -= 22
+    elif failure_class == "danger_failure":
+        score -= 40
 
     if rir is not None:
         if rir >= target_rir + 1:
@@ -540,11 +689,185 @@ def confidence_from_scores(readiness_score, fatigue_score, recovery_score):
     return "baixa"
 
 
+def confidence_score_from_label(confidence):
+    return {
+        "alta": 0.87,
+        "média": 0.68,
+        "baixa": 0.48,
+    }.get(confidence, 0.5)
+
+
+def classify_exercise_priority(exercise_context, session_context=None):
+    explicit_priority = normalize_text(exercise_context.get("exercise_priority"))
+
+    if explicit_priority in {"primary", "secondary", "accessory", "finisher"}:
+        return explicit_priority.upper()
+
+    movement_pattern = normalize_text(exercise_context.get("movement_pattern"))
+    equipment = normalize_text(exercise_context.get("equipment"))
+    exercise_name = normalize_text(exercise_context.get("exercise_name"))
+    is_compound = bool(exercise_context.get("is_compound"))
+    order = int_or_default(
+        (session_context or {}).get("exercise_order_in_workout") or exercise_context.get("exercise_order_in_workout"),
+        0,
+    )
+
+    if any(keyword in exercise_name for keyword in FINISHER_KEYWORDS) and not is_compound:
+        return "FINISHER" if order >= 5 else "ACCESSORY"
+
+    if is_compound and movement_pattern in PRIMARY_PATTERNS:
+        return "PRIMARY" if order <= 2 or order == 0 else "SECONDARY"
+
+    if movement_pattern in ACCESSORY_PATTERNS or any(keyword in equipment for keyword in ["cable", "polia", "machine", "máquina", "maquina"]):
+        return "ACCESSORY"
+
+    return "SECONDARY"
+
+
+def classify_exercise_type(exercise_context):
+    if exercise_context.get("exercise_type"):
+        return str(exercise_context.get("exercise_type")).upper()
+
+    if bool(exercise_context.get("is_compound")):
+        return "COMPOUND"
+
+    if is_low_risk_exercise(exercise_context):
+        return "ISOLATION"
+
+    return "MACHINE" if is_machine_or_stack_exercise(exercise_context) else "GENERAL"
+
+
+def maximum_allowed_sets(exercise_priority, user_context, exercise_context):
+    level = normalize_text(user_context.get("level"))
+    goal = normalize_text(user_context.get("goal"))
+    exercise_name = normalize_text(exercise_context.get("exercise_name"))
+    is_specialization = "special" in goal or notes_include(user_context.get("goal", ""), ["prioridade", "especialização", "especializacao"])
+
+    if exercise_priority == "PRIMARY":
+        return 5 if level == "advanced" else 4
+
+    if exercise_priority == "SECONDARY":
+        return 5 if level == "advanced" else 4
+
+    if exercise_priority == "ACCESSORY":
+        if level in {"intermediate", "advanced"} and (
+            is_specialization or any(keyword in exercise_name for keyword in SAFE_ACCESSORY_KEYWORDS)
+        ):
+            return 6
+        return 5
+
+    if exercise_priority == "FINISHER":
+        return 5 if level in {"intermediate", "advanced"} else 4
+
+    return 4
+
+
+def calculate_global_fatigue_score(notes, context, session_context, exercise_context):
+    total_sets = int_or_default(session_context.get("total_sets_completed_in_session"), 0)
+    score = min(total_sets * 3, 45)
+    score += int(context["history_analysis"]["failure_rate"] * 15)
+
+    if bool(exercise_context.get("is_compound")):
+        score += 8
+
+    if has_strong_fatigue(notes) or notes_include(session_context.get("session_notes", ""), STRONG_FATIGUE_KEYWORDS):
+        score += 25
+
+    if has_pain_or_risk(notes) or has_bad_technique(notes):
+        score += 35
+
+    return clamp(score, 0, 100)
+
+
+def calculate_stimulus_score(reps, rir, is_failure, notes, context, target_min_reps, target_max_reps, exercise_priority):
+    if has_pain_or_risk(notes) or has_bad_technique(notes):
+        return 0
+
+    score = 35
+
+    if reps >= target_max_reps:
+        score += 25
+    elif reps >= target_min_reps:
+        score += 18
+    elif reps >= max(1, target_min_reps * 0.7):
+        score += 10
+    else:
+        score += 4
+
+    if is_failure:
+        score += 8 if reps >= target_min_reps else 4
+
+    if rir is not None and 0 <= rir <= 3:
+        score += 12
+    elif rir is not None and rir >= 4:
+        score += 4
+
+    if exercise_priority in {"PRIMARY", "SECONDARY"}:
+        score += 5
+
+    if context["performance_drop_percent"] >= 25:
+        score -= 15
+
+    return clamp(score, 0, 100)
+
+
+def calculate_fatigue_cost(fatigue_score, global_fatigue_score, is_failure, context):
+    cost = round(fatigue_score * 0.65 + global_fatigue_score * 0.35)
+
+    if is_failure:
+        cost += 8
+
+    if context["performance_drop_percent"] >= 25:
+        cost += 10
+
+    return clamp(cost, 0, 100)
+
+
+def next_set_still_worthwhile(stimulus_score, fatigue_cost, exercise_priority, valid_working_sets, minimum_valid_sets):
+    if valid_working_sets < minimum_valid_sets:
+        return True
+
+    threshold = 8 if exercise_priority in {"PRIMARY", "SECONDARY"} else 16
+
+    return (stimulus_score - fatigue_cost) >= threshold
+
+
+def derive_exercise_state(decision, valid_working_sets, minimum_valid_sets, maximum_sets, stimulus_score, fatigue_cost):
+    if decision.get("action") == "flag_pain_or_risk":
+        return "SAFETY_STOP"
+
+    if decision.get("exercise_status") == "complete" or decision.get("stop_exercise"):
+        return "END_EXERCISE"
+
+    if valid_working_sets >= maximum_sets:
+        return "END_EXERCISE"
+
+    if decision.get("do_backoff_set") or decision.get("next_set_type") == "DROP":
+        return "BACKOFF"
+
+    if decision.get("action") in {"decrease_weight", "increase_weight", "maintain_or_small_backoff", "small_backoff"}:
+        return "ADJUST_LOAD"
+
+    if valid_working_sets >= minimum_valid_sets and decision.get("add_set"):
+        return "ADD_VOLUME" if (stimulus_score - fatigue_cost) >= 0 else "FINAL_SET"
+
+    if valid_working_sets == minimum_valid_sets - 1:
+        return "FINAL_SET"
+
+    return "CONTINUE"
+
+
 def public_context(context, previous_sets, planned_sets):
     return {
         "completed_set_count": context["completed_set_count"],
         "working_set_count": context["working_set_count"],
+        "valid_working_sets": context.get("valid_working_set_count", context["working_set_count"]),
         "planned_sets": planned_sets,
+        "minimum_valid_sets": context.get("minimum_valid_sets", planned_sets),
+        "maximum_allowed_sets": context.get("maximum_allowed_sets", planned_sets + MAX_EXTRA_PRODUCTIVE_SETS),
+        "exercise_priority": context.get("exercise_priority"),
+        "exercise_type": context.get("exercise_type"),
+        "failure_class": context.get("failure_class", "none"),
         "consecutive_working_misses": context["consecutive_working_misses"],
         "previous_history_count": len(previous_sets),
         "performance_drop_percent": context["performance_drop_percent"],
@@ -583,8 +906,31 @@ def with_decision_metadata(
         add_set = False
         do_backoff_set = False
 
+    confidence = confidence_from_scores(readiness_score, fatigue_score, recovery_score)
+    valid_working_sets = context.get("valid_working_set_count", context["working_set_count"])
+    minimum_valid_sets = context.get("minimum_valid_sets", planned_sets)
+    maximum_sets = context.get("maximum_allowed_sets", planned_sets + MAX_EXTRA_PRODUCTIVE_SETS)
+    stimulus_score = decision.get("stimulus_score", context.get("stimulus_score", readiness_score))
+    global_fatigue_score = decision.get("global_fatigue_score", context.get("global_fatigue_score", 0))
+    fatigue_cost = decision.get("fatigue_cost", context.get("fatigue_cost", fatigue_score))
+    exercise_state = decision.get("exercise_state") or derive_exercise_state(
+        {
+            **decision,
+            "add_set": add_set,
+            "stop_exercise": stop_exercise,
+            "do_backoff_set": do_backoff_set,
+            "action": action,
+        },
+        valid_working_sets,
+        minimum_valid_sets,
+        maximum_sets,
+        stimulus_score,
+        fatigue_cost,
+    )
+
     return {
         **decision,
+        "exercise_state": exercise_state if exercise_state in EXERCISE_STATES else "CONTINUE",
         "action": action,
         "target_reps": decision.get("target_reps", target_max_reps),
         "target_reps_label": target_reps_label(target_min_reps, target_max_reps),
@@ -593,10 +939,18 @@ def with_decision_metadata(
         "stop_exercise": stop_exercise,
         "do_backoff_set": do_backoff_set,
         "backoff_weight": decision.get("backoff_weight"),
-        "confidence": confidence_from_scores(readiness_score, fatigue_score, recovery_score),
+        "confidence": confidence,
+        "confidence_score": confidence_score_from_label(confidence),
         "readiness_score": readiness_score,
         "fatigue_score": fatigue_score,
+        "local_fatigue_score": fatigue_score,
+        "global_fatigue_score": global_fatigue_score,
+        "stimulus_score": stimulus_score,
+        "fatigue_cost": fatigue_cost,
         "recovery_score": recovery_score,
+        "valid_working_sets": valid_working_sets,
+        "minimum_valid_sets": minimum_valid_sets,
+        "maximum_allowed_sets": maximum_sets,
         "decision_basis": decision_basis,
         "context": public_context(context, previous_sets, planned_sets),
         "guardrails": guardrails or {},
@@ -642,6 +996,82 @@ def reduce_weight(weight, percent):
     return round_recommended_weight(weight * (1 - percent))
 
 
+def reps_zone(reps, target_min_reps, target_max_reps):
+    if reps <= max(1, round(target_min_reps * 0.4)):
+        return "extremely_low"
+
+    if reps <= max(1, round(target_min_reps * 0.6)):
+        return "very_low"
+
+    if reps <= max(1, round(target_min_reps * 0.8)):
+        return "low"
+
+    if reps < target_min_reps:
+        return "slightly_low"
+
+    if reps <= target_max_reps:
+        return "in_range"
+
+    if reps <= target_max_reps + 2:
+        return "above_range"
+
+    if reps <= target_max_reps + 4:
+        return "well_above_range"
+
+    return "too_light"
+
+
+def load_adjustment_ratio(reps, rir, is_failure, target_min_reps, target_max_reps):
+    zone = reps_zone(reps, target_min_reps, target_max_reps)
+
+    if zone == "extremely_low":
+        return -0.30
+
+    if zone == "very_low":
+        return -0.22
+
+    if zone == "low":
+        return -0.12
+
+    if zone == "slightly_low":
+        return -0.08 if is_failure or rir in (None, 0) else 0
+
+    if zone == "in_range":
+        if reps >= target_max_reps and is_failure:
+            return -0.06
+
+        if reps >= target_max_reps and rir is not None and rir >= 2:
+            return 0.04
+
+        if reps == target_min_reps and (is_failure or rir == 0):
+            return -0.05
+
+        if reps >= target_max_reps - 1 and rir is not None and rir >= 3:
+            return 0.03
+
+        return 0
+
+    if zone == "above_range":
+        return 0.06
+
+    if zone == "well_above_range":
+        return 0.09
+
+    return 0.12
+
+
+def adjusted_working_weight(weight, reps, rir, is_failure, target_min_reps, target_max_reps, exercise_context):
+    ratio = load_adjustment_ratio(reps, rir, is_failure, target_min_reps, target_max_reps)
+    direction = "nearest"
+
+    if ratio < 0:
+        direction = "down"
+    elif ratio > 0:
+        direction = "up"
+
+    return snap_to_available_weight(weight * (1 + ratio), exercise_context, direction)
+
+
 def adjust_recommended_weight(weight, exercise_context, direction="nearest"):
     return snap_to_available_weight(weight, exercise_context, direction)
 
@@ -651,6 +1081,185 @@ def increased_working_weight(weight, step, exercise_context):
         return next_available_weight(weight, exercise_context)
 
     return round_recommended_weight(weight + step)
+
+
+def is_machine_or_stack_exercise(exercise_context):
+    equipment = normalize_text(exercise_context.get("equipment"))
+
+    return any(keyword in equipment for keyword in ["machine", "máquina", "maquina", "cable", "polia"])
+
+
+def next_weight_available(weight, exercise_context):
+    scale = get_exercise_weight_scale(exercise_context)
+
+    if scale["configured"]:
+        return next_available_weight(weight, exercise_context) > weight
+
+    return False
+
+
+def weight_scale_missing(exercise_context):
+    return not get_exercise_weight_scale(exercise_context)["configured"]
+
+
+def next_weight_jump_ratio(weight, exercise_context):
+    next_weight = next_available_weight(weight, exercise_context)
+
+    if not weight or next_weight <= weight:
+        return 0
+
+    return (next_weight - weight) / weight
+
+
+def is_low_risk_exercise(exercise_context):
+    movement_pattern = normalize_text(exercise_context.get("movement_pattern"))
+    equipment = normalize_text(exercise_context.get("equipment"))
+
+    if movement_pattern in LOW_RISK_MOVEMENT_PATTERNS:
+        return True
+
+    return any(keyword in equipment for keyword in LOW_RISK_EQUIPMENT_KEYWORDS)
+
+
+def current_working_sets_at_target(context, minimum_rir, target_max_reps):
+    working_sets = [set_log for set_log in context["all_current_sets"] if is_working_set(set_log)]
+
+    if not working_sets:
+        return False
+
+    return all(
+        set_is_target_with_rir(set_log, minimum_rir, target_max_reps)
+        for set_log in working_sets
+    )
+
+
+def can_increase_working_weight(weight, reps, rir, is_failure, notes, context, history_sets, exercise_context, target_max_reps):
+    if reps < target_max_reps or rir is None or rir < 3:
+        return False
+
+    if is_failure or has_negative_feedback(notes):
+        return False
+
+    if context["performance_drop_percent"] >= 15:
+        return False
+
+    if context["history_signal"] == "regressing" or context["history_analysis"]["trend"] == "regression":
+        return False
+
+    if not next_weight_available(weight, exercise_context):
+        return False
+
+    if next_weight_jump_ratio(weight, exercise_context) > LARGE_MACHINE_JUMP_RATIO and rir < 4:
+        return False
+
+    next_weight = next_available_weight(weight, exercise_context)
+    recent_failures_at_next_weight = count_recent_failures_at_weight(history_sets, next_weight)
+
+    if recent_failures_at_next_weight and (rir < 4 or context["history_analysis"]["trend"] != "positive"):
+        return False
+
+    return True
+
+
+def should_request_weight_scale_before_increase(reps, rir, is_failure, notes, context, exercise_context, target_max_reps):
+    return (
+        reps >= target_max_reps
+        and rir is not None
+        and rir >= 3
+        and not is_failure
+        and not has_negative_feedback(notes)
+        and context["performance_drop_percent"] < 15
+        and context["history_signal"] != "regressing"
+        and context["history_analysis"]["trend"] != "regression"
+        and weight_scale_missing(exercise_context)
+    )
+
+
+def should_decrease_working_weight(reps, rir, is_failure, context, target_min_reps, failure_class):
+    return (
+        reps < target_min_reps
+        or failure_is_bad(failure_class)
+        or (rir is not None and rir <= 0)
+        or context["performance_drop_percent"] >= 25
+    )
+
+
+def should_stop_after_bad_set(context, planned_sets, reps, rir, is_failure, target_min_reps, failure_class):
+    minimum_valid_sets = context.get("minimum_valid_sets", planned_sets)
+
+    if context.get("valid_working_set_count", context["working_set_count"]) < minimum_valid_sets:
+        return False
+
+    rir_zero_count = len([
+        set_log
+        for set_log in context["all_current_sets"]
+        if is_working_set(set_log) and number_or_none(set_log.get("rir")) == 0
+    ])
+
+    if context["consecutive_working_misses"] >= 2:
+        return True
+
+    if rir_zero_count >= 2:
+        return True
+
+    if context["performance_drop_percent"] >= 25:
+        return True
+
+    if failure_is_bad(failure_class) and context["working_set_count"] >= max(1, planned_sets - 1):
+        return True
+
+    return reps < target_min_reps and context["working_set_count"] >= planned_sets
+
+
+def can_add_extra_set(context, planned_sets, exercise_context, target_max_reps):
+    working_sets = [set_log for set_log in context["all_current_sets"] if is_working_set(set_log)]
+    working_count = len(working_sets)
+    valid_working_sets = context.get("valid_working_set_count", working_count)
+    history = context["history_analysis"]
+    maximum_sets = context.get("maximum_allowed_sets", planned_sets + MAX_EXTRA_PRODUCTIVE_SETS)
+    exercise_priority = context.get("exercise_priority", "SECONDARY")
+
+    if valid_working_sets < planned_sets:
+        return True
+
+    if working_count >= maximum_sets:
+        return False
+
+    if context.get("global_fatigue_score", 0) > 80 or context.get("fatigue_cost", 0) > context.get("stimulus_score", 0):
+        return False
+
+    if history["trend"] == "regression" or history["failure_rate"] > 0.2:
+        return False
+
+    if context["current_summary"]["missed_set_count"] or context["failure_class"] in {"bad_failure", "danger_failure"}:
+        return False
+
+    if working_count == planned_sets and planned_sets >= 3:
+        first_sets = working_sets[:2]
+        last_planned_set = working_sets[planned_sets - 1]
+
+        return (
+            exercise_priority in {"PRIMARY", "SECONDARY", "ACCESSORY"}
+            and all(set_is_target_with_rir(set_log, 2, target_max_reps) for set_log in first_sets)
+            and set_is_target_with_rir(last_planned_set, 2, target_max_reps)
+        )
+
+    if working_count >= 4:
+        rir_values = [
+            number_or_none(set_log.get("rir"))
+            for set_log in working_sets
+            if number_or_none(set_log.get("rir")) is not None
+        ]
+
+        return (
+            exercise_priority in {"ACCESSORY", "FINISHER"}
+            and is_low_risk_exercise(exercise_context)
+            and len(rir_values) == working_count
+            and average(rir_values) >= 3
+            and current_working_sets_at_target(context, 2, target_max_reps)
+        )
+
+    return False
 
 
 def backoff_weight(weight, fatigue_score, is_failure, exercise_context):
@@ -695,13 +1304,18 @@ def should_continue_warming_up(weight, context):
 
 def should_stop_exercise(context, planned_sets, readiness_score, fatigue_score):
     working_count = context["working_set_count"]
+    valid_working_sets = context.get("valid_working_set_count", working_count)
     current_summary = context["current_summary"]
     planned_sets = planned_sets or 3
-    max_productive_sets = planned_sets + MAX_EXTRA_PRODUCTIVE_SETS
+    minimum_valid_sets = context.get("minimum_valid_sets", planned_sets)
+    max_productive_sets = context.get("maximum_allowed_sets", planned_sets + MAX_EXTRA_PRODUCTIVE_SETS)
     latest_working_set = context["last_two_working_sets"][-1] if context["last_two_working_sets"] else None
     latest_set_recovered = latest_working_set is not None and set_has_reserve(latest_working_set)
 
     if working_count == 0:
+        return False
+
+    if valid_working_sets < minimum_valid_sets:
         return False
 
     if context["performance_drop_percent"] >= 35:
@@ -731,32 +1345,46 @@ def should_stop_exercise(context, planned_sets, readiness_score, fatigue_score):
 
 def can_add_productive_set(context, planned_sets, readiness_score, fatigue_score, recovery_score, exercise_context):
     working_count = context["working_set_count"]
+    valid_working_sets = context.get("valid_working_set_count", working_count)
     planned_sets = planned_sets or 3
+    maximum_sets = context.get("maximum_allowed_sets", planned_sets + MAX_EXTRA_PRODUCTIVE_SETS)
+    exercise_priority = context.get("exercise_priority", "SECONDARY")
 
-    if working_count < planned_sets:
+    if valid_working_sets < planned_sets:
         return True
 
-    if working_count >= planned_sets + MAX_EXTRA_PRODUCTIVE_SETS:
+    if working_count >= maximum_sets:
         return False
 
-    if bool(exercise_context.get("is_compound")) and working_count >= planned_sets:
+    if exercise_priority == "PRIMARY" and working_count >= 4:
         return False
 
     return (
         readiness_score >= 82
         and fatigue_score < 35
         and recovery_score >= 70
+        and context.get("global_fatigue_score", 0) <= 70
+        and next_set_still_worthwhile(
+            context.get("stimulus_score", readiness_score),
+            context.get("fatigue_cost", fatigue_score),
+            exercise_priority,
+            valid_working_sets,
+            context.get("minimum_valid_sets", planned_sets),
+        )
         and context["current_summary"]["missed_set_count"] == 0
         and context["current_summary"]["reserve_ratio"] >= 0.8
     )
 
 
-def safety_guardrails(notes, reps, is_failure, target_min_reps, fatigue_score, context):
+def safety_guardrails(notes, reps, is_failure, target_min_reps, target_max_reps, fatigue_score, context):
+    failure_class = classify_failure(reps, is_failure, notes, target_min_reps, target_max_reps, context)
+
     return {
         "has_pain_or_risk": has_pain_or_risk(notes),
         "has_bad_technique": has_bad_technique(notes),
         "has_stop_request": has_stop_request(notes),
         "has_no_increase_request": has_no_increase_request(notes),
+        "failure_class": failure_class,
         "block_increase": (
             has_negative_feedback(notes)
             or is_failure
@@ -769,6 +1397,7 @@ def safety_guardrails(notes, reps, is_failure, target_min_reps, fatigue_score, c
             has_pain_or_risk(notes)
             or has_bad_technique(notes)
             or has_stop_request(notes)
+            or failure_class == "danger_failure"
             or fatigue_score > 80
             or context["performance_drop_percent"] >= 35
         ),
@@ -827,6 +1456,13 @@ def calculate_training_coach_decision(
     target_rir = int_or_default(target_rir, DEFAULT_TARGET_RIR)
     target_reps = target_max_reps
     is_warmup = set_type == "WARMUP"
+    minimum_valid_sets = int_or_default(exercise_context.get("minimum_valid_sets"), min(planned_sets, 3))
+    exercise_priority = classify_exercise_priority(exercise_context, session_context)
+    exercise_type = classify_exercise_type(exercise_context)
+    max_sets = int_or_default(
+        exercise_context.get("maximum_allowed_sets"),
+        maximum_allowed_sets(exercise_priority, user_context, exercise_context),
+    )
 
     if is_warmup:
         rir = None
@@ -847,6 +1483,12 @@ def calculate_training_coach_decision(
         target_max_reps,
         target_rir,
     )
+    failure_class = classify_failure(reps, is_failure, notes, target_min_reps, target_max_reps, context)
+    context["failure_class"] = failure_class
+    context["minimum_valid_sets"] = minimum_valid_sets
+    context["maximum_allowed_sets"] = max_sets
+    context["exercise_priority"] = exercise_priority
+    context["exercise_type"] = exercise_type
     fatigue_score = calculate_fatigue_score(
         scoring_reps,
         rir,
@@ -854,6 +1496,7 @@ def calculate_training_coach_decision(
         notes,
         context,
         target_min_reps,
+        target_max_reps,
         target_rir,
         planned_sets,
     )
@@ -868,7 +1511,22 @@ def calculate_training_coach_decision(
         target_rir,
     )
     recovery_score = calculate_recovery_score(notes, context, fatigue_score, user_context)
-    guardrails = safety_guardrails(notes, scoring_reps, is_failure, target_min_reps, fatigue_score, context)
+    global_fatigue_score = calculate_global_fatigue_score(notes, context, session_context, exercise_context)
+    stimulus_score = calculate_stimulus_score(
+        scoring_reps,
+        rir,
+        is_failure,
+        notes,
+        context,
+        target_min_reps,
+        target_max_reps,
+        exercise_priority,
+    )
+    fatigue_cost = calculate_fatigue_cost(fatigue_score, global_fatigue_score, is_failure, context)
+    context["global_fatigue_score"] = global_fatigue_score
+    context["stimulus_score"] = stimulus_score
+    context["fatigue_cost"] = fatigue_cost
+    guardrails = safety_guardrails(notes, scoring_reps, is_failure, target_min_reps, target_max_reps, fatigue_score, context)
 
     if guardrails["has_pain_or_risk"] or guardrails["has_bad_technique"] or guardrails["has_stop_request"]:
         return with_decision_metadata(
@@ -962,6 +1620,30 @@ def calculate_training_coach_decision(
             guardrails,
         )
 
+    if should_stop_after_bad_set(context, planned_sets, reps, rir, is_failure, target_min_reps, failure_class):
+        return with_decision_metadata(
+            make_stop_decision(
+                "stop_exercise",
+                "A falha, queda de reps ou acumulação de RIR 0 indica que continuar neste exercício já não compensa.",
+                "Termina este exercício",
+                "Passa para o próximo exercício e preserva performance para o resto do treino.",
+            ),
+            context,
+            previous_sets,
+            planned_sets,
+            readiness_score,
+            fatigue_score,
+            recovery_score,
+            target_min_reps,
+            target_max_reps,
+            target_rir,
+            [
+                f"{context['working_set_count']} série(s) de trabalho feitas",
+                f"Fadiga estimada: {fatigue_score}/100",
+            ],
+            guardrails,
+        )
+
     if should_stop_exercise(context, planned_sets, readiness_score, fatigue_score):
         return with_decision_metadata(
             make_stop_decision(
@@ -986,14 +1668,75 @@ def calculate_training_coach_decision(
             guardrails,
         )
 
-    if reps < target_min_reps or is_failure or (rir is not None and rir <= 0 and target_rir >= 2):
+    if failure_class in {"productive_failure", "acceptable_failure"} and context["working_set_count"] < planned_sets:
+        recommended_weight = adjusted_working_weight(
+            weight,
+            reps,
+            rir,
+            is_failure,
+            target_min_reps,
+            target_max_reps,
+            exercise_context,
+        )
+        target_reps_after_failure = target_reps
+        action = "maintain_or_small_backoff" if recommended_weight < weight else "maintain_weight"
+        reason = (
+            "A falha ocorreu no topo da faixa de reps. A carga está desafiante, mas ainda existe volume útil sem subir peso."
+            if failure_class == "productive_failure"
+            else "A falha aconteceu dentro da faixa alvo. Continua com cautela, sem aumentar carga."
+        )
+
+        return with_decision_metadata(
+            {
+                "recommended_weight": recommended_weight,
+                "target_reps": target_reps_after_failure,
+                "recommended_rest_seconds": 150,
+                "next_set_type": "WORKING",
+                "exercise_status": "continue",
+                "action": action,
+                "add_set": True,
+                "stop_exercise": False,
+                "do_backoff_set": recommended_weight < weight,
+                "backoff_weight": recommended_weight if recommended_weight < weight else None,
+                "reason": reason,
+                "guidance_title": "Pequeno ajuste de carga" if recommended_weight < weight else "Mantém a carga",
+                "guidance_message": "Falhar não significa parar. Não subas peso; ajusta a carga para garantir uma próxima série útil com técnica limpa.",
+            },
+            context,
+            previous_sets,
+            planned_sets,
+            readiness_score,
+            fatigue_score,
+            recovery_score,
+            target_min_reps,
+            target_max_reps,
+            target_rir,
+            [
+                f"Falha classificada como {failure_class}",
+                "Falha não ocorreu abaixo do mínimo de reps",
+                "Progressão de carga bloqueada, mas exercício pode continuar",
+            ],
+            guardrails,
+        )
+
+    if should_decrease_working_weight(reps, rir, is_failure, context, target_min_reps, failure_class):
+        recommended_weight = adjusted_working_weight(
+            weight,
+            reps,
+            rir,
+            is_failure,
+            target_min_reps,
+            target_max_reps,
+            exercise_context,
+        )
+
         if (
             bool(exercise_context.get("is_compound"))
             and reps >= max(1, target_min_reps - 1)
             and not has_strong_fatigue(notes)
             and context["working_set_count"] < planned_sets
         ):
-            recommended_backoff_weight = backoff_weight(weight, fatigue_score, is_failure, exercise_context)
+            recommended_backoff_weight = recommended_weight
 
             return with_decision_metadata(
                 {
@@ -1024,23 +1767,11 @@ def calculate_training_coach_decision(
                 guardrails,
             )
 
-        reduction = 0.05
-
-        if reps <= target_min_reps - 2 or is_failure or context["performance_drop_percent"] >= 25:
-            reduction = 0.10
-
-        if fatigue_score >= 75:
-            reduction = 0.15
-
         return with_decision_metadata(
             {
-                "recommended_weight": snap_to_available_weight(
-                    reduce_weight(weight, reduction),
-                    exercise_context,
-                    "down",
-                ),
+                "recommended_weight": recommended_weight,
                 "target_reps": target_reps,
-                "recommended_rest_seconds": 150 if reduction <= 0.10 else 180,
+                "recommended_rest_seconds": 180 if is_failure or fatigue_score >= 75 else 150,
                 "next_set_type": "WORKING",
                 "exercise_status": "continue",
                 "action": "decrease_weight",
@@ -1157,20 +1888,95 @@ def calculate_training_coach_decision(
             guardrails,
         )
 
-    if reps >= target_max_reps and rir is not None and rir >= target_rir and not guardrails["block_increase"]:
-        step = calculate_increase_step(weight, exercise_context)
-        next_working_set_allowed = can_add_productive_set(
+    if (
+        reps >= target_max_reps
+        and rir is not None
+        and 1 <= rir <= 2
+        and not is_failure
+        and context["working_set_count"] < planned_sets
+    ):
+        return with_decision_metadata(
+            {
+                "recommended_weight": weight,
+                "target_reps": target_reps,
+                "recommended_rest_seconds": 120,
+                "next_set_type": "WORKING",
+                "exercise_status": "continue",
+                "action": "maintain_weight",
+                "add_set": True,
+                "stop_exercise": False,
+                "do_backoff_set": False,
+                "backoff_weight": None,
+                "reason": "Chegaste às reps alvo, mas o RIR ficou na zona de trabalho normal. A carga deve ser consolidada.",
+                "guidance_title": "Mantém a carga",
+                "guidance_message": "Repete a carga e procura manter 12 reps com técnica limpa.",
+            },
             context,
+            previous_sets,
             planned_sets,
             readiness_score,
             fatigue_score,
             recovery_score,
-            exercise_context,
+            target_min_reps,
+            target_max_reps,
+            target_rir,
+            ["12 reps atingidas", "RIR 1-2 pede consolidação, não subida"],
+            guardrails,
         )
 
-        if next_working_set_allowed:
-            action = "increase_weight" if context["working_set_count"] <= planned_sets else "increase_volume"
+    if should_request_weight_scale_before_increase(
+        reps,
+        rir,
+        is_failure,
+        notes,
+        context,
+        exercise_context,
+        target_max_reps,
+    ):
+        return with_decision_metadata(
+            {
+                "recommended_weight": weight,
+                "target_reps": target_reps,
+                "recommended_rest_seconds": 120,
+                "next_set_type": "WORKING",
+                "exercise_status": "continue",
+                "action": "maintain_weight",
+                "add_set": context["working_set_count"] < planned_sets,
+                "stop_exercise": False,
+                "do_backoff_set": False,
+                "backoff_weight": None,
+                "reason": "A performance sugere que pode existir margem para subir, mas a escala de pesos deste exercício ainda não está registada.",
+                "guidance_title": "Regista a escala da máquina",
+                "guidance_message": "Abre o menu Escala deste exercício e adiciona as placas e bolachas disponíveis. Depois a IA consegue decidir se há subida real possível.",
+            },
+            context,
+            previous_sets,
+            planned_sets,
+            readiness_score,
+            fatigue_score,
+            recovery_score,
+            target_min_reps,
+            target_max_reps,
+            target_rir,
+            ["12 reps com RIR >= 3", "Subida bloqueada até existir escala de pesos registada"],
+            guardrails,
+        )
 
+    if can_increase_working_weight(
+        weight,
+        reps,
+        rir,
+        is_failure,
+        notes,
+        context,
+        history_sets,
+        exercise_context,
+        target_max_reps,
+    ):
+        step = calculate_increase_step(weight, exercise_context)
+        next_working_set_allowed = context["working_set_count"] < planned_sets
+
+        if next_working_set_allowed:
             return with_decision_metadata(
                 {
                     "recommended_weight": increased_working_weight(weight, step, exercise_context),
@@ -1178,14 +1984,14 @@ def calculate_training_coach_decision(
                     "recommended_rest_seconds": 120,
                     "next_set_type": "WORKING",
                     "exercise_status": "continue",
-                    "action": action,
-                    "add_set": context["working_set_count"] >= planned_sets,
+                    "action": "increase_weight",
+                    "add_set": False,
                     "stop_exercise": False,
                     "do_backoff_set": False,
                     "backoff_weight": None,
-                    "reason": "Atingiste o topo da faixa com RIR suficiente, sem falha e sem sinais negativos. A progressão é permitida.",
+                    "reason": "Atingiste 12 reps com RIR alto, sem falha, sem queda relevante e com próximo peso disponível.",
                     "guidance_title": "Sobe a carga",
-                    "guidance_message": "Mantém a mesma qualidade técnica e confirma se a nova carga ainda fica dentro do alvo.",
+                    "guidance_message": "Usa o próximo peso disponível desta máquina e confirma se continuas dentro das 12 reps com controlo.",
                 },
                 context,
                 previous_sets,
@@ -1196,9 +2002,44 @@ def calculate_training_coach_decision(
                 target_min_reps,
                 target_max_reps,
                 target_rir,
-                ["Topo da faixa atingido", "RIR dentro ou acima do alvo", "Sem dor, falha ou fadiga forte"],
+                ["12 reps atingidas", "RIR >= 3", "Próximo peso disponível respeitado", "Histórico não bloqueia subida"],
                 guardrails,
             )
+
+    if context["working_set_count"] >= planned_sets and can_add_extra_set(
+        context,
+        planned_sets,
+        exercise_context,
+        target_max_reps,
+    ):
+        return with_decision_metadata(
+            {
+                "recommended_weight": weight,
+                "target_reps": target_reps,
+                "recommended_rest_seconds": 120,
+                "next_set_type": "WORKING",
+                "exercise_status": "continue",
+                "action": "add_set",
+                "add_set": True,
+                "stop_exercise": False,
+                "do_backoff_set": False,
+                "backoff_weight": None,
+                "reason": "O volume planeado foi cumprido, mas as séries mostram margem real e o histórico não aponta excesso de fadiga.",
+                "guidance_title": "Podes fazer mais uma série",
+                "guidance_message": "Mantém a mesma carga. Esta série extra serve para volume de qualidade, não para testar carga.",
+            },
+            context,
+            previous_sets,
+            planned_sets,
+            readiness_score,
+            fatigue_score,
+            recovery_score,
+            target_min_reps,
+            target_max_reps,
+            target_rir,
+            ["Séries planeadas sólidas", "RIR alto suficiente", "Histórico permite uma série extra"],
+            guardrails,
+        )
 
     if context["working_set_count"] >= planned_sets:
         return with_decision_metadata(

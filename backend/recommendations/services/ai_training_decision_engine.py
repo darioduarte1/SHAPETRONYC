@@ -13,11 +13,23 @@ DEFAULT_TIMEOUT_SECONDS = 20
 OLLAMA_TIMEOUT_SECONDS = 60
 ALLOWED_NEXT_SET_TYPES = {"WARMUP", "WORKING", "DROP", "COMPLETE"}
 ALLOWED_EXERCISE_STATUS = {"continue", "complete"}
+ALLOWED_EXERCISE_STATES = {
+    "CONTINUE",
+    "ADJUST_LOAD",
+    "BACKOFF",
+    "FINAL_SET",
+    "ADD_VOLUME",
+    "END_EXERCISE",
+    "SAFETY_STOP",
+    "DELOAD_REQUIRED",
+}
 ALLOWED_ACTIONS = {
     "increase_weight",
     "maintain_weight",
     "decrease_weight",
     "add_set",
+    "maintain_or_small_backoff",
+    "small_backoff",
     "stop_exercise",
     "do_backoff_set",
     "skip_backoff_set",
@@ -34,6 +46,7 @@ TRAINING_DECISION_SCHEMA = {
     "type": "object",
     "properties": {
         "recommended_weight": {"type": "string"},
+        "exercise_state": {"type": "string", "enum": sorted(ALLOWED_EXERCISE_STATES)},
         "target_reps": {"type": "string"},
         "target_rir": {"type": "integer"},
         "add_set": {"type": "boolean"},
@@ -43,6 +56,12 @@ TRAINING_DECISION_SCHEMA = {
         "fatigue_score": {"type": "integer"},
         "recovery_score": {"type": "integer"},
         "readiness_score": {"type": "integer"},
+        "valid_working_sets": {"type": "integer"},
+        "minimum_valid_sets": {"type": "integer"},
+        "local_fatigue_score": {"type": "integer"},
+        "global_fatigue_score": {"type": "integer"},
+        "stimulus_score": {"type": "integer"},
+        "fatigue_cost": {"type": "integer"},
         "recommended_rest_seconds": {"type": "integer"},
         "next_set_type": {"type": "string", "enum": ["WARMUP", "WORKING", "DROP", "COMPLETE"]},
         "exercise_status": {"type": "string", "enum": ["continue", "complete"]},
@@ -51,6 +70,7 @@ TRAINING_DECISION_SCHEMA = {
         "guidance_title": {"type": "string"},
         "guidance_message": {"type": "string"},
         "confidence": {"type": "string", "enum": ["alta", "média", "baixa"]},
+        "confidence_score": {"type": "number"},
         "decision_basis": {
             "type": "array",
             "items": {"type": "string"},
@@ -58,6 +78,7 @@ TRAINING_DECISION_SCHEMA = {
     },
     "required": [
         "recommended_weight",
+        "exercise_state",
         "target_reps",
         "target_rir",
         "add_set",
@@ -67,6 +88,12 @@ TRAINING_DECISION_SCHEMA = {
         "fatigue_score",
         "recovery_score",
         "readiness_score",
+        "valid_working_sets",
+        "minimum_valid_sets",
+        "local_fatigue_score",
+        "global_fatigue_score",
+        "stimulus_score",
+        "fatigue_cost",
         "recommended_rest_seconds",
         "next_set_type",
         "exercise_status",
@@ -75,6 +102,7 @@ TRAINING_DECISION_SCHEMA = {
         "guidance_title",
         "guidance_message",
         "confidence",
+        "confidence_score",
         "decision_basis",
     ],
     "additionalProperties": False,
@@ -118,6 +146,7 @@ def _compact_set(set_log):
 
 def _compact_decision(local_decision):
     return {
+        "exercise_state": local_decision.get("exercise_state"),
         "recommended_weight": local_decision.get("recommended_weight"),
         "target_reps": local_decision.get("target_reps"),
         "recommended_rest_seconds": local_decision.get("recommended_rest_seconds"),
@@ -126,9 +155,17 @@ def _compact_decision(local_decision):
         "action": local_decision.get("action"),
         "reason": local_decision.get("reason"),
         "confidence": local_decision.get("confidence"),
+        "confidence_score": local_decision.get("confidence_score"),
         "readiness_score": local_decision.get("readiness_score"),
         "fatigue_score": local_decision.get("fatigue_score"),
+        "local_fatigue_score": local_decision.get("local_fatigue_score"),
+        "global_fatigue_score": local_decision.get("global_fatigue_score"),
+        "stimulus_score": local_decision.get("stimulus_score"),
+        "fatigue_cost": local_decision.get("fatigue_cost"),
         "recovery_score": local_decision.get("recovery_score"),
+        "valid_working_sets": local_decision.get("valid_working_sets"),
+        "minimum_valid_sets": local_decision.get("minimum_valid_sets"),
+        "maximum_allowed_sets": local_decision.get("maximum_allowed_sets"),
         "decision_basis": local_decision.get("decision_basis", []),
         "context": local_decision.get("context", {}),
         "guardrails": local_decision.get("guardrails", {}),
@@ -176,7 +213,50 @@ def _build_llm_context(local_decision, request_context):
             "feedback_overrides_performance": True,
             "warmup_sets_do_not_use_rir": True,
             "warmup_sets_assume_load_is_liftable": True,
+            "progression_goal": "12 reps consistentes com RIR controlado; não perseguir carga",
+            "increase_load_requires": [
+                "12 reps na série normal",
+                "RIR >= 3",
+                "sem falha",
+                "técnica boa e sem dor",
+                "próximo peso disponível na escala registada do exercício",
+                "se o salto de peso for superior a 10%, exigir RIR >= 4",
+                "sem falhas recentes nesse próximo peso",
+            ],
+            "maintain_load_when": [
+                "12 reps com RIR 1-2",
+                "10-11 reps sem falha",
+                "sem próximo peso registado na escala do exercício",
+                "histórico recente bloqueia progressão",
+            ],
+            "request_weight_scale_when": (
+                "a performance permitiria avaliar subida, mas a escala de pesos do exercício ainda não está preenchida"
+            ),
+            "decrease_or_stop_when": [
+                "falha abaixo do mínimo de reps",
+                "RIR 0",
+                "queda de reps >= 30-35% face à melhor série do dia",
+                "duas séries consecutivas abaixo do mínimo de reps",
+                "dor, tontura, desconforto articular ou técnica má",
+            ],
+            "failure_classification": {
+                "productive_failure": "falha no topo da faixa, sem dor, técnica boa e poucas séries feitas; continuar sem subir carga",
+                "acceptable_failure": "falha dentro da faixa; continuar com cautela, mantendo ou fazendo pequeno backoff",
+                "bad_failure": "falha abaixo do mínimo ou queda grande; baixar carga ou parar",
+                "danger_failure": "dor, técnica má, tontura ou desconforto articular; parar exercício",
+            },
+            "must_not_stop_when": [
+                "existem menos de 3 séries de trabalho válidas e não há risco de segurança",
+                "reached_failure=true mas reps_completed >= target_max_reps",
+                "falha no topo da faixa sem dor e ainda há séries úteis planeadas",
+            ],
+            "minimum_valid_working_sets": (
+                "antes de 3 séries de trabalho válidas, adaptar peso para recuperar volume; "
+                "não terminar salvo dor, tontura, risco técnico, execução perigosa ou pedido explícito do atleta"
+            ),
+            "extra_set_requires": "plano cumprido, todas as séries fortes, RIR alto, sem falha e histórico sem excesso de fadiga",
             "must_return_json": True,
+            "exercise_state_values": sorted(ALLOWED_EXERCISE_STATES),
             "must_respect_complete_exercise_guardrail": (
                 local_decision.get("exercise_status") == "complete"
             ),
@@ -220,11 +300,24 @@ def _request_openai_training_decision(context, api_key, model):
             "e recuperação antes de progressão. Se existir conflito entre performance e feedback do utilizador, o "
             "feedback manda. Séries de aquecimento não usam RIR nem falha; assume que a carga é levantável e decide "
             "aquecimento apenas por progressão de carga, técnica, histórico e distância até à primeira série normal. "
+            "Regra central: antes de 3 séries de trabalho válidas, não termines o exercício salvo dor articular, tontura, "
+            "risco técnico, execução perigosa, desconforto anormal ou pedido explícito para parar; se a carga falhar cedo, ajusta peso. "
+            "Para séries normais, o objetivo é 12 reps consistentes com RIR controlado. Só podes subir carga quando "
+            "existem 12 reps, RIR >= 3, sem falha, sem dor, técnica boa e próximo peso disponível na escala registada do exercício; se o "
+            "salto for superior a 10%, exige RIR >= 4. 12 reps com RIR 1-2 mantém carga. Falha não significa parar: "
+            "classifica a falha. Falha no topo da faixa, por exemplo 12 reps e falha na 12ª, é produtiva/aceitável: "
+            "não subas carga e não termines automaticamente; mantém ou faz pequeno backoff. Só termina se a falha "
+            "aconteceu abaixo do mínimo de reps, se há queda de reps >= 30-35%, dor, tontura, desconforto articular, "
+            "técnica má ou fadiga acumulada que torne a próxima série improdutiva. Se a performance permitiria avaliar "
+            "subida mas a escala do exercício ainda não está preenchida, mantém a carga e pede ao atleta para "
+            "preencher placas e bolachas no menu Escala antes de decidir subir. Séries extra só quando o plano foi "
+            "cumprido com margem clara e o histórico não mostra excesso de fadiga. "
             "Só podes escolher uma ação da lista permitida. Não dês aconselhamento médico. "
             "Devolve apenas JSON válido com estas chaves: recommended_weight, target_reps, recommended_rest_seconds, "
-            "target_rir, add_set, stop_exercise, do_backoff_set, backoff_weight, fatigue_score, recovery_score, "
-            "readiness_score, next_set_type, exercise_status, action, reason, guidance_title, guidance_message, "
-            "confidence, decision_basis."
+            "target_rir, add_set, stop_exercise, do_backoff_set, backoff_weight, fatigue_score, local_fatigue_score, "
+            "global_fatigue_score, stimulus_score, fatigue_cost, recovery_score, readiness_score, valid_working_sets, "
+            "minimum_valid_sets, next_set_type, exercise_status, exercise_state, action, reason, guidance_title, "
+            "guidance_message, confidence, confidence_score, decision_basis."
         ),
         "input": json.dumps(context, ensure_ascii=False),
     }
@@ -263,11 +356,18 @@ def _request_ollama_training_decision(context, base_url, model):
                     "reps, RIR alvo, fadiga, recuperação e notas. Segurança, técnica e recuperação têm prioridade "
                     "sobre progressão. Séries de aquecimento não usam RIR nem falha; assume que a carga é levantável "
                     "e decide aquecimento apenas por progressão de carga, técnica, histórico e distância até à primeira "
-                    "série normal. Só podes escolher uma ação da lista permitida. "
+                    "série normal. Antes de 3 séries de trabalho válidas, não termines salvo dor, tontura, risco técnico, execução perigosa, "
+                    "desconforto anormal ou pedido explícito para parar; falhar cedo significa ajustar carga. Para séries normais, sobe carga apenas com 12 reps, RIR >= 3, sem falha, sem dor, "
+                    "técnica boa e próximo peso disponível na escala registada do exercício; saltos acima de 10% exigem RIR >= 4. 12 reps com RIR 1-2 "
+                    "mantém carga. Falha não significa parar: falha no topo da faixa é produtiva/aceitável e deve continuar sem subir carga; "
+                    "só termina com falha abaixo do mínimo de reps, queda de reps >= 30-35%, dor, tontura, desconforto articular, técnica má ou fadiga improdutiva. "
+                    "Se a performance permitiria avaliar subida mas falta escala, mantém carga e pede ao atleta para preencher o menu Escala. "
+                    "Séries extra exigem plano cumprido com margem clara e histórico sem fadiga excessiva. Só podes escolher uma ação da lista permitida. "
                     "Responde só com JSON válido com as chaves: recommended_weight, target_reps, "
-                    "target_rir, add_set, stop_exercise, do_backoff_set, backoff_weight, fatigue_score, "
-                    "recovery_score, readiness_score, recommended_rest_seconds, next_set_type, exercise_status, "
-                    "action, reason, guidance_title, guidance_message, confidence, decision_basis."
+                    "target_rir, add_set, stop_exercise, do_backoff_set, backoff_weight, fatigue_score, local_fatigue_score, "
+                    "global_fatigue_score, stimulus_score, fatigue_cost, recovery_score, readiness_score, valid_working_sets, "
+                    "minimum_valid_sets, recommended_rest_seconds, next_set_type, exercise_status, exercise_state, "
+                    "action, reason, guidance_title, guidance_message, confidence, confidence_score, decision_basis."
                 ),
             },
             {
@@ -296,6 +396,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
 
     next_set_type = ai_decision.get("next_set_type") or local_decision.get("next_set_type")
     exercise_status = ai_decision.get("exercise_status") or local_decision.get("exercise_status", "continue")
+    exercise_state = ai_decision.get("exercise_state") or local_decision.get("exercise_state", "CONTINUE")
     action = ai_decision.get("action") or local_decision.get("action")
     guardrails = local_decision.get("guardrails", {})
 
@@ -304,6 +405,9 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
 
     if exercise_status not in ALLOWED_EXERCISE_STATUS:
         exercise_status = local_decision.get("exercise_status", "continue")
+
+    if exercise_state not in ALLOWED_EXERCISE_STATES:
+        exercise_state = local_decision.get("exercise_state", "CONTINUE")
 
     if action not in ALLOWED_ACTIONS:
         action = local_decision.get("action", "maintain_weight")
@@ -315,6 +419,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
     if local_decision.get("exercise_status") == "complete" or guardrails.get("must_stop"):
         next_set_type = "COMPLETE"
         exercise_status = "complete"
+        exercise_state = local_decision.get("exercise_state", "SAFETY_STOP" if guardrails.get("must_stop") else "END_EXERCISE")
         action = local_decision.get("action", "stop_exercise")
 
     recommended_weight = ai_decision.get("recommended_weight", local_decision.get("recommended_weight"))
@@ -323,6 +428,10 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
     guardrail_reason = ""
     local_weight = _number_or_none(local_decision.get("recommended_weight"))
     ai_weight = _number_or_none(recommended_weight)
+    local_context = local_decision.get("context", {})
+    failure_class = local_context.get("failure_class")
+    working_set_count = local_context.get("working_set_count", 0)
+    planned_sets = local_context.get("planned_sets", request_context.get("total_sets") or 3)
 
     if (
         local_decision.get("next_set_type") == "WARMUP"
@@ -331,6 +440,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
     ):
         next_set_type = "WARMUP"
         exercise_status = "continue"
+        exercise_state = local_decision.get("exercise_state", "CONTINUE")
         recommended_weight = local_decision.get("recommended_weight")
         target_reps = local_decision.get("target_reps")
         guardrail_applied = True
@@ -339,11 +449,43 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
     if guardrails.get("block_increase") and (action == "increase_weight" or (ai_weight is not None and local_weight is not None and ai_weight > local_weight)):
         next_set_type = local_decision.get("next_set_type", "WORKING")
         exercise_status = local_decision.get("exercise_status", "continue")
+        exercise_state = local_decision.get("exercise_state", "CONTINUE")
         recommended_weight = local_decision.get("recommended_weight")
         target_reps = local_decision.get("target_reps")
         action = local_decision.get("action", "maintain_weight")
         guardrail_applied = True
         guardrail_reason = "A IA tentou subir carga apesar de um bloqueio de segurança, fadiga ou feedback do utilizador."
+
+    local_action_allows_load_increase = local_decision.get("action") in {"increase_weight", "increase_volume"}
+    ai_attempted_load_increase = action in {"increase_weight", "increase_volume"} or (
+        ai_weight is not None
+        and local_weight is not None
+        and ai_weight > local_weight
+    )
+
+    if ai_attempted_load_increase and not local_action_allows_load_increase:
+        next_set_type = local_decision.get("next_set_type", "WORKING")
+        exercise_status = local_decision.get("exercise_status", "continue")
+        exercise_state = local_decision.get("exercise_state", "CONTINUE")
+        recommended_weight = local_decision.get("recommended_weight")
+        target_reps = local_decision.get("target_reps")
+        action = local_decision.get("action", "maintain_weight")
+        guardrail_applied = True
+        guardrail_reason = "A IA tentou subir carga sem cumprir as regras de 12 reps, RIR e escala disponível."
+
+    if (
+        exercise_status == "complete"
+        and failure_class in {"productive_failure", "acceptable_failure"}
+        and working_set_count < planned_sets
+    ):
+        next_set_type = local_decision.get("next_set_type", "WORKING")
+        exercise_status = "continue"
+        exercise_state = local_decision.get("exercise_state", "CONTINUE")
+        recommended_weight = local_decision.get("recommended_weight")
+        target_reps = local_decision.get("target_reps")
+        action = local_decision.get("action", "maintain_or_small_backoff")
+        guardrail_applied = True
+        guardrail_reason = "A IA tentou terminar o exercício apesar de a falha ter sido produtiva ou aceitável."
 
     if next_set_type == "COMPLETE" or exercise_status == "complete":
         recommended_weight = ""
@@ -364,6 +506,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
 
     if guardrail_applied:
         action = local_decision.get("action")
+        exercise_state = local_decision.get("exercise_state", exercise_state)
         if action not in ALLOWED_ACTIONS:
             action = "maintain_weight"
         reason = local_decision.get("reason")
@@ -372,6 +515,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
 
     return {
         **local_decision,
+        "exercise_state": exercise_state,
         "recommended_weight": recommended_weight,
         "target_reps": target_reps,
         "target_reps_label": local_decision.get("target_reps_label"),
@@ -381,8 +525,14 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         "do_backoff_set": bool(ai_decision.get("do_backoff_set", local_decision.get("do_backoff_set", False))) and exercise_status != "complete",
         "backoff_weight": ai_decision.get("backoff_weight", local_decision.get("backoff_weight")),
         "fatigue_score": _int_or_default(ai_decision.get("fatigue_score", local_decision.get("fatigue_score", 0)), 0),
+        "local_fatigue_score": _int_or_default(ai_decision.get("local_fatigue_score", local_decision.get("local_fatigue_score", local_decision.get("fatigue_score", 0))), 0),
+        "global_fatigue_score": _int_or_default(ai_decision.get("global_fatigue_score", local_decision.get("global_fatigue_score", 0)), 0),
+        "stimulus_score": _int_or_default(ai_decision.get("stimulus_score", local_decision.get("stimulus_score", 0)), 0),
+        "fatigue_cost": _int_or_default(ai_decision.get("fatigue_cost", local_decision.get("fatigue_cost", 0)), 0),
         "recovery_score": _int_or_default(ai_decision.get("recovery_score", local_decision.get("recovery_score", 0)), 0),
         "readiness_score": _int_or_default(ai_decision.get("readiness_score", local_decision.get("readiness_score", 0)), 0),
+        "valid_working_sets": _int_or_default(ai_decision.get("valid_working_sets", local_decision.get("valid_working_sets", 0)), 0),
+        "minimum_valid_sets": _int_or_default(ai_decision.get("minimum_valid_sets", local_decision.get("minimum_valid_sets", 3)), 3),
         "recommended_rest_seconds": ai_decision.get(
             "recommended_rest_seconds",
             local_decision.get("recommended_rest_seconds"),
@@ -394,6 +544,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         "guidance_title": str(guidance_title),
         "guidance_message": str(guidance_message),
         "confidence": str(ai_decision.get("confidence") or local_decision.get("confidence")),
+        "confidence_score": float(ai_decision.get("confidence_score") or local_decision.get("confidence_score", 0.5)),
         "decision_basis": [
             str(item)
             for item in ai_decision.get("decision_basis", local_decision.get("decision_basis", []))

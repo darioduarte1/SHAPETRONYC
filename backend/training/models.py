@@ -157,6 +157,66 @@ class AdaptivePlanDecision(models.Model):
         return f"{self.user.username} - {self.exercise_name} - {self.action} - {self.status}"
 
 
+class ExerciseCalibration(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("CALIBRATED", "Calibrated"),
+        ("NEEDS_REVIEW", "Needs review"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="exercise_calibrations",
+    )
+    exercise = models.ForeignKey(
+        Exercise,
+        on_delete=models.CASCADE,
+        related_name="exercise_calibrations",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
+    estimated_working_weight = models.FloatField(null=True, blank=True)
+    target_reps = models.PositiveIntegerField(default=12)
+    target_rir = models.PositiveIntegerField(default=2)
+    confidence = models.CharField(max_length=20, default="baixa")
+    calibration_sets = models.JSONField(default=list, blank=True)
+    scale_snapshot = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "exercise")
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.exercise.name} - {self.status}"
+
+
+class UserExerciseWeightScale(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="exercise_weight_scales",
+    )
+    exercise = models.ForeignKey(
+        Exercise,
+        on_delete=models.CASCADE,
+        related_name="user_weight_scales",
+    )
+    main_weight_options = models.JSONField(default=list, blank=True)
+    micro_weight_options = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "exercise")
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.exercise.name} scale"
+
+
 class TrainingBlock(models.Model):
     STATUS_CHOICES = [
         ("ACTIVE", "Active"),

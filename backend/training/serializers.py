@@ -6,6 +6,7 @@ from .models import (
     TrainingWorkoutExercise,
     WorkoutSession,
 )
+from .services.user_exercise_weight_scale import get_user_exercise_weight_scale
 
 
 class TrainingWorkoutExerciseSerializer(serializers.ModelSerializer):
@@ -19,8 +20,17 @@ class TrainingWorkoutExerciseSerializer(serializers.ModelSerializer):
     exercise_equipment = serializers.CharField(source="exercise.equipment", read_only=True)
     exercise_localized_name = serializers.CharField(source="exercise.localized_name", read_only=True)
     exercise_image_url = serializers.CharField(source="exercise.image_url", read_only=True)
-    exercise_main_weight_options = serializers.JSONField(source="exercise.main_weight_options", read_only=True)
-    exercise_micro_weight_options = serializers.JSONField(source="exercise.micro_weight_options", read_only=True)
+    exercise_main_weight_options = serializers.SerializerMethodField()
+    exercise_micro_weight_options = serializers.SerializerMethodField()
+
+    def _get_user_scale(self, obj):
+        return get_user_exercise_weight_scale(obj.workout.program.user, obj.exercise)
+
+    def get_exercise_main_weight_options(self, obj):
+        return self._get_user_scale(obj)["main_weight_options"]
+
+    def get_exercise_micro_weight_options(self, obj):
+        return self._get_user_scale(obj)["micro_weight_options"]
 
     class Meta:
         model = TrainingWorkoutExercise

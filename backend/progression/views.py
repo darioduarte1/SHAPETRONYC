@@ -4,6 +4,10 @@ from rest_framework.views import APIView
 
 from accounts.models import UserProfile
 from training.models import TrainingWorkoutExercise, WorkoutSession
+from training.services.exercise_calibration import (
+    build_calibrated_recommended_sets,
+    get_exercise_calibration_state,
+)
 from .models import SetLog
 from .serializers import SetLogSerializer
 from .services.exercise_history_recommendation import (
@@ -16,6 +20,11 @@ from .services.exercise_history_recommendation import (
 
 class SetLogListCreateView(generics.ListCreateAPIView):
     queryset = SetLog.objects.all().order_by("-created_at")
+    serializer_class = SetLogSerializer
+
+
+class SetLogDetailView(generics.RetrieveDestroyAPIView):
+    queryset = SetLog.objects.all()
     serializer_class = SetLogSerializer
 
 
@@ -121,11 +130,15 @@ class ExerciseHistoryView(APIView):
         )
         recent_session_sets = group_sets_by_session(recent_set_logs)
         planned_working_sets = training_exercise.sets if training_exercise else 1
+        calibration_state = get_exercise_calibration_state(profile.user, training_exercise.exercise) if training_exercise else None
         recommended_sets = build_history_based_recommended_sets(
             recent_session_sets,
             planned_working_sets,
             exercise_profile=training_exercise.exercise if training_exercise else None,
         )
+
+        if training_exercise and not recent_session_sets and calibration_state and not calibration_state["needs_calibration"]:
+            recommended_sets = build_calibrated_recommended_sets(training_exercise, calibration_state)
         max_rows = max(
             planned_working_sets + 1,
             current_sets.count(),
@@ -143,6 +156,7 @@ class ExerciseHistoryView(APIView):
             "current_sets": SetLogSerializer(current_sets, many=True).data,
             "history_sets": SetLogSerializer(recent_set_logs, many=True).data,
             "recommended_sets": recommended_sets,
+            "calibration": calibration_state,
             "history_summary": summarize_recent_sessions(recent_session_sets),
             "history_scope": {
                 "workout_name": current_session.workout.name if current_session else None,

@@ -13,8 +13,10 @@ from progression.models import SetLog
 from training.models import (
     AdaptivePlanDecision,
     AthleteTrainingMemory,
+    ExerciseCalibration,
     TrainingBlock,
     TrainingProgram,
+    UserExerciseWeightScale,
     WorkoutSession,
 )
 
@@ -93,6 +95,13 @@ class UserTrainingExportView(APIView):
         blocks = TrainingBlock.objects.filter(user=user).select_related(
             "program",
         ).order_by("-start_date", "-created_at")
+        calibrations = ExerciseCalibration.objects.filter(user=user).select_related(
+            "exercise",
+        ).order_by("-updated_at")
+        weight_scales = {
+            scale.exercise_id: scale
+            for scale in UserExerciseWeightScale.objects.filter(user=user)
+        }
 
         payload = {
             "exported_at": timezone.now(),
@@ -135,8 +144,14 @@ class UserTrainingExportView(APIView):
                                     "equipment": training_exercise.exercise.equipment,
                                     "movement_pattern": training_exercise.exercise.movement_pattern,
                                     "is_compound": training_exercise.exercise.is_compound,
-                                    "main_weight_options": training_exercise.exercise.main_weight_options,
-                                    "micro_weight_options": training_exercise.exercise.micro_weight_options,
+                                    "main_weight_options": (
+                                        weight_scales[training_exercise.exercise_id].main_weight_options
+                                        if training_exercise.exercise_id in weight_scales else []
+                                    ),
+                                    "micro_weight_options": (
+                                        weight_scales[training_exercise.exercise_id].micro_weight_options
+                                        if training_exercise.exercise_id in weight_scales else []
+                                    ),
                                     "sets": training_exercise.sets,
                                     "target_min_reps": training_exercise.target_min_reps,
                                     "target_max_reps": training_exercise.target_max_reps,
@@ -240,6 +255,24 @@ class UserTrainingExportView(APIView):
                     "updated_at": block.updated_at,
                 }
                 for block in blocks
+            ],
+            "exercise_calibrations": [
+                {
+                    "id": calibration.id,
+                    "exercise_id": calibration.exercise_id,
+                    "exercise_name": calibration.exercise.name,
+                    "status": calibration.status,
+                    "estimated_working_weight": calibration.estimated_working_weight,
+                    "target_reps": calibration.target_reps,
+                    "target_rir": calibration.target_rir,
+                    "confidence": calibration.confidence,
+                    "calibration_sets": calibration.calibration_sets,
+                    "scale_snapshot": calibration.scale_snapshot,
+                    "notes": calibration.notes,
+                    "created_at": calibration.created_at,
+                    "updated_at": calibration.updated_at,
+                }
+                for calibration in calibrations
             ],
         }
 

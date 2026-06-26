@@ -20,6 +20,15 @@ from .services.training_memory import refresh_training_memory
 from .services.training_generator import generate_training_program
 from .services.training_blocks import build_training_block, list_training_blocks
 from .services.exercise_substitution import get_substitution_options, replace_training_exercise
+from .services.exercise_calibration import (
+    get_exercise_calibration_state,
+    upsert_exercise_calibration,
+)
+from .services.user_exercise_weight_scale import (
+    get_user_exercise_weight_scale,
+    serialize_user_exercise_weight_scale,
+    upsert_user_exercise_weight_scale,
+)
 from .services.weekly_feedback import build_weekly_feedback
 from .models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
 from exercises.models import Exercise
@@ -342,3 +351,107 @@ class ReplaceTrainingExerciseView(APIView):
             )
 
         return Response(TrainingProgramSerializer(updated_training_exercise.workout.program).data)
+
+
+class ExerciseCalibrationView(APIView):
+
+    def get(self, request, profile_id, training_exercise_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Calibration target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(get_exercise_calibration_state(profile.user, training_exercise.exercise))
+
+
+class ExerciseWeightScaleView(APIView):
+
+    def get(self, request, profile_id, training_exercise_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Weight scale target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(serialize_user_exercise_weight_scale(profile.user, training_exercise.exercise))
+
+    def patch(self, request, profile_id, training_exercise_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Weight scale target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        scale = upsert_user_exercise_weight_scale(
+            profile.user,
+            training_exercise.exercise,
+            request.data.get("main_weight_options", []),
+            request.data.get("micro_weight_options", []),
+        )
+
+        return Response(scale, status=status.HTTP_200_OK)
+
+
+class SaveExerciseCalibrationView(APIView):
+
+    def post(self, request):
+        profile_id = request.data.get("profile_id")
+        training_exercise_id = request.data.get("training_exercise_id")
+
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Calibration target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        scale = get_user_exercise_weight_scale(profile.user, training_exercise.exercise)
+
+        if not scale["configured"]:
+            return Response(
+                {
+                    "error": "A escala da máquina é obrigatória antes da calibração experimental.",
+                    "reason": "scale_required",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        calibration = upsert_exercise_calibration(
+            profile.user,
+            training_exercise.exercise,
+            {
+                "weight_used": request.data.get("weight_used"),
+                "result_color": request.data.get("result_color"),
+                "reps_completed": request.data.get("reps_completed"),
+                "rir": request.data.get("rir"),
+                "reached_failure": request.data.get("reached_failure", False),
+                "notes": request.data.get("notes", ""),
+            },
+            notes=request.data.get("notes", ""),
+        )
+
+        return Response(calibration, status=status.HTTP_200_OK)
