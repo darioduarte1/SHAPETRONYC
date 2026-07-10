@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
+import ExerciseSetTable from "./components/ExerciseSetTable";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
@@ -3653,341 +3654,37 @@ function App() {
                                 )}
                               </div>
 
-                              <div style={{ display: blocksNormalTraining ? "none" : "block", overflowX: "auto", marginTop: "12px" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
-                                  <thead>
-                                    <tr style={{ color: "#777", textTransform: "uppercase", fontSize: "13px" }}>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Série</th>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Anterior</th>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Kg</th>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Reps</th>
-                                      <th style={{ textAlign: "center", padding: "8px" }}>Feita</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {rows.map(({ sourceSetNumber, displaySetNumber }) => {
-                                      const setFormKey = getSetFormKey(item.id, sourceSetNumber);
-                                      const currentSet = getCurrentSetForRow(item.id, displaySetNumber);
-                                      const rowForm = setForms[setFormKey] || {};
-                                      const rowSetType = getSetTypeForExerciseRow(
-                                        item,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const previousSet = getPreviousSetForExerciseRow(
-                                        item,
-                                        rows,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const setTypeMeta = getSetTypeMeta(rowSetType);
-                                      const visibleSetLabel = getVisibleSetLabel(
-                                        item,
-                                        rows,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const isCompleted = Boolean(currentSet);
-                                      const effortMeta = getEffortMetaFromSet(currentSet);
-                                      const restSecondsForRow = getRestSecondsForRow(setFormKey);
-                                      const plannedValues = getPlannedValuesForExerciseRow(
-                                        item,
-                                        rows,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const weightValue =
-                                        currentSet?.weight_used ?? rowForm.weight_used ?? plannedValues.weight;
-                                      const repsValue =
-                                        currentSet?.reps_completed ??
-                                        rowForm.reps_completed ??
-                                        plannedValues.reps;
-                                      const availableEffortOptions = getEffortOptionsForSet(rowSetType, repsValue);
-
-                                      return (
-                                        <tr
-                                          key={sourceSetNumber}
-                                          style={{
-                                            background: displaySetNumber % 2 === 0 ? "rgba(148, 163, 184, 0.12)" : "transparent",
-                                          }}
-                                        >
-                                          <td style={{ padding: "8px" }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                              <div style={{ position: "relative" }}>
-                                                <button
-                                                  type="button"
-                                                  disabled={isCompleted}
-                                                  onClick={() => toggleRestMenu(setFormKey)}
-                                                  title="Configurar descanso"
-                                                  style={{
-                                                    width: "30px",
-                                                    height: "30px",
-                                                    borderRadius: "6px",
-                                                    border: "1px solid #555",
-                                                    background: "transparent",
-                                                    color: "#999",
-                                                    cursor: isCompleted ? "default" : "pointer",
-                                                  }}
-                                                >
-                                                  ⋯
-                                                </button>
-
-                                                {openRestMenuBySet[setFormKey] && !isCompleted && (
-                                                  <div
-                                                    style={{
-                                                      position: "absolute",
-                                                      top: "36px",
-                                                      left: "0",
-                                                      zIndex: 10,
-                                                      minWidth: "180px",
-                                                      padding: "10px",
-                                                      border: "1px solid #555",
-                                                      borderRadius: "8px",
-                                                      background: "#111827",
-                                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-                                                    }}
-                                                  >
-                                                    <label style={{ display: "block", fontSize: "13px", color: "#cbd5e1" }}>
-                                                      Descanso após série
-                                                    </label>
-                                                    <input
-                                                      type="number"
-                                                      min="15"
-                                                      step="15"
-                                                      value={restSecondsForRow}
-                                                      onChange={(e) =>
-                                                        updateSetForm(setFormKey, "rest_seconds", e.target.value)
-                                                      }
-                                                      style={{ width: "100%", marginTop: "6px" }}
-                                                    />
-                                                    <div
-                                                      style={{
-                                                        display: "grid",
-                                                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                                        gap: "6px",
-                                                        marginTop: "8px",
-                                                      }}
-                                                    >
-                                                      {[60, 90, 120, 180].map((seconds) => (
-                                                        <button
-                                                          key={seconds}
-                                                          type="button"
-                                                          onClick={() => updateSetForm(setFormKey, "rest_seconds", seconds)}
-                                                          style={{ padding: "6px" }}
-                                                        >
-                                                          {formatTimer(seconds)}
-                                                        </button>
-                                                      ))}
-                                                    </div>
-
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => removeExerciseRow(item, sourceSetNumber, displaySetNumber)}
-                                                      style={{
-                                                        width: "100%",
-                                                        marginTop: "10px",
-                                                        padding: "8px",
-                                                        border: "1px solid #7f1d1d",
-                                                        borderRadius: "6px",
-                                                        background: "rgba(127, 29, 29, 0.18)",
-                                                        color: "#fca5a5",
-                                                        fontWeight: "bold",
-                                                        cursor: "pointer",
-                                                      }}
-                                                    >
-                                                      Remover série
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </div>
-
-                                              <div style={{ position: "relative" }}>
-                                                <button
-                                                  type="button"
-                                                  disabled={isCompleted}
-                                                  onClick={() => toggleSetTypeMenu(setFormKey)}
-                                                  title="Alterar tipo de série"
-                                                  style={{
-                                                    minWidth: "42px",
-                                                    height: "32px",
-                                                    borderRadius: "8px",
-                                                    border: "1px solid #334155",
-                                                    background: "rgba(15, 23, 42, 0.7)",
-                                                    color: setTypeMeta.color,
-                                                    fontWeight: "bold",
-                                                    cursor: isCompleted ? "default" : "pointer",
-                                                  }}
-                                                >
-                                                  {visibleSetLabel}
-                                                </button>
-
-                                                {openSetTypeMenuBySet[setFormKey] && !isCompleted && (
-                                                  <div
-                                                    style={{
-                                                      position: "absolute",
-                                                      top: "38px",
-                                                      left: "0",
-                                                      zIndex: 10,
-                                                      minWidth: "150px",
-                                                      padding: "8px",
-                                                      border: "1px solid #555",
-                                                      borderRadius: "8px",
-                                                      background: "#111827",
-                                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-                                                    }}
-                                                  >
-                                                    {SET_TYPES.map((setType) => (
-                                                      <button
-                                                        key={setType.value}
-                                                        type="button"
-                                                        onClick={() => selectSetType(setFormKey, setType.value)}
-                                                        style={{
-                                                          display: "flex",
-                                                          alignItems: "center",
-                                                          gap: "8px",
-                                                          width: "100%",
-                                                          padding: "9px 10px",
-                                                          border: "none",
-                                                          borderRadius: "6px",
-                                                          background:
-                                                            rowSetType === setType.value
-                                                              ? "rgba(148, 163, 184, 0.18)"
-                                                              : "transparent",
-                                                          color: "#e5e7eb",
-                                                          fontWeight: "bold",
-                                                          textAlign: "left",
-                                                          cursor: "pointer",
-                                                        }}
-                                                      >
-                                                        <span style={{ color: setType.color, minWidth: "22px" }}>
-                                                          {setType.shortLabel}
-                                                        </span>
-                                                        {setType.label}
-                                                      </button>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </td>
-                                          <td style={{ padding: "8px", color: "#777" }}>
-                                            {formatPreviousSet(previousSet)}
-                                          </td>
-                                          <td style={{ padding: "8px" }}>
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={weightValue}
-                                              disabled={isCompleted}
-                                              onChange={(e) => updateSetForm(setFormKey, "weight_used", e.target.value)}
-                                              style={{ width: "90px" }}
-                                            />
-                                          </td>
-                                          <td style={{ padding: "8px" }}>
-                                            <input
-                                              type="number"
-                                              value={repsValue}
-                                              disabled={isCompleted}
-                                              onChange={(e) => updateSetForm(setFormKey, "reps_completed", e.target.value)}
-                                              style={{ width: "78px" }}
-                                            />
-                                          </td>
-                                          <td style={{ padding: "8px", textAlign: "center" }}>
-                                            <div
-                                              style={{
-                                                position: "relative",
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: "8px",
-                                              }}
-                                            >
-                                              <button
-                                                type="button"
-                                                title={isCompleted ? "Desfazer série" : "Guardar série"}
-                                                onClick={() => {
-                                                  if (isCompleted) {
-                                                    undoSet(item, sourceSetNumber, displaySetNumber);
-                                                    return;
-                                                  }
-
-                                                  if (rowSetType === "WARMUP") {
-                                                    saveSet(item, sourceSetNumber, displaySetNumber, WARMUP_EFFORT);
-                                                  } else {
-                                                    toggleCompletionMenu(setFormKey);
-                                                  }
-                                                }}
-                                                style={{
-                                                  minWidth: "42px",
-                                                  height: "34px",
-                                                  borderRadius: "8px",
-                                                  border: "1px solid #4b5563",
-                                                  background: isCompleted ? "#16a34a" : "transparent",
-                                                  color: isCompleted ? "#fff" : "#cbd5e1",
-                                                  fontWeight: "bold",
-                                                  cursor: "pointer",
-                                                }}
-                                              >
-                                                ✓
-                                              </button>
-
-                                              {effortMeta && (
-                                                <span
-                                                  style={{
-                                                    color: effortMeta.color,
-                                                    fontWeight: "bold",
-                                                    whiteSpace: "nowrap",
-                                                  }}
-                                                >
-                                                  {effortMeta.label}
-                                                </span>
-                                              )}
-
-                                              {openCompletionMenuBySet[setFormKey] && !isCompleted && rowSetType !== "WARMUP" && (
-                                                <div
-                                                  style={{
-                                                    position: "absolute",
-                                                    top: "40px",
-                                                    right: "0",
-                                                    zIndex: 10,
-                                                    minWidth: "150px",
-                                                    padding: "8px",
-                                                    border: "1px solid #555",
-                                                    borderRadius: "8px",
-                                                    background: "#111827",
-                                                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-                                                  }}
-                                                >
-                                                  {availableEffortOptions.map((option) => (
-                                                    <button
-                                                      key={option.value}
-                                                      type="button"
-                                                      onClick={() => saveSet(item, sourceSetNumber, displaySetNumber, option)}
-                                                      style={{
-                                                        display: "block",
-                                                        width: "100%",
-                                                        padding: "9px 10px",
-                                                        border: "none",
-                                                        borderRadius: "6px",
-                                                        background: "transparent",
-                                                        color: option.color,
-                                                        fontWeight: "bold",
-                                                        textAlign: "left",
-                                                        cursor: "pointer",
-                                                      }}
-                                                    >
-                                                      {option.label}
-                                                    </button>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
+                              <ExerciseSetTable
+                                exercise={item}
+                                rows={rows}
+                                blocksNormalTraining={blocksNormalTraining}
+                                setForms={setForms}
+                                setTypes={SET_TYPES}
+                                warmupEffort={WARMUP_EFFORT}
+                                openRestMenuBySet={openRestMenuBySet}
+                                openSetTypeMenuBySet={openSetTypeMenuBySet}
+                                openCompletionMenuBySet={openCompletionMenuBySet}
+                                getSetFormKey={getSetFormKey}
+                                getCurrentSetForRow={getCurrentSetForRow}
+                                getSetTypeForExerciseRow={getSetTypeForExerciseRow}
+                                getPreviousSetForExerciseRow={getPreviousSetForExerciseRow}
+                                getSetTypeMeta={getSetTypeMeta}
+                                getVisibleSetLabel={getVisibleSetLabel}
+                                getEffortMetaFromSet={getEffortMetaFromSet}
+                                getRestSecondsForRow={getRestSecondsForRow}
+                                getPlannedValuesForExerciseRow={getPlannedValuesForExerciseRow}
+                                getEffortOptionsForSet={getEffortOptionsForSet}
+                                formatPreviousSet={formatPreviousSet}
+                                formatTimer={formatTimer}
+                                updateSetForm={updateSetForm}
+                                toggleRestMenu={toggleRestMenu}
+                                toggleSetTypeMenu={toggleSetTypeMenu}
+                                toggleCompletionMenu={toggleCompletionMenu}
+                                selectSetType={selectSetType}
+                                removeExerciseRow={removeExerciseRow}
+                                saveSet={saveSet}
+                                undoSet={undoSet}
+                              />
 
                               {!blocksNormalTraining && (
                                 <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
