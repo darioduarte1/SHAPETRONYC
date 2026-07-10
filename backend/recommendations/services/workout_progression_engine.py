@@ -139,20 +139,71 @@ def confidence_from_summary(summary):
 def with_progression_metadata(recommendation, summary, decision_basis):
     return {
         **recommendation,
-        "confidence": confidence_from_summary(summary),
+        "confidence": recommendation.get("confidence") or confidence_from_summary(summary),
         "decision_basis": decision_basis,
         "progression_context": summary,
         "source": "hybrid_local_workout_progression",
     }
 
 
-def calculate_exercise_progression(training_exercise, current_sets):
+def serialize_calibration(calibration):
+    if not calibration:
+        return None
+
+    return {
+        "status": calibration.status,
+        "estimated_working_weight": calibration.estimated_working_weight,
+        "target_reps": calibration.target_reps,
+        "target_rir": calibration.target_rir,
+        "confidence": calibration.confidence,
+        "set_count": len(calibration.calibration_sets or []),
+    }
+
+
+def calibration_scale_context(calibration, exercise):
+    if calibration and calibration.scale_snapshot:
+        return calibration.scale_snapshot
+
+    return exercise
+
+
+def calculate_exercise_progression(training_exercise, current_sets, calibration=None):
     working_sets = [set_log for set_log in current_sets if is_working_set(set_log)]
     planned_sets = training_exercise.sets
     target_rir = training_exercise.target_rir
     summary = summarize_working_sets(working_sets, planned_sets)
+    calibration_context = serialize_calibration(calibration)
 
     if not working_sets:
+        if calibration and calibration.estimated_working_weight:
+            recommended_weight = snap_to_available_weight(
+                calibration.estimated_working_weight,
+                calibration_scale_context(calibration, training_exercise.exercise),
+            )
+            summary["calibration"] = calibration_context
+
+            return with_progression_metadata(
+                {
+                    "training_exercise": training_exercise.id,
+                    "exercise": training_exercise.exercise_id,
+                    "exercise_name": training_exercise.exercise.name,
+                    "action": "use_calibrated_load",
+                    "recommended_weight": recommended_weight,
+                    "recommended_sets": planned_sets,
+                    "target_reps": calibration.target_reps or TARGET_REPS,
+                    "target_rir": calibration.target_rir or target_rir,
+                    "title": "Usar peso calibrado",
+                    "message": (
+                        "Treino experimental concluído. No próximo treino, a primeira série normal "
+                        f"deve começar com {recommended_weight}kg e 12 reps como objetivo."
+                    ),
+                    "reason": "A calibração inicial encontrou um peso de trabalho para este exercício.",
+                    "confidence": calibration.confidence,
+                },
+                summary,
+                ["Peso de trabalho calibrado", "Sem séries normais ainda", "Escala da máquina respeitada"],
+            )
+
         return with_progression_metadata(
             {
                 "training_exercise": training_exercise.id,
@@ -161,7 +212,7 @@ def calculate_exercise_progression(training_exercise, current_sets):
                 "action": "maintain",
                 "recommended_weight": "",
                 "recommended_sets": planned_sets,
-                "target_reps": TARGET_REPS,
+                "target_reps": training_exercise.target_max_reps or TARGET_REPS,
                 "target_rir": target_rir,
                 "title": "Mantém o plano",
                 "message": "Sem séries normais registadas neste exercício. Mantém o plano no próximo treino.",
@@ -295,8 +346,12 @@ def calculate_exercise_progression(training_exercise, current_sets):
     )
 
 
-def calculate_workout_progression(workout, set_logs):
+def calculate_workout_progression(workout, set_logs, calibrations=None):
     sets_by_training_exercise = {}
+    calibrations_by_exercise = {
+        calibration.exercise_id: calibration
+        for calibration in calibrations or []
+    }
 
     for set_log in set_logs:
         if not set_log.training_exercise_id:
@@ -313,6 +368,7 @@ def calculate_workout_progression(workout, set_logs):
                 sets_by_training_exercise.get(training_exercise.id, []),
                 key=lambda set_log: (set_log["set_number"], set_log["set_type"]),
             ),
+            calibrations_by_exercise.get(training_exercise.exercise_id),
         )
         for training_exercise in workout.exercises.select_related("exercise").all()
     ]

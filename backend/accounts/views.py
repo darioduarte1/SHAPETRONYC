@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import transaction
 from django.http import JsonResponse
 from django.utils import timezone
 
@@ -58,6 +59,35 @@ class CreateUserView(APIView):
                 "created": created,
             },
             status=status.HTTP_201_CREATED
+        )
+
+
+class DeleteExperimentalUsersView(APIView):
+    def delete(self, request):
+        users = User.objects.filter(is_staff=False, is_superuser=False)
+        user_count = users.count()
+        profile_count = UserProfile.objects.filter(user__in=users).count()
+        set_log_count = SetLog.objects.filter(user__in=users).count()
+        session_count = WorkoutSession.objects.filter(user__in=users).count()
+        program_count = TrainingProgram.objects.filter(user__in=users).count()
+        calibration_count = ExerciseCalibration.objects.filter(user__in=users).count()
+        weight_scale_count = UserExerciseWeightScale.objects.filter(user__in=users).count()
+
+        with transaction.atomic():
+            _, deleted_by_model = users.delete()
+
+        return Response(
+            {
+                "deleted_users": user_count,
+                "deleted_profiles": profile_count,
+                "deleted_programs": program_count,
+                "deleted_sessions": session_count,
+                "deleted_set_logs": set_log_count,
+                "deleted_calibrations": calibration_count,
+                "deleted_weight_scales": weight_scale_count,
+                "deleted_by_model": deleted_by_model,
+            },
+            status=status.HTTP_200_OK,
         )
 
 

@@ -36,8 +36,34 @@ def _serialize_set_log(set_log):
     }
 
 
-def build_session_coach_context(workout, set_logs, workout_progression, notes=""):
+def _serialize_calibration(calibration):
+    calibration_sets = calibration.calibration_sets or []
+    volume = sum(
+        _number_or_zero(calibration_set.get("weight_used"))
+        * _number_or_zero(calibration_set.get("reps_completed"))
+        for calibration_set in calibration_sets
+    )
+
+    return {
+        "exercise_name": calibration.exercise.name,
+        "exercise": calibration.exercise_id,
+        "status": calibration.status,
+        "estimated_working_weight": calibration.estimated_working_weight,
+        "target_reps": calibration.target_reps,
+        "target_rir": calibration.target_rir,
+        "confidence": calibration.confidence,
+        "set_count": len(calibration_sets),
+        "volume": _round_metric(volume),
+        "sets": calibration_sets,
+    }
+
+
+def build_session_coach_context(workout, set_logs, workout_progression, notes="", calibrations=None):
     serialized_sets = [_serialize_set_log(set_log) for set_log in set_logs]
+    serialized_calibrations = [
+        _serialize_calibration(calibration)
+        for calibration in calibrations or []
+    ]
     exercise_map = {}
 
     for set_log in serialized_sets:
@@ -53,6 +79,7 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
                 "failures": 0,
                 "volume": 0,
                 "rir_values": [],
+                "calibration": None,
             },
         )
 
@@ -74,9 +101,39 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
         if set_log["rir"] is not None:
             exercise_summary["rir_values"].append(set_log["rir"])
 
+    for calibration in serialized_calibrations:
+        exercise_key = calibration["exercise"]
+        exercise_summary = exercise_map.setdefault(
+            exercise_key,
+            {
+                "exercise_name": calibration["exercise_name"],
+                "completed_sets": 0,
+                "working_sets": 0,
+                "warmup_sets": 0,
+                "drop_sets": 0,
+                "failures": 0,
+                "volume": 0,
+                "rir_values": [],
+                "calibration": None,
+            },
+        )
+        exercise_summary["completed_sets"] += calibration["set_count"]
+        exercise_summary["volume"] += calibration["volume"]
+        exercise_summary["calibration"] = {
+            "status": calibration["status"],
+            "estimated_working_weight": calibration["estimated_working_weight"],
+            "target_reps": calibration["target_reps"],
+            "target_rir": calibration["target_rir"],
+            "confidence": calibration["confidence"],
+            "set_count": calibration["set_count"],
+            "volume": calibration["volume"],
+        }
+
     exercise_summaries = []
     total_volume = 0
     total_failures = 0
+    calibration_set_count = sum(calibration["set_count"] for calibration in serialized_calibrations)
+    calibration_volume = sum(calibration["volume"] for calibration in serialized_calibrations)
 
     for exercise_summary in exercise_map.values():
         total_volume += exercise_summary["volume"]
@@ -96,8 +153,11 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
         },
         "session": {
             "notes": notes,
-            "total_sets": len(serialized_sets),
+            "training_sets": len(serialized_sets),
+            "calibration_sets": calibration_set_count,
+            "total_sets": len(serialized_sets) + calibration_set_count,
             "total_volume": _round_metric(total_volume),
+            "calibration_volume": _round_metric(calibration_volume),
             "failure_count": total_failures,
             "exercise_count": len(exercise_summaries),
         },
@@ -120,6 +180,49 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
     }
 
 
+def build_exercise_feedback(context):
+    feedback = []
+
+    for exercise in context.get("exercises", []):
+        calibration = exercise.get("calibration")
+
+        if calibration:
+            weight = calibration.get("estimated_working_weight")
+            confidence = calibration.get("confidence") or "baixa"
+            feedback.append({
+                "exercise_name": exercise["exercise_name"],
+                "title": f"{exercise['exercise_name']}: base criada",
+                "message": (
+                    f"Foram registadas {calibration['set_count']} série(s) experimentais e o peso de trabalho "
+                    f"ficou estimado em {weight}kg com confiança {confidence}. No próximo treino já há uma "
+                    "primeira carga real para começar, sem adivinhar."
+                ),
+            })
+            continue
+
+        if exercise["working_sets"]:
+            rir_text = (
+                f"RIR médio {exercise['average_rir']}"
+                if exercise["average_rir"] is not None
+                else "sem RIR médio suficiente"
+            )
+            failure_text = (
+                f" Teve {exercise['failures']} falha(s), por isso a próxima decisão deve ser prudente."
+                if exercise["failures"]
+                else " Sem falhas registadas, bom sinal para consolidar."
+            )
+            feedback.append({
+                "exercise_name": exercise["exercise_name"],
+                "title": f"{exercise['exercise_name']}: trabalho registado",
+                "message": (
+                    f"Completaste {exercise['working_sets']} série(s) normal(is), "
+                    f"{exercise['volume']}kg de volume e {rir_text}.{failure_text}"
+                ),
+            })
+
+    return feedback[:6]
+
+
 def build_local_coach_summary(context):
     session = context["session"]
     action_counts = context["progression"]["summary"].get("action_counts", {})
@@ -130,6 +233,9 @@ def build_local_coach_summary(context):
     if session["total_sets"] == 0:
         headline = "Treino terminado sem séries registadas"
         summary = "Não há dados suficientes para analisar performance. No próximo treino, regista pelo menos as séries normais."
+    elif session.get("training_sets", 0) == 0 and session.get("calibration_sets", 0) > 0:
+        headline = "Calibração concluída: já temos uma base real"
+        summary = "O treino experimental criou dados úteis para o próximo treino. A app já tem pesos de trabalho estimados por exercício calibrado."
     elif reduce_count or session["failure_count"] >= 2:
         headline = "Sessão exigente: protege a recuperação"
         summary = "O treino mostrou sinais de fadiga. A melhor decisão agora é consolidar técnica, descanso e volume antes de forçar progressão."
@@ -154,6 +260,9 @@ def build_local_coach_summary(context):
     if session["failure_count"]:
         focus_points.append(f"{session['failure_count']} série(s) chegaram à falha.")
 
+    if session.get("calibration_sets"):
+        focus_points.append(f"{session['calibration_sets']} série(s) experimentais transformadas em dados de treino.")
+
     if not focus_points:
         focus_points.append("Continua a registar carga, reps e esforço para melhorar a leitura do coach.")
 
@@ -161,6 +270,7 @@ def build_local_coach_summary(context):
         "headline": headline,
         "summary": summary,
         "focus_points": focus_points[:4],
+        "exercise_feedback": build_exercise_feedback(context),
         "next_session_strategy": "Segue as recomendações por exercício e dá prioridade a séries limpas, com RIR controlado.",
         "recovery_note": "Se a sensação de fadiga continuar alta, mantém cargas e aumenta ligeiramente o descanso entre séries.",
         "metrics": session,
@@ -198,6 +308,15 @@ def _normalize_ai_summary(summary, fallback_summary, model):
             for point in summary.get("focus_points", fallback_summary["focus_points"])
             if point
         ][:4],
+        "exercise_feedback": [
+            {
+                "exercise_name": str(item.get("exercise_name") or ""),
+                "title": str(item.get("title") or item.get("exercise_name") or ""),
+                "message": str(item.get("message") or ""),
+            }
+            for item in summary.get("exercise_feedback", fallback_summary.get("exercise_feedback", []))
+            if isinstance(item, dict) and (item.get("message") or item.get("title"))
+        ][:6],
         "next_session_strategy": str(
             summary.get("next_session_strategy") or fallback_summary["next_session_strategy"]
         ),
@@ -215,7 +334,9 @@ def _request_openai_coach_summary(context, api_key, model):
         "instructions": (
             "És o AI Coach do SHAPETRONYC. Analisa uma sessão de treino e responde em português europeu. "
             "Não dês aconselhamento médico. Se houver dor ou fadiga forte, recomenda prudência, técnica e recuperação. "
-            "Devolve apenas JSON válido com estas chaves: headline, summary, focus_points, next_session_strategy, recovery_note."
+            "Fala de forma dinâmica sobre cada exercício usando exercise_feedback. "
+            "Devolve apenas JSON válido com estas chaves: headline, summary, focus_points, exercise_feedback, next_session_strategy, recovery_note. "
+            "exercise_feedback deve ser uma lista de objetos com exercise_name, title e message."
         ),
         "input": json.dumps(context, ensure_ascii=False),
     }
@@ -236,8 +357,8 @@ def _request_openai_coach_summary(context, api_key, model):
     return json.loads(response_text)
 
 
-def generate_session_ai_coach_summary(workout, set_logs, workout_progression, notes=""):
-    context = build_session_coach_context(workout, set_logs, workout_progression, notes)
+def generate_session_ai_coach_summary(workout, set_logs, workout_progression, notes="", calibrations=None):
+    context = build_session_coach_context(workout, set_logs, workout_progression, notes, calibrations)
     fallback_summary = build_local_coach_summary(context)
     api_key = getattr(settings, "OPENAI_API_KEY", "")
     model = getattr(settings, "AI_COACH_MODEL", "gpt-5.5")

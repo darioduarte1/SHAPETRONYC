@@ -30,7 +30,13 @@ from .services.user_exercise_weight_scale import (
     upsert_user_exercise_weight_scale,
 )
 from .services.weekly_feedback import build_weekly_feedback
-from .models import TrainingProgram, TrainingWorkout, TrainingWorkoutExercise, WorkoutSession
+from .models import (
+    ExerciseCalibration,
+    TrainingProgram,
+    TrainingWorkout,
+    TrainingWorkoutExercise,
+    WorkoutSession,
+)
 from exercises.models import Exercise
 
 
@@ -139,12 +145,30 @@ class FinishWorkoutSessionView(APIView):
             "set_number",
             "created_at",
         )
-        progression = calculate_workout_progression(session.workout, set_logs)
+        workout_exercise_ids = session.workout.exercises.values_list("exercise_id", flat=True)
+        calibrations = ExerciseCalibration.objects.filter(
+            user=session.user,
+            exercise_id__in=workout_exercise_ids,
+        ).select_related("exercise")
+
+        if session.started_at and session.completed_at:
+            session_calibrations = calibrations.filter(
+                updated_at__gte=session.started_at,
+                updated_at__lte=session.completed_at,
+            )
+        else:
+            session_calibrations = calibrations.none()
+
+        if not set_logs.exists() and not session_calibrations.exists():
+            session_calibrations = calibrations
+
+        progression = calculate_workout_progression(session.workout, set_logs, session_calibrations)
         ai_coach_summary = generate_session_ai_coach_summary(
             session.workout,
             set_logs,
             progression,
             notes,
+            session_calibrations,
         )
         try:
             profile = UserProfile.objects.get(user=session.user)

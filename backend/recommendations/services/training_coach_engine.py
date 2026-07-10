@@ -3,7 +3,6 @@ import re
 from exercises.services.weight_scale import (
     get_exercise_weight_scale,
     next_available_weight,
-    previous_available_weight,
     snap_to_available_weight,
 )
 
@@ -1262,16 +1261,6 @@ def can_add_extra_set(context, planned_sets, exercise_context, target_max_reps):
     return False
 
 
-def backoff_weight(weight, fatigue_score, is_failure, exercise_context):
-    if not bool(exercise_context.get("is_compound")):
-        return snap_to_available_weight(reduce_weight(weight, 0.1), exercise_context, "down")
-
-    if is_failure or fatigue_score >= 60:
-        return snap_to_available_weight(reduce_weight(weight, 0.15), exercise_context, "down")
-
-    return snap_to_available_weight(reduce_weight(weight, 0.1), exercise_context, "down")
-
-
 def next_warmup_weight(current_weight, first_working_weight, exercise_context):
     if not first_working_weight:
         return current_weight
@@ -1341,39 +1330,6 @@ def should_stop_exercise(context, planned_sets, readiness_score, fatigue_score):
         return True
 
     return working_count >= max_productive_sets
-
-
-def can_add_productive_set(context, planned_sets, readiness_score, fatigue_score, recovery_score, exercise_context):
-    working_count = context["working_set_count"]
-    valid_working_sets = context.get("valid_working_set_count", working_count)
-    planned_sets = planned_sets or 3
-    maximum_sets = context.get("maximum_allowed_sets", planned_sets + MAX_EXTRA_PRODUCTIVE_SETS)
-    exercise_priority = context.get("exercise_priority", "SECONDARY")
-
-    if valid_working_sets < planned_sets:
-        return True
-
-    if working_count >= maximum_sets:
-        return False
-
-    if exercise_priority == "PRIMARY" and working_count >= 4:
-        return False
-
-    return (
-        readiness_score >= 82
-        and fatigue_score < 35
-        and recovery_score >= 70
-        and context.get("global_fatigue_score", 0) <= 70
-        and next_set_still_worthwhile(
-            context.get("stimulus_score", readiness_score),
-            context.get("fatigue_cost", fatigue_score),
-            exercise_priority,
-            valid_working_sets,
-            context.get("minimum_valid_sets", planned_sets),
-        )
-        and context["current_summary"]["missed_set_count"] == 0
-        and context["current_summary"]["reserve_ratio"] >= 0.8
-    )
 
 
 def safety_guardrails(notes, reps, is_failure, target_min_reps, target_max_reps, fatigue_score, context):

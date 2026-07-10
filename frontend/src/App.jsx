@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
+import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
@@ -58,6 +60,8 @@ function App() {
   const [loginUsername, setLoginUsername] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isDeletingExperimentalUsers, setIsDeletingExperimentalUsers] = useState(false);
+  const [deleteUsersMessage, setDeleteUsersMessage] = useState("");
 
   const [form, setForm] = useState({
     username: "",
@@ -2202,6 +2206,76 @@ function App() {
     });
   }
 
+  async function deleteExperimentalUsers() {
+    const confirmed = window.confirm(
+      "Isto vai apagar todos os atletas experimentais e os dados associados. A biblioteca de exercícios fica preservada. Queres continuar?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteUsersMessage("");
+    setLoginError("");
+    setProgramError("");
+    setIsDeletingExperimentalUsers(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/accounts/experimental/delete-users/`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+        setDeleteUsersMessage("Não consegui apagar os atletas experimentais.");
+        return;
+      }
+
+      setProfileId(null);
+      setUserId(null);
+      setProgram(null);
+      setSetForms({});
+      setRecommendations({});
+      setActiveSessionByWorkout({});
+      setSessionNotes({});
+      setOpenExerciseById({});
+      setOpenWorkoutId(null);
+      setExerciseLogsById({});
+      setSubstitutionOptionsByExerciseId({});
+      setOpenSubstitutionByExerciseId({});
+      setIsReplacingExerciseById({});
+      setOpenWeightScaleByExerciseId({});
+      setWeightScaleFormsByExerciseId({});
+      setIsSavingWeightScaleByExerciseId({});
+      setCalibrationFormsByExerciseId({});
+      setIsSavingCalibrationByExerciseId({});
+      setCompletedCalibrationByExerciseId({});
+      setExerciseRowCounts({});
+      setRestTimers({});
+      setOpenCompletionMenuBySet({});
+      setOpenRestMenuBySet({});
+      setOpenSetTypeMenuBySet({});
+      setRemovedSetByKey({});
+      setLatestWorkoutProgression(null);
+      setLatestAiCoach(null);
+      setAthleteDashboard(null);
+      setAdaptivePlan(null);
+      setAdaptiveDecisions([]);
+      setWeeklyFeedback(null);
+      setTrainingBlock(null);
+      setApplyingAdaptiveById({});
+      setLoginUsername("");
+      setStep(1);
+      setDeleteUsersMessage(`${data.deleted_users} atleta(s) experimental(is) apagado(s).`);
+    } catch (error) {
+      console.error(error);
+      setDeleteUsersMessage("Erro de ligação ao apagar atletas experimentais.");
+    } finally {
+      setIsDeletingExperimentalUsers(false);
+    }
+  }
+
   return (
     <div className={step === 1 ? "app-shell home-app-shell" : step === 2 ? "app-shell profile-app-shell" : "app-shell"}>
       <h1>SHAPETRONYC</h1>
@@ -2267,6 +2341,26 @@ function App() {
                 {isLoggingIn ? "Entering..." : "Enter profile"}
               </button>
             </form>
+          </section>
+
+          <section className="home-experimental-panel">
+            <div>
+              <span className="profile-kicker">Experimental</span>
+              <h2>Limpar atletas de teste</h2>
+              <p>
+                Apaga os atletas criados durante testes e todos os dados associados: perfis,
+                programas, sessões, séries, calibrações, memórias e escalas.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="home-danger-button"
+              onClick={deleteExperimentalUsers}
+              disabled={isDeletingExperimentalUsers}
+            >
+              {isDeletingExperimentalUsers ? "A apagar..." : "Apagar atletas experimentais"}
+            </button>
+            {deleteUsersMessage && <p className="home-delete-message">{deleteUsersMessage}</p>}
           </section>
         </div>
       )}
@@ -2466,242 +2560,13 @@ function App() {
             </button>
           </div>
 
-          {athleteDashboard && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(15, 23, 42, 0.72)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: "#94a3b8",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Dashboard
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>Evolução do atleta</h3>
-                </div>
-                <span style={{ color: "#bae6fd", fontSize: "12px", fontWeight: "bold" }}>
-                  Último treino: {formatDashboardDate(athleteDashboard.summary?.last_workout_at)}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-                  gap: "10px",
-                  marginTop: "14px",
-                }}
-              >
-                <div>
-                  <strong>{athleteDashboard.summary?.completed_workouts || 0}</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>Treinos</p>
-                </div>
-                <div>
-                  <strong>{formatNumber(athleteDashboard.summary?.total_volume)} kg</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>Volume</p>
-                </div>
-                <div>
-                  <strong>{athleteDashboard.summary?.total_sets || 0}</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>Séries</p>
-                </div>
-                <div>
-                  <strong>{athleteDashboard.summary?.average_rir ?? "-"}</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>RIR médio</p>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                  gap: "14px",
-                  marginTop: "16px",
-                }}
-              >
-                <div>
-                  <strong>Volume semanal</strong>
-                  {athleteDashboard.weekly_volume?.length > 0 ? (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${athleteDashboard.weekly_volume.length}, minmax(32px, 1fr))`,
-                        gap: "8px",
-                        alignItems: "end",
-                        height: "150px",
-                        marginTop: "10px",
-                      }}
-                    >
-                      {athleteDashboard.weekly_volume.map((week) => {
-                        const maxVolume = getDashboardMaxWeeklyVolume(athleteDashboard);
-                        const height = Math.max(8, (Number(week.volume) / maxVolume) * 112);
-
-                        return (
-                          <div key={week.week} style={{ display: "grid", gap: "6px", alignItems: "end" }}>
-                            <div
-                              title={`${week.week}: ${formatNumber(week.volume)} kg`}
-                              style={{
-                                height: `${height}px`,
-                                borderRadius: "5px 5px 2px 2px",
-                                background: "#38bdf8",
-                              }}
-                            />
-                            <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "bold" }}>
-                              {week.week.split("-")[1]}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p style={{ color: "#94a3b8" }}>Sem semanas concluídas.</p>
-                  )}
-                </div>
-
-                <div>
-                  <strong>Últimos treinos</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
-                    {(athleteDashboard.recent_sessions || []).slice(0, 4).map((session) => (
-                      <div
-                        key={session.id}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr auto",
-                          gap: "10px",
-                          paddingBottom: "8px",
-                          borderBottom: "1px solid rgba(148, 163, 184, 0.22)",
-                        }}
-                      >
-                        <span>{session.workout_name}</span>
-                        <span style={{ color: "#94a3b8", fontSize: "13px" }}>
-                          {formatNumber(session.volume)} kg
-                        </span>
-                      </div>
-                    ))}
-                    {athleteDashboard.recent_sessions?.length === 0 && (
-                      <p style={{ margin: 0, color: "#94a3b8" }}>Ainda sem treinos concluídos.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: "14px",
-                  marginTop: "16px",
-                }}
-              >
-                <div>
-                  <strong>Melhor progressão</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
-                    {(athleteDashboard.top_progressing_exercises || []).map((exercise) => (
-                      <div key={exercise.exercise_id}>
-                        <span>{exercise.exercise_name}</span>
-                        <p style={{ margin: "3px 0 0", color: "#86efac", fontSize: "13px" }}>
-                          +{formatNumber(exercise.load_change)} kg em {exercise.sessions} treinos
-                        </p>
-                      </div>
-                    ))}
-                    {athleteDashboard.top_progressing_exercises?.length === 0 && (
-                      <p style={{ margin: 0, color: "#94a3b8" }}>Sem progressões suficientes.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <strong>A vigiar</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
-                    {(athleteDashboard.watchlist_exercises || []).map((exercise) => (
-                      <div key={exercise.exercise_id}>
-                        <span>{exercise.exercise_name}</span>
-                        <p style={{ margin: "3px 0 0", color: "#fbbf24", fontSize: "13px" }}>
-                          {exercise.reason}
-                        </p>
-                      </div>
-                    ))}
-                    {athleteDashboard.watchlist_exercises?.length === 0 && (
-                      <p style={{ margin: 0, color: "#94a3b8" }}>Sem alertas recentes.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: "16px" }}>
-                <strong>Memória do atleta</strong>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                    gap: "10px",
-                    marginTop: "10px",
-                  }}
-                >
-                  {(athleteDashboard.training_memories || []).map((memory) => (
-                    <div
-                      key={memory.id}
-                      style={{
-                        padding: "10px",
-                        border: "1px solid rgba(148, 163, 184, 0.22)",
-                        borderRadius: "8px",
-                        background: "rgba(15, 23, 42, 0.44)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "10px",
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <span style={{ fontWeight: "bold" }}>{memory.title}</span>
-                        <span style={{ color: getConfidenceColor(memory.confidence), fontSize: "12px", fontWeight: "bold" }}>
-                          {memory.confidence}
-                        </span>
-                      </div>
-                      <p style={{ margin: "6px 0 0", color: "#cbd5e1", fontSize: "13px" }}>
-                        {memory.summary}
-                      </p>
-                      {memory.evidence?.length > 0 && (
-                        <div style={{ display: "grid", gap: "3px", marginTop: "8px" }}>
-                          {memory.evidence.map((item) => (
-                            <p key={item} style={{ margin: 0, color: "#94a3b8", fontSize: "12px" }}>
-                              {item}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {athleteDashboard.training_memories?.length === 0 && (
-                    <p style={{ margin: 0, color: "#94a3b8" }}>
-                      Ainda sem memória suficiente. Termina mais alguns treinos para criar padrões.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
+          <AthleteDashboardPanel
+            dashboard={athleteDashboard}
+            formatDate={formatDashboardDate}
+            formatNumber={formatNumber}
+            getConfidenceColor={getConfidenceColor}
+            getMaxWeeklyVolume={getDashboardMaxWeeklyVolume}
+          />
 
           {trainingBlock && (
             <section
@@ -3229,90 +3094,10 @@ function App() {
             </section>
           )}
 
-          {latestAiCoach && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(8, 47, 73, 0.42)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: "#7dd3fc",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    AI Coach
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: "8px" }}>{latestAiCoach.headline}</h3>
-                </div>
-                <span
-                  style={{
-                    color: "#bae6fd",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {getAiCoachSourceLabel(latestAiCoach.status)}
-                </span>
-              </div>
-
-              <p style={{ color: "#e5e7eb" }}>{latestAiCoach.summary}</p>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                  gap: "10px",
-                  marginTop: "14px",
-                }}
-              >
-                <div>
-                  <strong>Volume</strong>
-                  <p>{Number(latestAiCoach.metrics?.total_volume || 0).toFixed(1)} kg</p>
-                </div>
-                <div>
-                  <strong>Séries</strong>
-                  <p>{latestAiCoach.metrics?.total_sets || 0}</p>
-                </div>
-                <div>
-                  <strong>Falhas</strong>
-                  <p>{latestAiCoach.metrics?.failure_count || 0}</p>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
-                {latestAiCoach.focus_points?.map((point) => (
-                  <p key={point} style={{ margin: 0, color: "#cbd5e1" }}>
-                    {point}
-                  </p>
-                ))}
-              </div>
-
-              <p style={{ marginTop: "14px", color: "#bae6fd" }}>
-                {latestAiCoach.next_session_strategy}
-              </p>
-              <p style={{ marginTop: "8px", color: "#94a3b8", fontSize: "13px" }}>
-                {latestAiCoach.recovery_note}
-              </p>
-            </section>
-          )}
+          <AiCoachSummaryPanel
+            summary={latestAiCoach}
+            getSourceLabel={getAiCoachSourceLabel}
+          />
 
           {program.workouts.map((workout) => {
             const activeWorkoutId = getActiveWorkoutId();

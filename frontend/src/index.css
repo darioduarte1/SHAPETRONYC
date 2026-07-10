@@ -263,7 +263,8 @@ p {
 }
 
 .home-hero-panel,
-.home-action-card {
+.home-action-card,
+.home-experimental-panel {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;
   background: #171a21;
@@ -351,8 +352,37 @@ p {
     #171a21;
 }
 
+.home-experimental-panel {
+  grid-column: 1 / -1;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border-color: rgba(248, 113, 113, 0.28);
+  background:
+    linear-gradient(135deg, rgba(127, 29, 29, 0.16), transparent 48%),
+    #171a21;
+}
+
+.home-experimental-panel h2 {
+  margin: 6px 0 0;
+  color: #fee2e2;
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.home-experimental-panel p {
+  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .home-primary-button,
-.home-secondary-button {
+.home-secondary-button,
+.home-danger-button {
   min-height: 46px;
   width: 100%;
   padding: 10px 16px;
@@ -376,12 +406,22 @@ p {
   color: #f8fafc;
 }
 
+.home-danger-button {
+  width: auto;
+  min-width: 230px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.48);
+  color: #fee2e2;
+}
+
 .home-primary-button:hover,
-.home-secondary-button:hover {
+.home-secondary-button:hover,
+.home-danger-button:hover {
   filter: brightness(1.05);
 }
 
-.home-secondary-button:disabled {
+.home-secondary-button:disabled,
+.home-danger-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -389,6 +429,13 @@ p {
 .home-error {
   margin: -6px 0 0;
   color: #fca5a5;
+  font-size: 13px;
+}
+
+.home-delete-message {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  color: #fecaca;
   font-size: 13px;
 }
 
@@ -969,9 +1016,18 @@ p {
 
   .home-hero-panel,
   .home-action-card,
+  .home-experimental-panel,
   .profile-intro-panel,
   .profile-form-card {
     padding: 18px;
+  }
+
+  .home-experimental-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .home-danger-button {
+    width: 100%;
   }
 
   .home-signal-grid,
@@ -1020,4 +1076,275 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+.dashboard-panel,
+.ai-coach-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.dashboard-panel {
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.ai-coach-panel {
+  background: rgba(8, 47, 73, 0.42);
+}
+
+.panel-heading-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.panel-heading-row h3 {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.panel-kicker {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.panel-kicker.blue {
+  color: #7dd3fc;
+}
+
+.panel-date,
+.panel-source {
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.dashboard-metrics,
+.ai-coach-metrics {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.dashboard-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.ai-coach-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-metrics p,
+.compact-list p,
+.ai-coach-focus-list p,
+.ai-coach-exercise-card p,
+.ai-coach-metrics p {
+  margin: 0;
+}
+
+.dashboard-metrics p {
+  color: #94a3b8;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.dashboard-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.weekly-volume-chart {
+  display: grid;
+  gap: 8px;
+  align-items: end;
+  height: 150px;
+  margin-top: 10px;
+}
+
+.weekly-volume-bar-wrap {
+  display: grid;
+  gap: 6px;
+  align-items: end;
+}
+
+.weekly-volume-bar {
+  border-radius: 5px 5px 2px 2px;
+  background: #38bdf8;
+}
+
+.weekly-volume-bar-wrap span {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.compact-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.recent-session-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.recent-session-row span:last-child {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.muted-text {
+  color: #94a3b8;
+}
+
+.no-margin {
+  margin: 0;
+}
+
+.positive-text,
+.warning-text {
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+
+.positive-text {
+  color: #86efac;
+}
+
+.warning-text {
+  color: #fbbf24;
+}
+
+.dashboard-section {
+  margin-top: 16px;
+}
+
+.dashboard-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.calibrated-exercise-card,
+.memory-card,
+.ai-coach-exercise-card {
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.calibrated-exercise-card {
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  background: rgba(8, 47, 73, 0.28);
+}
+
+.calibrated-exercise-card span,
+.memory-card-heading span:first-child {
+  font-weight: bold;
+}
+
+.calibrated-exercise-card p {
+  margin: 6px 0 0;
+  color: #e5e7eb;
+  font-size: 13px;
+}
+
+.calibrated-exercise-card p:last-child {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.memory-card {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.memory-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.memory-card-heading span:last-child {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.memory-card > p {
+  margin: 6px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.memory-evidence-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+}
+
+.memory-evidence-list p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.ai-coach-summary {
+  color: #e5e7eb;
+}
+
+.ai-coach-focus-list,
+.ai-coach-exercise-list {
+  display: grid;
+  margin-top: 14px;
+}
+
+.ai-coach-focus-list {
+  gap: 8px;
+}
+
+.ai-coach-focus-list p {
+  color: #cbd5e1;
+}
+
+.ai-coach-exercise-list {
+  gap: 10px;
+}
+
+.ai-coach-exercise-card {
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.ai-coach-exercise-card p {
+  margin-top: 6px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.ai-coach-next {
+  margin-top: 14px;
+  color: #bae6fd;
+}
+
+.ai-coach-recovery {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 13px;
 }

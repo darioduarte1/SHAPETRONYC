@@ -74,7 +74,7 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 72 testes a passar
+- Backend: 77 testes a passar
 - Frontend: build a passar
 - Motor de recomendações: 34 testes a passar
 
@@ -127,6 +127,8 @@ Implementado:
 - Escala de pesos por atleta e exercício, com placas principais e múltiplas bolachas/extras
 - Bloqueio do treino normal até existir escala da máquina e calibração inicial
 - Botão de check reversível: desfazer uma série apaga o registo e limpa decisões dependentes
+- Botão experimental no menu principal para apagar atletas de teste e todos os dados associados
+- Remoção de código legado não utilizado: app antiga `workouts`, assets iniciais do template Vite/React e wrapper antigo de recomendação híbrida
 
 Em preparação:
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
@@ -148,6 +150,7 @@ Em preparação:
 
 ### Accounts
 - `POST /api/accounts/create-user/`
+- `DELETE /api/accounts/experimental/delete-users/`
 - `GET /api/accounts/profiles/`
 - `POST /api/accounts/profiles/`
 - `GET /api/accounts/profiles/<profile_id>/export/`
@@ -658,6 +661,11 @@ Entregue:
 - Botão de check reversível para corrigir séries registadas
 - Endpoint de remoção de `SetLog` para desfazer séries confirmadas
 - Regra especial: desfazer aquecimento não apaga a primeira série normal, porque ela vem do histórico/calibração
+- Botão experimental no menu principal para apagar utilizadores normais e dados dependentes, preservando contas administrativas e a biblioteca de exercícios
+- Limpeza de código legado não utilizado:
+  - remoção da app antiga `workouts`
+  - remoção de assets iniciais do Vite/React não importados
+  - remoção do wrapper antigo `hybrid_recommendation_engine.py`
 
 Motor de decisão atualizado:
 - Regra central: antes de 3 séries de trabalho válidas, adaptar carga em vez de terminar, salvo segurança
@@ -776,7 +784,7 @@ SHAPETRONYC/
 │   ├── public/
 │   ├── src/
 │   │   ├── App.jsx
-│   │   ├── App.css
+│   │   ├── index.css
 │   │   └── main.jsx
 │   └── package.json
 └── README.md

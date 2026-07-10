@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 from accounts.models import UserProfile
 from exercises.models import Exercise
 from progression.models import SetLog
+from recommendations.services.workout_progression_engine import calculate_workout_progression
 from training.models import (
     AdaptivePlanDecision,
     AthleteTrainingMemory,
@@ -312,6 +313,88 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(dashboard["watchlist_exercises"][0]["exercise_name"], "Chest Press Machine")
         self.assertIn("falha", dashboard["watchlist_exercises"][0]["reason"])
 
+    def test_dashboard_includes_experimental_calibration_data(self):
+        completed_at = timezone.now()
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="COMPLETED",
+            completed_at=completed_at,
+        )
+        WorkoutSession.objects.filter(id=session.id).update(
+            started_at=completed_at - timedelta(minutes=12),
+        )
+        calibration = ExerciseCalibration.objects.create(
+            user=self.user,
+            exercise=self.exercise,
+            status="CALIBRATED",
+            estimated_working_weight=32,
+            confidence="média",
+            calibration_sets=[
+                {"weight_used": 24, "reps_completed": 15, "reached_failure": True},
+                {"weight_used": 30, "reps_completed": 13, "reached_failure": True},
+                {"weight_used": 32, "reps_completed": 12, "reached_failure": True},
+            ],
+        )
+        ExerciseCalibration.objects.filter(id=calibration.id).update(
+            updated_at=completed_at - timedelta(minutes=2),
+        )
+
+        dashboard = build_athlete_dashboard(self.profile)
+
+        self.assertEqual(dashboard["summary"]["completed_workouts"], 1)
+        self.assertEqual(dashboard["summary"]["total_sets"], 3)
+        self.assertEqual(dashboard["summary"]["calibration_sets"], 3)
+        self.assertEqual(dashboard["summary"]["calibrated_exercises"], 1)
+        self.assertEqual(dashboard["summary"]["total_volume"], 1134.0)
+        self.assertEqual(dashboard["recent_sessions"][0]["volume"], 1134.0)
+        self.assertEqual(dashboard["recent_sessions"][0]["calibration_sets"], 3)
+        self.assertEqual(dashboard["calibrated_exercises"][0]["estimated_working_weight"], 32.0)
+
+    def test_workout_progression_uses_calibrated_weight_without_normal_sets(self):
+        calibration = ExerciseCalibration.objects.create(
+            user=self.user,
+            exercise=self.exercise,
+            status="CALIBRATED",
+            estimated_working_weight=32,
+            confidence="média",
+            calibration_sets=[
+                {"weight_used": 32, "reps_completed": 12, "reached_failure": True},
+            ],
+        )
+
+        progression = calculate_workout_progression(self.workout, [], [calibration])
+        recommendation = progression["recommendations"][0]
+
+        self.assertEqual(recommendation["action"], "use_calibrated_load")
+        self.assertEqual(recommendation["recommended_weight"], 32)
+        self.assertEqual(recommendation["confidence"], "média")
+        self.assertIn("calibrado", recommendation["title"].lower())
+
+    def test_workout_progression_uses_calibration_scale_snapshot(self):
+        self.exercise.main_weight_options = [27.3]
+        self.exercise.save(update_fields=["main_weight_options"])
+        calibration = ExerciseCalibration.objects.create(
+            user=self.user,
+            exercise=self.exercise,
+            status="CALIBRATED",
+            estimated_working_weight=29.6,
+            confidence="alta",
+            scale_snapshot={
+                "main_weight_options": [27.3, 29.6],
+                "micro_weight_options": [],
+            },
+            calibration_sets=[
+                {"weight_used": 29.6, "reps_completed": 12, "reached_failure": True},
+            ],
+        )
+
+        progression = calculate_workout_progression(self.workout, [], [calibration])
+        recommendation = progression["recommendations"][0]
+
+        self.assertEqual(recommendation["action"], "use_calibrated_load")
+        self.assertEqual(recommendation["recommended_weight"], 29.6)
+
     def test_dashboard_endpoint_returns_profile_dashboard(self):
         self.create_completed_session(days_ago=1, weight=50, reps=12, rir=2)
         client = APIClient()
@@ -486,6 +569,39 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(feedback["status"], "progressing")
         self.assertFalse(feedback["deload"]["recommended"])
         self.assertEqual(feedback["signals"]["recent_failure_count"], 0)
+
+    def test_weekly_feedback_ignores_calibration_failure_sets_for_deload(self):
+        completed_at = timezone.now()
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="COMPLETED",
+            completed_at=completed_at,
+        )
+        WorkoutSession.objects.filter(id=session.id).update(
+            started_at=completed_at - timedelta(minutes=12),
+        )
+        calibration = ExerciseCalibration.objects.create(
+            user=self.user,
+            exercise=self.exercise,
+            status="CALIBRATED",
+            estimated_working_weight=29.6,
+            confidence="alta",
+            calibration_sets=[
+                {"weight_used": 27.3, "reps_completed": 15, "reached_failure": True},
+                {"weight_used": 29.6, "reps_completed": 13, "reached_failure": True},
+                {"weight_used": 29.6, "reps_completed": 12, "reached_failure": True},
+            ],
+        )
+        ExerciseCalibration.objects.filter(id=calibration.id).update(
+            updated_at=completed_at - timedelta(minutes=2),
+        )
+
+        feedback = build_weekly_feedback(self.profile)
+
+        self.assertEqual(feedback["signals"]["recent_failure_count"], 0)
+        self.assertEqual(feedback["status"], "progressing")
+        self.assertFalse(feedback["deload"]["recommended"])
 
     def test_weekly_feedback_endpoint_returns_deload_state(self):
         self.create_completed_session(days_ago=14, weight=55, reps=12, rir=2)

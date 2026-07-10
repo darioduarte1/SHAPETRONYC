@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'exercises',
-    'workouts',
     'progression',
     'recommendations',
     'programs',
