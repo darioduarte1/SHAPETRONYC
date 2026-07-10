@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
-import ExerciseCalibrationPanel from "./components/ExerciseCalibrationPanel";
-import ExerciseSetTable from "./components/ExerciseSetTable";
-import ExerciseSubstitutionPanel from "./components/ExerciseSubstitutionPanel";
-import ExerciseWeightScalePanel from "./components/ExerciseWeightScalePanel";
+import TrainingBlockPanel from "./components/TrainingBlockPanel";
+import WeeklyFeedbackPanel from "./components/WeeklyFeedbackPanel";
+import WorkoutCard from "./components/WorkoutCard";
+import WorkoutProgressionPanel from "./components/WorkoutProgressionPanel";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
@@ -2572,247 +2572,21 @@ function App() {
             getMaxWeeklyVolume={getDashboardMaxWeeklyVolume}
           />
 
-          {trainingBlock && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(15, 23, 42, 0.72)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: getTrainingBlockPhaseColor(trainingBlock.block?.phase),
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Bloco de treino
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>
-                    {trainingBlock.block?.name || "Sem bloco ativo"}
-                  </h3>
-                  <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
-                    {trainingBlock.summary?.phase_recommendation?.message || "Termina mais treinos para formar um bloco."}
-                  </p>
-                </div>
-                <span
-                  style={{
-                    color: getTrainingBlockPhaseColor(trainingBlock.block?.phase),
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {getTrainingBlockPhaseLabel(trainingBlock.block?.phase)}
-                </span>
-              </div>
+          <TrainingBlockPanel
+            trainingBlock={trainingBlock}
+            formatNumber={formatNumber}
+            getPhaseLabel={getTrainingBlockPhaseLabel}
+            getPhaseColor={getTrainingBlockPhaseColor}
+          />
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-                  gap: "10px",
-                  marginTop: "14px",
-                }}
-              >
-                <div>
-                  <strong>{trainingBlock.summary?.completed_sessions || 0}</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>treinos no bloco</p>
-                </div>
-                <div>
-                  <strong>{formatNumber(trainingBlock.summary?.total_volume || 0)} kg</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>volume do bloco</p>
-                </div>
-                <div>
-                  <strong>{trainingBlock.summary?.total_failures || 0}</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>falhas no bloco</p>
-                </div>
-                <div>
-                  <strong>{trainingBlock.summary?.average_rir ?? "-"}</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>RIR médio</p>
-                </div>
-              </div>
 
-              {trainingBlock.summary?.weekly_volume?.length > 0 && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${trainingBlock.summary.weekly_volume.length}, minmax(44px, 1fr))`,
-                    gap: "8px",
-                    alignItems: "end",
-                    height: "120px",
-                    marginTop: "14px",
-                  }}
-                >
-                  {trainingBlock.summary.weekly_volume.map((week) => {
-                    const maxVolume = Math.max(
-                      ...trainingBlock.summary.weekly_volume.map((item) => Number(item.volume) || 0),
-                      1
-                    );
-                    const height = Math.max(8, (Number(week.volume) / maxVolume) * 82);
 
-                    return (
-                      <div key={week.week} style={{ display: "grid", gap: "6px", alignItems: "end" }}>
-                        <div
-                          title={`${week.week}: ${formatNumber(week.volume)} kg`}
-                          style={{
-                            height: `${height}px`,
-                            borderRadius: "5px 5px 2px 2px",
-                            background: getTrainingBlockPhaseColor(trainingBlock.block?.phase),
-                          }}
-                        />
-                        <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "bold" }}>
-                          {week.week.split("-")[1]}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
 
-              <div
-                style={{
-                  marginTop: "14px",
-                  padding: "12px",
-                  border: "1px solid rgba(148, 163, 184, 0.18)",
-                  borderRadius: "8px",
-                  background: "rgba(15, 23, 42, 0.38)",
-                }}
-              >
-                <strong>{trainingBlock.summary?.phase_recommendation?.title}</strong>
-                <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "13px" }}>
-                  {trainingBlock.summary?.phase_recommendation?.next_step}
-                </p>
-              </div>
-            </section>
-          )}
-
-          {weeklyFeedback && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(30, 41, 59, 0.72)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: getWeeklyFeedbackStatusColor(weeklyFeedback.status),
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Feedback semanal
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>{weeklyFeedback.title}</h3>
-                  <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>{weeklyFeedback.summary}</p>
-                </div>
-                <span
-                  style={{
-                    color: getWeeklyFeedbackStatusColor(weeklyFeedback.status),
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {getWeeklyFeedbackStatusLabel(weeklyFeedback.status)}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                  gap: "10px",
-                  marginTop: "14px",
-                }}
-              >
-                <div>
-                  <strong>{weeklyFeedback.signals?.recent_session_count || 0}</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>treinos recentes</p>
-                </div>
-                <div>
-                  <strong>{weeklyFeedback.signals?.recent_failure_count || 0}</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>falhas recentes</p>
-                </div>
-                <div>
-                  <strong>{weeklyFeedback.signals?.watchlist_count || 0}</strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>exercícios a vigiar</p>
-                </div>
-                <div>
-                  <strong>
-                    {weeklyFeedback.signals?.volume_trend?.change_percent > 0 ? "+" : ""}
-                    {weeklyFeedback.signals?.volume_trend?.change_percent || 0}%
-                  </strong>
-                  <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "13px" }}>tendência volume</p>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
-                {(weeklyFeedback.feedback || []).map((item) => (
-                  <p key={item} style={{ margin: 0, color: "#cbd5e1", fontSize: "13px" }}>
-                    {item}
-                  </p>
-                ))}
-              </div>
-
-              {weeklyFeedback.deload?.recommended && (
-                <div
-                  style={{
-                    marginTop: "14px",
-                    padding: "12px",
-                    border: "1px solid rgba(251, 191, 36, 0.35)",
-                    borderRadius: "8px",
-                    background: "rgba(120, 53, 15, 0.28)",
-                  }}
-                >
-                  <strong style={{ color: "#fde68a" }}>Protocolo de deload sugerido</strong>
-                  <p style={{ margin: "6px 0 0", color: "#fef3c7", fontSize: "13px" }}>
-                    {weeklyFeedback.deload.duration} · volume a {Math.round((weeklyFeedback.deload.volume_multiplier || 0) * 100)}% · RIR alvo {weeklyFeedback.deload.target_rir}+
-                  </p>
-                  <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
-                    {(weeklyFeedback.deload.protocol || []).map((item) => (
-                      <p key={item} style={{ margin: 0, color: "#fde68a", fontSize: "12px" }}>
-                        {item}
-                      </p>
-                    ))}
-                  </div>
-                  {weeklyFeedback.deload.reasons?.length > 0 && (
-                    <p style={{ margin: "8px 0 0", color: "#fbbf24", fontSize: "12px" }}>
-                      Motivo: {weeklyFeedback.deload.reasons.join(", ")}
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
+          <WeeklyFeedbackPanel
+            feedback={weeklyFeedback}
+            getStatusLabel={getWeeklyFeedbackStatusLabel}
+            getStatusColor={getWeeklyFeedbackStatusColor}
+          />
 
           {adaptivePlan && (
             <section
@@ -3002,101 +2776,13 @@ function App() {
             </section>
           )}
 
-          {latestWorkoutProgression && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(15, 23, 42, 0.72)",
-              }}
-            >
-              <div
-                style={{
-                  color: "#94a3b8",
-                  fontSize: "12px",
-                  fontWeight: "bold",
-                  letterSpacing: "0",
-                  textTransform: "uppercase",
-                }}
-              >
-                Próximo treino
-              </div>
-              <h3 style={{ marginTop: "6px", marginBottom: "12px" }}>
-                Progressão para {latestWorkoutProgression.workout_name}
-              </h3>
-
-              <div style={{ display: "grid", gap: "10px" }}>
-                {latestWorkoutProgression.recommendations.map((recommendation) => (
-                  <div
-                    key={recommendation.training_exercise}
-                    style={{
-                      padding: "12px",
-                      border: "1px solid rgba(148, 163, 184, 0.26)",
-                      borderRadius: "8px",
-                      background: "rgba(15, 23, 42, 0.44)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <strong>{recommendation.exercise_name}</strong>
-                      <span
-                        style={{
-                          color: "#38bdf8",
-                          fontSize: "13px",
-                          fontWeight: "bold",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {getProgressionActionLabel(recommendation.action)}
-                      </span>
-                    </div>
-                    <p style={{ marginTop: "6px", color: "#e5e7eb" }}>
-                      {formatProgressionTarget(recommendation)}
-                    </p>
-                    <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
-                      {recommendation.message}
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "8px",
-                        marginTop: "10px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      <span style={{ color: "#bae6fd" }}>
-                        {getDecisionSourceLabel(recommendation.source)}
-                      </span>
-                      {recommendation.confidence && (
-                        <span style={{ color: getConfidenceColor(recommendation.confidence) }}>
-                          Confiança {recommendation.confidence}
-                        </span>
-                      )}
-                    </div>
-                    {recommendation.decision_basis?.length > 0 && (
-                      <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
-                        {recommendation.decision_basis.map((basis) => (
-                          <p key={basis} style={{ margin: 0, color: "#cbd5e1", fontSize: "12px" }}>
-                            {basis}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <WorkoutProgressionPanel
+            progression={latestWorkoutProgression}
+            getActionLabel={getProgressionActionLabel}
+            getSourceLabel={getDecisionSourceLabel}
+            getConfidenceColor={getConfidenceColor}
+            formatTarget={formatProgressionTarget}
+          />
 
           <AiCoachSummaryPanel
             summary={latestAiCoach}
@@ -3106,362 +2792,97 @@ function App() {
           {program.workouts.map((workout) => {
             const activeWorkoutId = getActiveWorkoutId();
             const activeSessionId = activeSessionByWorkout[workout.id];
-            const isActiveWorkout = activeWorkoutId === String(workout.id);
             const hasActiveWorkout = Boolean(activeWorkoutId);
-            const isWorkoutOpen = isActiveWorkout || openWorkoutId === workout.id;
-            const workoutStats = getWorkoutSessionStats(workout);
-
-            if (hasActiveWorkout && !isActiveWorkout) {
-              return null;
-            }
 
             return (
-              <div
+              <WorkoutCard
                 key={workout.id}
-                style={{ border: "1px solid #ccc", padding: "16px", marginTop: "16px" }}
-              >
-                <button
-                  onClick={() => toggleWorkout(workout.id)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "12px",
-                    fontSize: "18px",
-                    fontWeight: "bold",
-                    cursor: hasActiveWorkout ? "default" : "pointer",
-                    background: "transparent",
-                    border: "none",
-                  }}
-                >
-                  {isWorkoutOpen ? "▼" : "▶"} Day {workout.order} - {workout.name}
-                </button>
-
-                {isWorkoutOpen && (
-                  <div style={{ marginTop: "12px" }}>
-                    {!activeSessionId ? (
-                      <button onClick={() => startWorkoutSession(workout)}>
-                        Start Workout
-                      </button>
-                    ) : (
-                      <div style={{ marginBottom: "16px" }}>
-                        <p style={{ color: "green" }}>Workout session active. Session ID: {activeSessionId}</p>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                            gap: "12px",
-                            marginTop: "12px",
-                          }}
-                        >
-                          <div>
-                            <strong>Volume</strong>
-                            <p>{workoutStats.volume.toFixed(1)} kg</p>
-                          </div>
-                          <div>
-                            <strong>Séries concluídas</strong>
-                            <p>{workoutStats.sets}</p>
-                          </div>
-                        </div>
-
-                        <textarea
-                          placeholder="Final workout notes"
-                          value={sessionNotes[workout.id] || ""}
-                          onChange={(e) =>
-                            setSessionNotes({
-                              ...sessionNotes,
-                              [workout.id]: e.target.value,
-                            })
-                          }
-                          style={{ display: "block", width: "100%", marginTop: "8px" }}
-                        />
-
-                        <button onClick={() => finishWorkoutSession(workout)} style={{ marginTop: "8px" }}>
-                          Finish Workout
-                        </button>
-                      </div>
-                    )}
-
-                    {activeSessionId && workout.exercises.map((item) => {
-                      const exerciseLogs = getExerciseLogs(item.id);
-                      const isOpen = Boolean(openExerciseById[item.id]);
-                      const isSubstitutionOpen = Boolean(openSubstitutionByExerciseId[item.id]);
-                      const isWeightScaleOpen = Boolean(openWeightScaleByExerciseId[item.id]);
-                      const substitutionData = substitutionOptionsByExerciseId[item.id];
-                      const weightScaleForm = getWeightScaleForm(item);
-                      const calibrationState = getCalibrationState(item);
-                      const calibrationForm = getCalibrationForm(item);
-                      const needsCalibration = exerciseNeedsCalibration(item);
-                      const calibrationCompletedToday = Boolean(completedCalibrationByExerciseId[item.id]);
-                      const blocksNormalTraining = needsCalibration || calibrationCompletedToday;
-                      const hasLoggedSets = exerciseLogs.current_sets.length > 0;
-                      const isReplacing = Boolean(isReplacingExerciseById[item.id]);
-                      const isSavingWeightScale = Boolean(isSavingWeightScaleByExerciseId[item.id]);
-                      const isSavingCalibration = Boolean(isSavingCalibrationByExerciseId[item.id]);
-                      const restSeconds = restTimers[item.id] || 0;
-                      const calibrationInputsLocked = !calibrationState.scale_configured || restSeconds > 0 || isSavingCalibration;
-                      const rows = getExerciseRows(item);
-                      const guidance = getGuidanceForExercise(item, rows, restSeconds);
-
-                      return (
-                        <div
-                          key={item.id}
-                          style={{
-                            borderBottom: "1px solid #ddd",
-                            padding: "14px 0",
-                          }}
-                        >
-                          <div className="exercise-row-shell">
-                            <button
-                              className="exercise-main-button"
-                              onClick={() => toggleExercise(item)}
-                            >
-                              <img
-                                className="exercise-row-image"
-                                src={getExerciseImageUrl(item)}
-                                alt={item.exercise_localized_name || item.exercise_name}
-                              />
-                              <span className="exercise-row-copy">
-                                <span className="exercise-row-title">
-                                  <span aria-hidden="true">{isOpen ? "▼" : "▶"}</span>
-                                  {item.exercise_name}
-                                </span>
-                                <span className="exercise-row-meta">
-                                  {item.exercise_localized_name || item.exercise_muscle_group}
-                                  {" · "}
-                                  {item.exercise_muscle_group}
-                                  {" · "}
-                                  {item.exercise_equipment}
-                                  {needsCalibration ? " · Calibração necessária" : ""}
-                                </span>
-                              </span>
-                            </button>
-
-                            <button
-                              className="exercise-replace-button"
-                              onClick={() => toggleExerciseSubstitutions(item)}
-                              disabled={hasLoggedSets || isReplacing}
-                              title={hasLoggedSets ? "Termina este exercício antes de trocar." : "Trocar por outro exercício do mesmo grupo muscular"}
-                            >
-                              {isReplacing ? "A trocar..." : "Trocar"}
-                            </button>
-
-                            <button
-                              className="exercise-scale-button"
-                              onClick={() => toggleWeightScaleMenu(item)}
-                              disabled={isSavingWeightScale}
-                              title="Configurar placas e bolachas desta máquina"
-                            >
-                              Escala
-                            </button>
-                          </div>
-
-                          <ExerciseWeightScalePanel
-                            exercise={item}
-                            isOpen={isWeightScaleOpen}
-                            form={weightScaleForm}
-                            isSaving={isSavingWeightScale}
-                            updateWeightScaleForm={updateWeightScaleForm}
-                            updateMicroWeightScaleRow={updateMicroWeightScaleRow}
-                            addMicroWeightScaleRow={addMicroWeightScaleRow}
-                            removeMicroWeightScaleRow={removeMicroWeightScaleRow}
-                            saveWeightScale={saveWeightScale}
-                          />
-
-                          <ExerciseSubstitutionPanel
-                            exercise={item}
-                            isOpen={isSubstitutionOpen}
-                            hasLoggedSets={hasLoggedSets}
-                            substitutionData={substitutionData}
-                            isReplacing={isReplacing}
-                            replaceExercise={replaceExercise}
-                          />
-
-                          {isOpen && (
-                            <div style={{ marginTop: "12px" }}>
-                              <p>
-                                Target: {item.sets} sets | {TARGET_REPS} reps | RIR {item.target_rir}
-                              </p>
-
-                              <ExerciseCalibrationPanel
-                                exercise={item}
-                                needsCalibration={needsCalibration}
-                                calibrationCompletedToday={calibrationCompletedToday}
-                                calibrationState={calibrationState}
-                                calibrationForm={calibrationForm}
-                                calibrationInputsLocked={calibrationInputsLocked}
-                                restSeconds={restSeconds}
-                                isSavingCalibration={isSavingCalibration}
-                                colorOptions={getCalibrationColorOptions()}
-                                getColorMeta={getCalibrationColorMeta}
-                                formatTimer={formatTimer}
-                                toggleWeightScaleMenu={toggleWeightScaleMenu}
-                                updateCalibrationForm={updateCalibrationForm}
-                                saveExerciseCalibration={saveExerciseCalibration}
-                              />
-
-                              {!blocksNormalTraining && exerciseLogs.previous_session && (
-                                <p style={{ marginTop: "8px", color: "#777" }}>
-                                  Anterior: {exerciseLogs.previous_session.workout_name}
-                                </p>
-                              )}
-
-                              <div
-                                style={{
-                                  display: blocksNormalTraining ? "none" : "block",
-                                  marginTop: "12px",
-                                  padding: "16px",
-                                  border: "1px solid #334155",
-                                  borderRadius: "8px",
-                                  background: "rgba(15, 23, 42, 0.78)",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    color: guidance.isResting ? "#0ea5e9" : "#94a3b8",
-                                    fontSize: "12px",
-                                    fontWeight: "bold",
-                                    letterSpacing: "0",
-                                    textTransform: "uppercase",
-                                  }}
-                                >
-                                  {guidance.eyebrow}
-                                </div>
-                                <strong
-                                  style={{
-                                    display: "block",
-                                    marginTop: "6px",
-                                    color: "#f8fafc",
-                                    fontSize: "18px",
-                                  }}
-                                >
-                                  {guidance.title}
-                                </strong>
-                                <p style={{ marginTop: "6px", color: "#cbd5e1" }}>{guidance.message}</p>
-
-                                {guidance.reason && !guidance.isResting && (
-                                  <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
-                                    {guidance.reason}
-                                  </p>
-                                )}
-
-                                {guidance.source && !guidance.isResting && (
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexWrap: "wrap",
-                                      gap: "8px",
-                                      marginTop: "10px",
-                                      fontSize: "12px",
-                                      fontWeight: "bold",
-                                    }}
-                                  >
-                                    <span style={{ color: "#bae6fd" }}>
-                                      {getDecisionSourceLabel(guidance.source)}
-                                    </span>
-                                    {guidance.llmStatus && (
-                                      <span style={{ color: guidance.llmStatus === "llm_enabled" ? "#86efac" : "#fbbf24" }}>
-                                        {getLlmStatusLabel(guidance.llmStatus)}
-                                      </span>
-                                    )}
-                                    {guidance.confidence && (
-                                      <span style={{ color: getConfidenceColor(guidance.confidence) }}>
-                                        Confiança {guidance.confidence}
-                                      </span>
-                                    )}
-                                    {guidance.guardrailApplied && (
-                                      <span title={guidance.guardrailReason} style={{ color: "#fbbf24" }}>
-                                        Guardrail aplicado
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {guidance.decisionBasis?.length > 0 && !guidance.isResting && (
-                                  <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
-                                    {guidance.decisionBasis.map((basis) => (
-                                      <p key={basis} style={{ margin: 0, color: "#cbd5e1", fontSize: "12px" }}>
-                                        {basis}
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {guidance.isResting && (
-                                  <div style={{ marginTop: "14px" }}>
-                                    <div
-                                      style={{
-                                        color: "#0ea5e9",
-                                        fontSize: "42px",
-                                        fontWeight: "bold",
-                                        lineHeight: "1",
-                                      }}
-                                    >
-                                      {formatTimer(restSeconds)}
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                        gap: "8px",
-                                        marginTop: "12px",
-                                      }}
-                                    >
-                                      <button type="button" onClick={() => adjustRestTimer(item.id, -15)}>
-                                        -15s
-                                      </button>
-                                      <button type="button" onClick={() => adjustRestTimer(item.id, 15)}>
-                                        +15s
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              <ExerciseSetTable
-                                exercise={item}
-                                rows={rows}
-                                blocksNormalTraining={blocksNormalTraining}
-                                setForms={setForms}
-                                setTypes={SET_TYPES}
-                                warmupEffort={WARMUP_EFFORT}
-                                openRestMenuBySet={openRestMenuBySet}
-                                openSetTypeMenuBySet={openSetTypeMenuBySet}
-                                openCompletionMenuBySet={openCompletionMenuBySet}
-                                getSetFormKey={getSetFormKey}
-                                getCurrentSetForRow={getCurrentSetForRow}
-                                getSetTypeForExerciseRow={getSetTypeForExerciseRow}
-                                getPreviousSetForExerciseRow={getPreviousSetForExerciseRow}
-                                getSetTypeMeta={getSetTypeMeta}
-                                getVisibleSetLabel={getVisibleSetLabel}
-                                getEffortMetaFromSet={getEffortMetaFromSet}
-                                getRestSecondsForRow={getRestSecondsForRow}
-                                getPlannedValuesForExerciseRow={getPlannedValuesForExerciseRow}
-                                getEffortOptionsForSet={getEffortOptionsForSet}
-                                formatPreviousSet={formatPreviousSet}
-                                formatTimer={formatTimer}
-                                updateSetForm={updateSetForm}
-                                toggleRestMenu={toggleRestMenu}
-                                toggleSetTypeMenu={toggleSetTypeMenu}
-                                toggleCompletionMenu={toggleCompletionMenu}
-                                selectSetType={selectSetType}
-                                removeExerciseRow={removeExerciseRow}
-                                saveSet={saveSet}
-                                undoSet={undoSet}
-                              />
-
-                              {!blocksNormalTraining && (
-                                <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
-                                  + Adicionar Série
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                workout={workout}
+                activeWorkoutId={activeWorkoutId}
+                activeSessionId={activeSessionId}
+                hasActiveWorkout={hasActiveWorkout}
+                isWorkoutOpen={activeWorkoutId === String(workout.id) || openWorkoutId === workout.id}
+                workoutStats={getWorkoutSessionStats(workout)}
+                sessionNote={sessionNotes[workout.id]}
+                setSessionNote={(workoutId, value) =>
+                  setSessionNotes({
+                    ...sessionNotes,
+                    [workoutId]: value,
+                  })
+                }
+                constants={{ targetReps: TARGET_REPS, setTypes: SET_TYPES, warmupEffort: WARMUP_EFFORT }}
+                state={{
+                  setForms,
+                  openExerciseById,
+                  openSubstitutionByExerciseId,
+                  openWeightScaleByExerciseId,
+                  substitutionOptionsByExerciseId,
+                  completedCalibrationByExerciseId,
+                  isReplacingExerciseById,
+                  isSavingWeightScaleByExerciseId,
+                  isSavingCalibrationByExerciseId,
+                  restTimers,
+                  openRestMenuBySet,
+                  openSetTypeMenuBySet,
+                  openCompletionMenuBySet,
+                }}
+                helpers={{
+                  getExerciseLogs,
+                  getWeightScaleForm,
+                  getCalibrationState,
+                  getCalibrationForm,
+                  exerciseNeedsCalibration,
+                  getExerciseRows,
+                  getGuidanceForExercise,
+                  getExerciseImageUrl,
+                  getCalibrationColorOptions,
+                  getCalibrationColorMeta,
+                  formatTimer,
+                  getDecisionSourceLabel,
+                  getLlmStatusLabel,
+                  getConfidenceColor,
+                }}
+                actions={{
+                  toggleWorkout,
+                  startWorkoutSession,
+                  finishWorkoutSession,
+                  toggleExercise,
+                  toggleExerciseSubstitutions,
+                  toggleWeightScaleMenu,
+                  replaceExercise,
+                  updateWeightScaleForm,
+                  updateMicroWeightScaleRow,
+                  addMicroWeightScaleRow,
+                  removeMicroWeightScaleRow,
+                  saveWeightScale,
+                  updateCalibrationForm,
+                  saveExerciseCalibration,
+                  adjustRestTimer,
+                  addExerciseRow,
+                  setTableHandlers: {
+                    getSetFormKey,
+                    getCurrentSetForRow,
+                    getSetTypeForExerciseRow,
+                    getPreviousSetForExerciseRow,
+                    getSetTypeMeta,
+                    getVisibleSetLabel,
+                    getEffortMetaFromSet,
+                    getRestSecondsForRow,
+                    getPlannedValuesForExerciseRow,
+                    getEffortOptionsForSet,
+                    formatPreviousSet,
+                    formatTimer,
+                    updateSetForm,
+                    toggleRestMenu,
+                    toggleSetTypeMenu,
+                    toggleCompletionMenu,
+                    selectSetType,
+                    removeExerciseRow,
+                    saveSet,
+                    undoSet,
+                  },
+                }}
+              />
             );
           })}
         </div>
