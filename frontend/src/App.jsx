@@ -1,10 +1,32 @@
 import { useEffect, useState } from "react";
+import AdaptivePlanPanel from "./components/AdaptivePlanPanel";
 import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
+import HomeScreen from "./components/HomeScreen";
+import ProgramHeader from "./components/ProgramHeader";
+import ProfileForm from "./components/ProfileForm";
 import TrainingBlockPanel from "./components/TrainingBlockPanel";
 import WeeklyFeedbackPanel from "./components/WeeklyFeedbackPanel";
 import WorkoutCard from "./components/WorkoutCard";
 import WorkoutProgressionPanel from "./components/WorkoutProgressionPanel";
+import {
+  formatDashboardDate,
+  formatNumber,
+  formatProgressionTarget,
+  getAdaptiveActionColor,
+  getAdaptiveActionLabel,
+  getAdaptiveDecisionStatusLabel,
+  getAiCoachSourceLabel,
+  getConfidenceColor,
+  getDashboardMaxWeeklyVolume,
+  getDecisionSourceLabel,
+  getLlmStatusLabel,
+  getProgressionActionLabel,
+  getTrainingBlockPhaseColor,
+  getTrainingBlockPhaseLabel,
+  getWeeklyFeedbackStatusColor,
+  getWeeklyFeedbackStatusLabel,
+} from "./utils/trainingFormatters";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
@@ -644,165 +666,6 @@ function App() {
       sets: currentSets.length,
       volume,
     };
-  }
-
-  function formatNumber(value, digits = 1) {
-    return Number(value || 0).toFixed(digits);
-  }
-
-  function formatDashboardDate(dateValue) {
-    if (!dateValue) {
-      return "-";
-    }
-
-    return new Date(dateValue).toLocaleDateString("pt-PT", {
-      day: "2-digit",
-      month: "short",
-    });
-  }
-
-  function getDashboardMaxWeeklyVolume(dashboard) {
-    return Math.max(
-      ...((dashboard?.weekly_volume || []).map((week) => Number(week.volume) || 0)),
-      1
-    );
-  }
-
-  function getAdaptiveActionLabel(action) {
-    const labels = {
-      protect_recovery: "Proteger recuperação",
-      increase_margin: "Aumentar margem",
-      progress_load: "Progredir carga",
-      maintain_plan: "Manter plano",
-    };
-
-    return labels[action] || "Ajuste";
-  }
-
-  function getAdaptiveActionColor(action) {
-    const colors = {
-      protect_recovery: "#fbbf24",
-      increase_margin: "#38bdf8",
-      progress_load: "#86efac",
-      maintain_plan: "#94a3b8",
-    };
-
-    return colors[action] || "#94a3b8";
-  }
-
-  function getAdaptiveDecisionStatusLabel(status) {
-    const labels = {
-      APPLIED: "Aplicada",
-      DEFERRED: "Adiada",
-      IGNORED: "Ignorada",
-    };
-
-    return labels[status] || status;
-  }
-
-  function getWeeklyFeedbackStatusColor(status) {
-    const colors = {
-      deload_recommended: "#fbbf24",
-      monitor: "#38bdf8",
-      progressing: "#86efac",
-    };
-
-    return colors[status] || "#94a3b8";
-  }
-
-  function getWeeklyFeedbackStatusLabel(status) {
-    const labels = {
-      deload_recommended: "Deload recomendado",
-      monitor: "Monitorizar",
-      progressing: "Progressão saudável",
-    };
-
-    return labels[status] || "Feedback semanal";
-  }
-
-  function getTrainingBlockPhaseLabel(phase) {
-    const labels = {
-      BUILD: "Build",
-      DELOAD: "Deload",
-      RETURN: "Retorno",
-    };
-
-    return labels[phase] || "Bloco";
-  }
-
-  function getTrainingBlockPhaseColor(phase) {
-    const colors = {
-      BUILD: "#86efac",
-      DELOAD: "#fbbf24",
-      RETURN: "#38bdf8",
-    };
-
-    return colors[phase] || "#94a3b8";
-  }
-
-  function getProgressionActionLabel(action) {
-    const labels = {
-      increase_load: "Subir carga",
-      maintain_load: "Manter carga",
-      reduce_volume: "Reduzir volume",
-      adjust_target_rir: "Alterar RIR",
-      maintain: "Manter plano",
-    };
-
-    return labels[action] || "Recomendação";
-  }
-
-  function formatProgressionTarget(recommendation) {
-    const weightLabel = recommendation.recommended_weight === "" || recommendation.recommended_weight === null
-      ? "carga do plano"
-      : `${recommendation.recommended_weight}kg`;
-
-    return `${weightLabel} | ${recommendation.recommended_sets} séries | ${recommendation.target_reps} reps | RIR ${recommendation.target_rir}`;
-  }
-
-  function getAiCoachSourceLabel(status) {
-    const labels = {
-      llm_enabled: "OpenAI",
-      llm_error: "Fallback local",
-      llm_disabled: "Fallback local",
-    };
-
-    return labels[status] || "Coach";
-  }
-
-  function getDecisionSourceLabel(source) {
-    const labels = {
-      hybrid_local_training_coach: "Coach híbrido local",
-      hybrid_local_workout_progression: "Progressão híbrida local",
-      openai_training_decision: "IA OpenAI série a série",
-      ollama_training_decision: "IA Ollama local",
-      last_15_workout_history: "Histórico últimos 15 treinos",
-      warmup_from_first_working_set: "Aquecimento proporcional",
-      warmup_ramp_from_first_working_set: "Aquecimento progressivo",
-      training_coach_engine: "Motor local",
-    };
-
-    return labels[source] || "Motor local";
-  }
-
-  function getLlmStatusLabel(status) {
-    const labels = {
-      llm_enabled: "IA ativa",
-      llm_error: "Fallback local",
-      llm_disabled: "Regras locais",
-    };
-
-    return labels[status] || "";
-  }
-
-  function getConfidenceColor(confidence) {
-    const colors = {
-      alta: "#22c55e",
-      média: "#eab308",
-      baixa: "#f97316",
-    };
-
-    return colors[confidence] || "#94a3b8";
   }
 
   function handleChange(e) {
@@ -2285,260 +2148,28 @@ function App() {
       <h1>SHAPETRONYC</h1>
 
       {step === 1 && (
-        <div className="home-landing">
-          <section className="home-hero-panel">
-            <span className="profile-kicker">Adaptive training system</span>
-            <h2>Adaptive training built around you</h2>
-            <p>
-              Create a new athlete profile or enter an existing one to continue training with
-              history, memory, weekly feedback and adaptive planning.
-            </p>
-            <div className="home-signal-grid">
-              <div>
-                <strong>AI Coach</strong>
-                <span>set-by-set guidance</span>
-              </div>
-              <div>
-                <strong>Memory</strong>
-                <span>patterns by exercise</span>
-              </div>
-              <div>
-                <strong>Blocks</strong>
-                <span>periodization review</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="home-action-grid">
-            <article className="home-action-card primary">
-              <div>
-                <span className="profile-kicker">New athlete</span>
-                <h2>Create a new profile</h2>
-                <p>
-                  Start from baseline data and let SHAPETRONYC generate the first adaptive program.
-                </p>
-              </div>
-              <button type="button" className="home-primary-button" onClick={() => setStep(2)}>
-                Create new profile
-              </button>
-            </article>
-
-            <form className="home-action-card" onSubmit={loginExistingProfile}>
-              <div>
-                <span className="profile-kicker">Existing athlete</span>
-                <h2>Login</h2>
-                <p>
-                  Enter the athlete username to continue from the saved program, dashboard and
-                  training history.
-                </p>
-              </div>
-              <label className="profile-field">
-                <span>Username</span>
-                <input
-                  value={loginUsername}
-                  onChange={(event) => setLoginUsername(event.target.value)}
-                  placeholder="e.g. beatriz"
-                />
-              </label>
-              {loginError && <p className="home-error">{loginError}</p>}
-              <button type="submit" className="home-secondary-button" disabled={isLoggingIn}>
-                {isLoggingIn ? "Entering..." : "Enter profile"}
-              </button>
-            </form>
-          </section>
-
-          <section className="home-experimental-panel">
-            <div>
-              <span className="profile-kicker">Experimental</span>
-              <h2>Limpar atletas de teste</h2>
-              <p>
-                Apaga os atletas criados durante testes e todos os dados associados: perfis,
-                programas, sessões, séries, calibrações, memórias e escalas.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="home-danger-button"
-              onClick={deleteExperimentalUsers}
-              disabled={isDeletingExperimentalUsers}
-            >
-              {isDeletingExperimentalUsers ? "A apagar..." : "Apagar atletas experimentais"}
-            </button>
-            {deleteUsersMessage && <p className="home-delete-message">{deleteUsersMessage}</p>}
-          </section>
-        </div>
+        <HomeScreen
+          loginUsername={loginUsername}
+          setLoginUsername={setLoginUsername}
+          loginError={loginError}
+          isLoggingIn={isLoggingIn}
+          loginExistingProfile={loginExistingProfile}
+          goToProfileSetup={() => setStep(2)}
+          deleteExperimentalUsers={deleteExperimentalUsers}
+          isDeletingExperimentalUsers={isDeletingExperimentalUsers}
+          deleteUsersMessage={deleteUsersMessage}
+        />
       )}
 
       {step === 2 && (
-        <div className="profile-onboarding">
-          <section className="profile-intro-panel">
-            <div>
-              <span className="profile-kicker">Athlete setup</span>
-              <h2>Create Profile</h2>
-              <p>
-                Define the athlete baseline so the training plan starts with the right volume,
-                frequency and progression speed.
-              </p>
-            </div>
-
-            <div className="profile-preview-card">
-              <span>Current setup</span>
-              <strong>{goalLabels[form.goal]}</strong>
-              <div className="profile-preview-grid">
-                <div>
-                  <span>Level</span>
-                  <strong>{levelGuidance[form.level].label}</strong>
-                </div>
-                <div>
-                  <span>Days</span>
-                  <strong>{form.days_per_week}/week</strong>
-                </div>
-                <div>
-                  <span>Body</span>
-                  <strong>{form.weight_kg}kg</strong>
-                </div>
-                <div>
-                  <span>Age</span>
-                  <strong>{form.age}</strong>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <form className="profile-form-card" onSubmit={createProfile}>
-            <div className="profile-form-header">
-              <div>
-                <span className="profile-kicker">New athlete</span>
-                <h2>Build the profile</h2>
-              </div>
-              <button type="submit" className="profile-submit-button">Create Profile</button>
-            </div>
-
-            <div className="profile-section">
-              <h3>Identity</h3>
-              <div className="profile-grid two">
-                <label className="profile-field">
-                  <span>Username</span>
-                  <input
-                    name="username"
-                    value={form.username}
-                    onChange={handleChange}
-                    required
-                    placeholder="e.g. beatriz"
-                  />
-                </label>
-
-                <div className="profile-field">
-                  <span>Gender</span>
-                  <div className="profile-segmented">
-                    {[
-                      ["MALE", "Male"],
-                      ["FEMALE", "Female"],
-                    ].map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={form.gender === value ? "active" : ""}
-                        onClick={() => setForm({ ...form, gender: value })}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="profile-section">
-              <h3>Body metrics</h3>
-              <div className="profile-grid three">
-                <label className="profile-field">
-                  <span>Age</span>
-                  <input name="age" type="number" value={form.age} onChange={handleChange} />
-                </label>
-
-                <label className="profile-field">
-                  <span>Height</span>
-                  <div className="profile-input-unit">
-                    <input name="height_cm" type="number" value={form.height_cm} onChange={handleChange} />
-                    <small>cm</small>
-                  </div>
-                </label>
-
-                <label className="profile-field">
-                  <span>Weight</span>
-                  <div className="profile-input-unit">
-                    <input name="weight_kg" type="number" value={form.weight_kg} onChange={handleChange} />
-                    <small>kg</small>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="profile-section">
-              <h3>Training direction</h3>
-              <div className="profile-grid two">
-                <label className="profile-field">
-                  <span>Goal</span>
-                  <select name="goal" value={form.goal} onChange={handleChange}>
-                    <option value="HYPERTROPHY">Gain muscle</option>
-                    <option value="STRENGTH">Gain strength</option>
-                    <option value="FAT_LOSS">Lose fat</option>
-                    <option value="RECOMPOSITION">Recomposition</option>
-                    <option value="GENERAL_FITNESS">General fitness</option>
-                  </select>
-                </label>
-
-                <label className="profile-field">
-                  <span>Level</span>
-                  <select name="level" value={form.level} onChange={handleChange}>
-                    <option value="BEGINNER">Beginner</option>
-                    <option value="INTERMEDIATE">Intermediate</option>
-                    <option value="ADVANCED">Advanced</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="profile-level-note">
-                <strong>{levelGuidance[form.level].label}</strong>
-                <span>{levelGuidance[form.level].text}</span>
-              </div>
-            </div>
-
-            <div className="profile-section">
-              <h3>Availability</h3>
-              <div className="profile-grid two">
-                <label className="profile-field">
-                  <span>Training Experience</span>
-                  <select name="training_experience" value={form.training_experience} onChange={handleChange}>
-                    <option value="LESS_THAN_1">Less than 1 year</option>
-                    <option value="ONE_TO_THREE">1-3 years</option>
-                    <option value="THREE_TO_FIVE">3-5 years</option>
-                    <option value="MORE_THAN_FIVE">More than 5 years</option>
-                  </select>
-                </label>
-
-                <div className="profile-field">
-                  <span>Days per week</span>
-                  <div className="profile-day-picker">
-                    {[2, 3, 4, 5, 6, 7].map((day) => (
-                      <button
-                        key={day}
-                        type="button"
-                        className={Number(form.days_per_week) === day ? "active" : ""}
-                        onClick={() => setForm({ ...form, days_per_week: day })}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button type="submit" className="profile-submit-button mobile">Create Profile</button>
-          </form>
-        </div>
+        <ProfileForm
+          form={form}
+          setForm={setForm}
+          handleChange={handleChange}
+          createProfile={createProfile}
+          goalLabels={goalLabels}
+          levelGuidance={levelGuidance}
+        />
       )}
 
       {step === 3 && (
@@ -2553,16 +2184,10 @@ function App() {
 
       {step === 4 && program && (
         <div>
-          <div className="program-header-row">
-            <h2>{program.name}</h2>
-            <button
-              type="button"
-              className="export-user-button"
-              onClick={exportUserTrainingData}
-            >
-              Exportar histórico
-            </button>
-          </div>
+          <ProgramHeader
+            programName={program.name}
+            exportUserTrainingData={exportUserTrainingData}
+          />
 
           <AthleteDashboardPanel
             dashboard={athleteDashboard}
@@ -2579,202 +2204,21 @@ function App() {
             getPhaseColor={getTrainingBlockPhaseColor}
           />
 
-
-
-
           <WeeklyFeedbackPanel
             feedback={weeklyFeedback}
             getStatusLabel={getWeeklyFeedbackStatusLabel}
             getStatusColor={getWeeklyFeedbackStatusColor}
           />
 
-          {adaptivePlan && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(20, 83, 45, 0.28)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: "#86efac",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Plano adaptativo
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>Ajustes sugeridos</h3>
-                </div>
-                <span style={{ color: "#bbf7d0", fontSize: "12px", fontWeight: "bold" }}>
-                  {adaptivePlan.summary?.high_priority_count || 0} prioridade alta
-                </span>
-              </div>
-
-              <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
-                {(adaptivePlan.recommendations || [])
-                  .filter((recommendation) => recommendation.action !== "maintain_plan")
-                  .slice(0, 6)
-                  .map((recommendation) => (
-                    <div
-                      key={recommendation.training_exercise}
-                      style={{
-                        padding: "12px",
-                        border: "1px solid rgba(134, 239, 172, 0.2)",
-                        borderRadius: "8px",
-                        background: "rgba(15, 23, 42, 0.38)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <div>
-                          <strong>{recommendation.exercise_name}</strong>
-                          <p style={{ margin: "4px 0 0", color: "#cbd5e1", fontSize: "13px" }}>
-                            {recommendation.workout_name}
-                          </p>
-                        </div>
-                        <span
-                          style={{
-                            color: getAdaptiveActionColor(recommendation.action),
-                            fontSize: "12px",
-                            fontWeight: "bold",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {getAdaptiveActionLabel(recommendation.action)}
-                        </span>
-                      </div>
-                      <p style={{ margin: "8px 0 0", color: "#e5e7eb" }}>
-                        {recommendation.message}
-                      </p>
-                      <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "13px" }}>
-                        Séries: {recommendation.current_sets} → {recommendation.recommended_sets} | RIR: {recommendation.current_target_rir} → {recommendation.recommended_target_rir} | carga {recommendation.load_adjustment > 0 ? "+" : ""}{recommendation.load_adjustment}kg
-                      </p>
-                      {recommendation.evidence?.length > 0 && (
-                        <div style={{ display: "grid", gap: "3px", marginTop: "8px" }}>
-                          {recommendation.evidence.map((item) => (
-                            <p key={item} style={{ margin: 0, color: "#94a3b8", fontSize: "12px" }}>
-                              {item}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "8px",
-                          marginTop: "12px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => recordAdaptiveDecision(recommendation, "APPLIED")}
-                          disabled={Boolean(applyingAdaptiveById[recommendation.training_exercise])}
-                          style={{
-                            padding: "8px 10px",
-                            border: "1px solid #86efac",
-                            borderRadius: "6px",
-                            background: "#166534",
-                            color: "#f0fdf4",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {applyingAdaptiveById[recommendation.training_exercise] ? "A aplicar..." : "Aplicar"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => recordAdaptiveDecision(recommendation, "DEFERRED")}
-                          disabled={Boolean(applyingAdaptiveById[recommendation.training_exercise])}
-                          style={{
-                            padding: "8px 10px",
-                            border: "1px solid #475569",
-                            borderRadius: "6px",
-                            background: "rgba(15, 23, 42, 0.8)",
-                            color: "#e2e8f0",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Adiar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => recordAdaptiveDecision(recommendation, "IGNORED")}
-                          disabled={Boolean(applyingAdaptiveById[recommendation.training_exercise])}
-                          style={{
-                            padding: "8px 10px",
-                            border: "1px solid #475569",
-                            borderRadius: "6px",
-                            background: "rgba(15, 23, 42, 0.8)",
-                            color: "#cbd5e1",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Ignorar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                {(adaptivePlan.recommendations || []).filter((recommendation) => recommendation.action !== "maintain_plan").length === 0 && (
-                  <p style={{ margin: 0, color: "#94a3b8" }}>
-                    Sem ajustes adaptativos por agora. Mantém o plano e continua a recolher dados.
-                  </p>
-                )}
-              </div>
-
-              {adaptiveDecisions.length > 0 && (
-                <div style={{ marginTop: "16px" }}>
-                  <strong style={{ color: "#bbf7d0", fontSize: "13px" }}>Últimas decisões</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
-                    {adaptiveDecisions.slice(0, 5).map((decision) => (
-                      <div
-                        key={decision.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "10px",
-                          padding: "10px",
-                          border: "1px solid rgba(148, 163, 184, 0.18)",
-                          borderRadius: "6px",
-                          background: "rgba(15, 23, 42, 0.32)",
-                        }}
-                      >
-                        <div>
-                          <strong style={{ fontSize: "13px" }}>{decision.exercise_name}</strong>
-                          <p style={{ margin: "3px 0 0", color: "#94a3b8", fontSize: "12px" }}>
-                            {getAdaptiveActionLabel(decision.action)} · Séries {decision.current_sets} → {decision.recommended_sets} · RIR {decision.current_target_rir} → {decision.recommended_target_rir} · carga {decision.load_adjustment > 0 ? "+" : ""}{decision.load_adjustment}kg
-                          </p>
-                        </div>
-                        <span style={{ color: "#e2e8f0", fontSize: "12px", whiteSpace: "nowrap" }}>
-                          {getAdaptiveDecisionStatusLabel(decision.status)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
+          <AdaptivePlanPanel
+            adaptivePlan={adaptivePlan}
+            adaptiveDecisions={adaptiveDecisions}
+            applyingAdaptiveById={applyingAdaptiveById}
+            getActionLabel={getAdaptiveActionLabel}
+            getActionColor={getAdaptiveActionColor}
+            getDecisionStatusLabel={getAdaptiveDecisionStatusLabel}
+            recordAdaptiveDecision={recordAdaptiveDecision}
+          />
 
           <WorkoutProgressionPanel
             progression={latestWorkoutProgression}

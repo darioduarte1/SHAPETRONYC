@@ -1872,3 +1872,143 @@ code {
 .active-workout-summary > button {
   margin-top: 8px;
 }
+
+.adaptive-plan-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: rgba(20, 83, 45, 0.28);
+}
+
+.panel-kicker.adaptive,
+.adaptive-priority-count {
+  color: #86efac;
+}
+
+.adaptive-priority-count {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.adaptive-recommendation-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.adaptive-recommendation-card {
+  padding: 12px;
+  border: 1px solid rgba(134, 239, 172, 0.2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.adaptive-recommendation-heading,
+.adaptive-decision-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.adaptive-recommendation-heading p {
+  margin: 4px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.adaptive-recommendation-heading span {
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.adaptive-message {
+  margin: 8px 0 0;
+  color: #e5e7eb;
+}
+
+.adaptive-target {
+  margin: 6px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.adaptive-evidence-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+}
+
+.adaptive-evidence-list p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.adaptive-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.adaptive-action-row button {
+  padding: 8px 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.adaptive-action-row .adaptive-apply-button {
+  border-color: #86efac;
+  background: #166534;
+  color: #f0fdf4;
+}
+
+.adaptive-empty {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.adaptive-decisions {
+  margin-top: 16px;
+}
+
+.adaptive-decisions > strong {
+  color: #bbf7d0;
+  font-size: 13px;
+}
+
+.adaptive-decisions > div {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.adaptive-decision-row {
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.adaptive-decision-row strong {
+  font-size: 13px;
+}
+
+.adaptive-decision-row p {
+  margin: 3px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.adaptive-decision-row span {
+  color: #e2e8f0;
+  font-size: 12px;
+  white-space: nowrap;
+}
