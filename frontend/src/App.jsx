@@ -3,6 +3,7 @@ import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
 import ExerciseCalibrationPanel from "./components/ExerciseCalibrationPanel";
 import ExerciseSetTable from "./components/ExerciseSetTable";
+import ExerciseWeightScalePanel from "./components/ExerciseWeightScalePanel";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
@@ -3253,81 +3254,17 @@ function App() {
                             </button>
                           </div>
 
-                          {isWeightScaleOpen && (
-                            <div className="exercise-weight-scale-panel">
-                              <div className="exercise-substitution-header">
-                                <strong>Escala de pesos da máquina</strong>
-                                <span>Usada pela IA para recomendar cargas possíveis.</span>
-                              </div>
-
-                              <div className="exercise-weight-scale-grid">
-                                <label className="profile-field">
-                                  <span>Placas principais</span>
-                                  <input
-                                    value={weightScaleForm.main_weight_options}
-                                    onChange={(event) =>
-                                      updateWeightScaleForm(item, "main_weight_options", event.target.value)
-                                    }
-                                    placeholder="4, 10, 12, 18, 24, 30"
-                                  />
-                                </label>
-
-                                <div className="profile-field">
-                                  <span>Bolachas / extras</span>
-                                  <div className="exercise-micro-weight-list">
-                                    {(weightScaleForm.micro_weight_options || []).map((microWeightRow, rowIndex) => (
-                                      <div className="exercise-micro-weight-row" key={`${rowIndex}-${microWeightRow.weight}`}>
-                                        <input
-                                          type="number"
-                                          min="1"
-                                          step="1"
-                                          value={microWeightRow.count}
-                                          onChange={(event) =>
-                                            updateMicroWeightScaleRow(item, rowIndex, "count", event.target.value)
-                                          }
-                                          placeholder="Qtd."
-                                        />
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          min="0"
-                                          value={microWeightRow.weight}
-                                          onChange={(event) =>
-                                            updateMicroWeightScaleRow(item, rowIndex, "weight", event.target.value)
-                                          }
-                                          placeholder="Kg"
-                                        />
-                                        <button
-                                          type="button"
-                                          className="exercise-micro-weight-remove"
-                                          onClick={() => removeMicroWeightScaleRow(item, rowIndex)}
-                                          title="Remover bolacha"
-                                        >
-                                          ×
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="exercise-micro-weight-add"
-                                    onClick={() => addMicroWeightScaleRow(item)}
-                                  >
-                                    + Adicionar bolacha
-                                  </button>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                className="exercise-scale-save-button"
-                                onClick={() => saveWeightScale(item)}
-                                disabled={isSavingWeightScale}
-                              >
-                                {isSavingWeightScale ? "A guardar..." : "Guardar escala"}
-                              </button>
-                            </div>
-                          )}
+                          <ExerciseWeightScalePanel
+                            exercise={item}
+                            isOpen={isWeightScaleOpen}
+                            form={weightScaleForm}
+                            isSaving={isSavingWeightScale}
+                            updateWeightScaleForm={updateWeightScaleForm}
+                            updateMicroWeightScaleRow={updateMicroWeightScaleRow}
+                            addMicroWeightScaleRow={addMicroWeightScaleRow}
+                            removeMicroWeightScaleRow={removeMicroWeightScaleRow}
+                            saveWeightScale={saveWeightScale}
+                          />
 
                           {isSubstitutionOpen && !hasLoggedSets && (
                             <div className="exercise-substitution-panel">
