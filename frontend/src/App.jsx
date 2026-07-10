@@ -6,6 +6,10 @@
 // Mantém grande parte do estado global do frontend e passa dados/funções para os componentes especializados.
 // =============================================================================
 import { useEffect, useState } from "react";
+import * as accountsApi from "./api/accountsApi";
+import * as progressionApi from "./api/progressionApi";
+import * as recommendationsApi from "./api/recommendationsApi";
+import * as trainingApi from "./api/trainingApi";
 import AdaptivePlanPanel from "./components/AdaptivePlanPanel";
 import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
@@ -35,7 +39,6 @@ import {
   getWeeklyFeedbackStatusLabel,
 } from "./utils/trainingFormatters";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const DEFAULT_REST_SECONDS = 120;
 const TARGET_REPS = 12;
 
@@ -877,18 +880,7 @@ function App() {
     }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/training/exercise-weight-scale/${profileId}/${exercise.id}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(data);
-        alert("Não consegui guardar a escala de pesos deste exercício.");
-        return;
-      }
+      const data = await trainingApi.saveExerciseWeightScale(profileId, exercise.id, payload);
 
       updateProgramExerciseScale(exercise.id, data);
       setWeightScaleFormsByExerciseId((currentForms) => ({
@@ -942,27 +934,16 @@ function App() {
     }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/training/exercise-calibration/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile_id: profileId,
-          training_exercise_id: exercise.id,
-          weight_used: Number(formData.weight_used),
-          result_color: formData.result_color,
-          reps_completed: getCalibrationColorReps(formData.result_color),
-          rir: 0,
-          reached_failure: true,
-          notes: formData.notes || "",
-        }),
+      const data = await trainingApi.saveExerciseCalibration({
+        profile_id: profileId,
+        training_exercise_id: exercise.id,
+        weight_used: Number(formData.weight_used),
+        result_color: formData.result_color,
+        reps_completed: getCalibrationColorReps(formData.result_color),
+        rir: 0,
+        reached_failure: true,
+        notes: formData.notes || "",
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(data);
-        alert("Não consegui guardar a calibração deste exercício.");
-        return;
-      }
 
       setExerciseLogsById((currentLogs) => ({
         ...currentLogs,
@@ -1011,16 +992,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/accounts/profiles/${profileId}/export/`);
-
-      if (!response.ok) {
-        const data = await response.json();
-        console.error(data);
-        alert("Não consegui exportar o histórico deste atleta.");
-        return;
-      }
-
-      const blob = await response.blob();
+      const blob = await accountsApi.exportProfileHistory(profileId);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
@@ -1044,16 +1016,14 @@ function App() {
       return null;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/dashboard/${dashboardProfileId}/`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+    try {
+      const data = await trainingApi.getDashboard(dashboardProfileId);
+      setAthleteDashboard(data);
+      return data;
+    } catch (error) {
+      console.error(error.data || error);
       return null;
     }
-
-    setAthleteDashboard(data);
-    return data;
   }
 
   async function loadAdaptivePlan(profileIdOverride = null) {
@@ -1063,16 +1033,14 @@ function App() {
       return null;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/adaptive-plan/${adaptiveProfileId}/`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+    try {
+      const data = await trainingApi.getAdaptivePlan(adaptiveProfileId);
+      setAdaptivePlan(data);
+      return data;
+    } catch (error) {
+      console.error(error.data || error);
       return null;
     }
-
-    setAdaptivePlan(data);
-    return data;
   }
 
   async function loadAdaptiveDecisions(profileIdOverride = null) {
@@ -1082,16 +1050,14 @@ function App() {
       return [];
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/adaptive-plan/decisions/${decisionsProfileId}/`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+    try {
+      const data = await trainingApi.getAdaptiveDecisions(decisionsProfileId);
+      setAdaptiveDecisions(data.decisions || []);
+      return data.decisions || [];
+    } catch (error) {
+      console.error(error.data || error);
       return [];
     }
-
-    setAdaptiveDecisions(data.decisions || []);
-    return data.decisions || [];
   }
 
   async function loadWeeklyFeedback(profileIdOverride = null) {
@@ -1101,16 +1067,14 @@ function App() {
       return null;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/weekly-feedback/${feedbackProfileId}/`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+    try {
+      const data = await trainingApi.getWeeklyFeedback(feedbackProfileId);
+      setWeeklyFeedback(data);
+      return data;
+    } catch (error) {
+      console.error(error.data || error);
       return null;
     }
-
-    setWeeklyFeedback(data);
-    return data;
   }
 
   async function loadTrainingBlock(profileIdOverride = null) {
@@ -1120,16 +1084,14 @@ function App() {
       return null;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/training-blocks/${blockProfileId}/`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+    try {
+      const data = await trainingApi.getTrainingBlock(blockProfileId);
+      setTrainingBlock(data);
+      return data;
+    } catch (error) {
+      console.error(error.data || error);
       return null;
     }
-
-    setTrainingBlock(data);
-    return data;
   }
 
   async function loginExistingProfile(e) {
@@ -1147,14 +1109,7 @@ function App() {
     setIsLoggingIn(true);
 
     try {
-      const profilesResponse = await fetch(`${API_BASE_URL}/api/accounts/profiles/`);
-      const profilesData = await profilesResponse.json();
-
-      if (!profilesResponse.ok) {
-        console.error(profilesData);
-        setLoginError("Não consegui procurar atletas existentes.");
-        return;
-      }
+      const profilesData = await accountsApi.listProfiles();
 
       const profile = profilesData.find(
         (item) => item.username?.toLowerCase() === normalizedUsername
@@ -1188,17 +1143,16 @@ function App() {
       setRemovedSetByKey({});
       setOpenSetTypeMenuBySet({});
 
-      const programResponse = await fetch(`${API_BASE_URL}/api/training/program/${profile.id}/`);
-      const programData = await programResponse.json();
-
-      if (!programResponse.ok) {
+      try {
+        const programData = await trainingApi.getProgram(profile.id);
+        setProgram(programData);
+      } catch (error) {
         setProgram(null);
         setProgramError("Perfil encontrado. Ainda não existe programa ativo para este atleta.");
         setStep(3);
         return;
       }
 
-      setProgram(programData);
       setOpenWorkoutId(null);
       loadAthleteDashboard(profile.id);
       loadAdaptivePlan(profile.id);
@@ -1235,25 +1189,26 @@ function App() {
       [recommendation.training_exercise]: true,
     });
 
-    const response = await fetch(`${API_BASE_URL}/api/training/adaptive-plan/apply/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let data;
+
+    try {
+      data = await trainingApi.applyAdaptivePlanDecision({
         profile_id: profileId,
         training_exercise_id: recommendation.training_exercise,
         status: decisionStatus,
-      }),
-    });
-    const data = await response.json();
+      });
+    } catch (error) {
+      console.error(error.data || error);
+      alert("Não consegui gravar a decisão adaptativa.");
+      data = null;
+    }
 
     setApplyingAdaptiveById((currentState) => ({
       ...currentState,
       [recommendation.training_exercise]: false,
     }));
 
-    if (!response.ok) {
-      console.error(data);
-      alert("Não consegui gravar a decisão adaptativa.");
+    if (!data) {
       return;
     }
 
@@ -1317,21 +1272,20 @@ function App() {
       return substitutionOptionsByExerciseId[exercise.id];
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/exercise-substitutions/${exercise.id}/`);
-    const data = await response.json();
+    try {
+      const data = await trainingApi.getExerciseSubstitutions(exercise.id);
 
-    if (!response.ok) {
-      console.error(data);
+      setSubstitutionOptionsByExerciseId((currentOptions) => ({
+        ...currentOptions,
+        [exercise.id]: data,
+      }));
+
+      return data;
+    } catch (error) {
+      console.error(error.data || error);
       alert("Não consegui carregar alternativas para este exercício.");
       return null;
     }
-
-    setSubstitutionOptionsByExerciseId((currentOptions) => ({
-      ...currentOptions,
-      [exercise.id]: data,
-    }));
-
-    return data;
   }
 
   async function toggleExerciseSubstitutions(exercise) {
@@ -1354,21 +1308,10 @@ function App() {
     }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/training/replace-exercise/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          training_exercise_id: exercise.id,
-          replacement_exercise_id: replacementExerciseId,
-        }),
+      const data = await trainingApi.replaceTrainingExercise({
+        training_exercise_id: exercise.id,
+        replacement_exercise_id: replacementExerciseId,
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(data);
-        alert(data.error || "Não consegui trocar o exercício.");
-        return;
-      }
 
       setProgram(data);
       setRecommendations((currentRecommendations) => {
@@ -1464,58 +1407,51 @@ function App() {
       session_id: sessionId,
     });
 
-    const response = await fetch(`${API_BASE_URL}/api/progression/exercise-history/?${params}`);
-    const data = await response.json();
+    try {
+      const data = await progressionApi.getExerciseHistory(params);
 
-    if (!response.ok) {
-      console.error(data);
+      setExerciseLogsById((currentLogs) => ({
+        ...currentLogs,
+        [exercise.id]: data,
+      }));
+
+      setExerciseRowCounts((currentCounts) => ({
+        ...currentCounts,
+        [exercise.id]: Math.max(
+          currentCounts[exercise.id] || 0,
+          exercise.sets + 1,
+          data.previous_sets.length,
+          data.current_sets.length,
+          data.recommended_sets.length,
+          1
+        ),
+      }));
+
+      return data;
+    } catch (error) {
+      console.error(error.data || error);
       return null;
     }
-
-    setExerciseLogsById((currentLogs) => ({
-      ...currentLogs,
-      [exercise.id]: data,
-    }));
-
-    setExerciseRowCounts((currentCounts) => ({
-      ...currentCounts,
-      [exercise.id]: Math.max(
-        currentCounts[exercise.id] || 0,
-        exercise.sets + 1,
-        data.previous_sets.length,
-        data.current_sets.length,
-        data.recommended_sets.length,
-        1
-      ),
-    }));
-
-    return data;
   }
 
   async function createProfile(e) {
     e.preventDefault();
     setProgramError("");
 
-    const userResponse = await fetch(`${API_BASE_URL}/api/accounts/create-user/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: form.username }),
-    });
+    let userData;
 
-    const userData = await userResponse.json();
-
-    if (!userResponse.ok) {
-      console.error(userData);
+    try {
+      userData = await accountsApi.createUser({ username: form.username });
+    } catch (error) {
+      console.error(error.data || error);
       alert("Erro ao criar utilizador. Confirma os dados e tenta novamente.");
       return;
     }
 
     setUserId(userData.id);
 
-    const profileResponse = await fetch(`${API_BASE_URL}/api/accounts/profiles/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const profileData = await accountsApi.createProfile({
         user: userData.id,
         gender: form.gender,
         age: Number(form.age),
@@ -1525,19 +1461,14 @@ function App() {
         level: form.level,
         training_experience: form.training_experience,
         days_per_week: Number(form.days_per_week),
-      }),
-    });
+      });
 
-    const profileData = await profileResponse.json();
-
-    if (!profileResponse.ok) {
-      console.error(profileData);
+      setProfileId(profileData.id);
+      setStep(3);
+    } catch (error) {
+      console.error(error.data || error);
       alert("Erro ao criar perfil. Confirma os dados e tenta novamente.");
-      return;
     }
-
-    setProfileId(profileData.id);
-    setStep(3);
   }
 
   async function generateProgram() {
@@ -1550,19 +1481,7 @@ function App() {
     setIsGeneratingProgram(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/training/generate-program/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile_id: profileId }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(data);
-        setProgramError(data.error || "Não foi possível gerar o programa. Tenta novamente.");
-        return;
-      }
+      const data = await trainingApi.generateProgram({ profile_id: profileId });
 
       if (!Array.isArray(data.workouts)) {
         console.error(data);
@@ -1596,19 +1515,15 @@ function App() {
   }
 
   async function startWorkoutSession(workout) {
-    const response = await fetch(`${API_BASE_URL}/api/training/start-session/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let data;
+
+    try {
+      data = await trainingApi.startWorkoutSession({
         profile_id: profileId,
         workout_id: workout.id,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+      });
+    } catch (error) {
+      console.error(error.data || error);
       alert("Erro ao iniciar treino.");
       return;
     }
@@ -1647,19 +1562,15 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/finish-session/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let data;
+
+    try {
+      data = await trainingApi.finishWorkoutSession({
         session_id: sessionId,
         notes: sessionNotes[workout.id] || "",
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+      });
+    } catch (error) {
+      console.error(error.data || error);
       alert("Erro ao terminar treino.");
       return;
     }
@@ -1760,10 +1671,10 @@ function App() {
       return;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/progression/set-logs/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let data;
+
+    try {
+      data = await progressionApi.createSetLog({
         user: userId,
         workout_session: sessionId,
         training_exercise: exercise.id,
@@ -1778,13 +1689,9 @@ function App() {
         rir: setRir,
         reached_failure: reachedFailure,
         notes: formData.notes || "",
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
+      });
+    } catch (error) {
+      console.error(error.data || error);
       alert("Erro ao guardar a série. Vê a consola.");
       return;
     }
@@ -1840,10 +1747,8 @@ function App() {
       data,
     ].sort((firstSet, secondSet) => Number(firstSet.set_number) - Number(secondSet.set_number));
 
-    const recommendationResponse = await fetch(`${API_BASE_URL}/api/recommendations/next-set/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const recommendationData = await recommendationsApi.getNextSetRecommendation({
         weight: Number(weightUsed),
         reps: Number(repsCompleted),
         rir: setRir,
@@ -1875,12 +1780,8 @@ function App() {
         current_sets: completedSetsForCoach.map(serializeSetForCoach),
         previous_sets: currentExerciseLogs.previous_sets.map(serializeSetForCoach),
         history_sets: currentExerciseLogs.history_sets.map(serializeSetForCoach),
-      }),
-    });
+      });
 
-    const recommendationData = await recommendationResponse.json();
-
-    if (recommendationResponse.ok) {
       setRecommendations({
         ...recommendations,
         [exercise.id]: recommendationData,
@@ -1943,6 +1844,8 @@ function App() {
           ),
         }));
       }
+    } catch (error) {
+      console.error(error.data || error);
     }
   }
 
@@ -1963,15 +1866,10 @@ function App() {
       return;
     }
 
-    const deleteResponses = await Promise.all(
-      setLogsToRemove.map((setLog) =>
-        fetch(`${API_BASE_URL}/api/progression/set-logs/${setLog.id}/`, {
-          method: "DELETE",
-        })
-      )
-    );
-
-    if (deleteResponses.some((response) => !response.ok)) {
+    try {
+      await Promise.all(setLogsToRemove.map((setLog) => progressionApi.deleteSetLog(setLog.id)));
+    } catch (error) {
+      console.error(error.data || error);
       alert("Não consegui desfazer a série. Tenta novamente.");
       return;
     }
@@ -2095,16 +1993,7 @@ function App() {
     setIsDeletingExperimentalUsers(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/accounts/experimental/delete-users/`, {
-        method: "DELETE",
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(data);
-        setDeleteUsersMessage("Não consegui apagar os atletas experimentais.");
-        return;
-      }
+      const data = await accountsApi.deleteExperimentalUsers();
 
       setProfileId(null);
       setUserId(null);
