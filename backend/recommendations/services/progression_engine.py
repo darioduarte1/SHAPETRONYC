@@ -1,3 +1,10 @@
+# =============================================================================
+# progression_engine.py
+# -----------------------------------------------------------------------------
+# Motor de progressão geral da app.
+# É usado para avaliar evolução do atleta e decidir ajustes de carga, volume ou margem.
+# Serve como base de regras para recomendações de treino mais amplas.
+# =============================================================================
 from .training_coach_engine import calculate_training_coach_decision
 
 

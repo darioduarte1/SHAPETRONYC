@@ -1,3 +1,10 @@
+# =============================================================================
+# urls.py
+# -----------------------------------------------------------------------------
+# Define as rotas HTTP da app training.
+# Liga endpoints de sessões, dashboard, calibração, escalas, blocos e feedback às respetivas views.
+# É incluído no mapa principal backend/config/urls.py.
+# =============================================================================
 from django.urls import path
 
 from .views import (

@@ -1,3 +1,10 @@
+# =============================================================================
+# adaptive_plan_decisions.py
+# -----------------------------------------------------------------------------
+# Serviço que regista e aplica decisões tomadas no plano adaptativo.
+# É usado quando o utilizador escolhe aplicar, adiar ou ignorar uma recomendação.
+# Mantém histórico das decisões e atualiza o plano quando uma recomendação é aceite.
+# =============================================================================
 from django.db import transaction
 
 from training.models import AdaptivePlanDecision, TrainingWorkoutExercise

@@ -1,3 +1,10 @@
+// =============================================================================
+// trainingFormatters.js
+// -----------------------------------------------------------------------------
+// Conjunto de funções utilitárias de formatação e labels do frontend.
+// É usado pelo App.jsx e componentes para traduzir estados técnicos em texto, cores e valores legíveis.
+// Não altera dados; apenas prepara informação para apresentação visual.
+// =============================================================================
 export function formatNumber(value, digits = 1) {
   return Number(value || 0).toFixed(digits);
 }

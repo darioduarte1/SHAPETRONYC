@@ -1,3 +1,10 @@
+// =============================================================================
+// TrainingBlockPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual do bloco de treino e periodização.
+// É usado no ecrã principal para mostrar fase atual, volume, falhas, RIR médio e recomendação do bloco.
+// Recebe dados já calculados pelo backend e apenas os apresenta.
+// =============================================================================
 export default function TrainingBlockPanel({
   trainingBlock,
   formatNumber,

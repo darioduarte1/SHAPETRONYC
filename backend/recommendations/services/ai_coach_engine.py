@@ -1,3 +1,10 @@
+# =============================================================================
+# ai_coach_engine.py
+# -----------------------------------------------------------------------------
+# Motor que cria mensagens de coach para o atleta.
+# É usado para transformar dados de treino em feedback textual útil, motivador e contextual.
+# Combina informação recente com regras locais e, quando disponível, apoio de IA.
+# =============================================================================
 import json
 import urllib.error
 import urllib.request

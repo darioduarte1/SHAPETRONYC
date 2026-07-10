@@ -1,3 +1,10 @@
+# =============================================================================
+# serializers.py
+# -----------------------------------------------------------------------------
+# Transforma dados da app training em JSON e valida inputs recebidos do frontend.
+# É usado por endpoints de sessões, dashboards, calibração, escalas, blocos, feedback e decisões adaptativas.
+# Mantém estável o contrato entre interface e backend.
+# =============================================================================
 from rest_framework import serializers
 
 from .models import (

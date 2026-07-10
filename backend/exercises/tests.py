@@ -1,3 +1,10 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app exercises.
+# Validam catálogo, endpoints e regras ligadas às escalas de peso das máquinas.
+# Protegem a base usada pela calibração e pelas recomendações de treino.
+# =============================================================================
 from django.test import SimpleTestCase
 
 from exercises.services.weight_scale import get_exercise_weight_scale

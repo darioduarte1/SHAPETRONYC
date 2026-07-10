@@ -1,3 +1,10 @@
+// =============================================================================
+// ExerciseCard.jsx
+// -----------------------------------------------------------------------------
+// Componente visual de um exercício dentro de um workout.
+// É usado pelo WorkoutCard para mostrar imagem, dados do exercício, escala, substituição, calibração, orientação do coach e tabela de séries.
+// Recebe estado, helpers e ações do App.jsx para manter a lógica centralizada.
+// =============================================================================
 import ExerciseCalibrationPanel from "./ExerciseCalibrationPanel";
 import ExerciseSetTable from "./ExerciseSetTable";
 import ExerciseSubstitutionPanel from "./ExerciseSubstitutionPanel";

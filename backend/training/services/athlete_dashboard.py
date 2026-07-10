@@ -1,3 +1,10 @@
+# =============================================================================
+# athlete_dashboard.py
+# -----------------------------------------------------------------------------
+# Serviço que calcula os dados do dashboard do atleta.
+# É usado para mostrar volume, séries, calibrações, últimas sessões, alertas e evolução geral.
+# Resume dados de treino num formato motivador e fácil de ler no frontend.
+# =============================================================================
 from collections import defaultdict
 
 from progression.models import SetLog

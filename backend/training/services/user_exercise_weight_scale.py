@@ -1,3 +1,10 @@
+# =============================================================================
+# user_exercise_weight_scale.py
+# -----------------------------------------------------------------------------
+# Serviço que gere escalas de peso por atleta e exercício.
+# É usado para guardar a escala real de cada máquina e calcular cargas possíveis.
+# Garante que recomendações e calibrações usam apenas pesos existentes naquela máquina.
+# =============================================================================
 from exercises.services.weight_scale import (
     get_exercise_weight_scale,
     normalize_micro_weight_options,

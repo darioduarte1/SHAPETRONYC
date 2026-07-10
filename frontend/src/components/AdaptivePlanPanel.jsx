@@ -1,3 +1,10 @@
+// =============================================================================
+// AdaptivePlanPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual usado no ecrã principal do programa, dentro do App.jsx, quando já existe um plano de treino carregado para o atleta.
+// Mostra recomendações adaptativas por exercício, alterações sugeridas de séries/RIR/carga, evidência da decisão e histórico recente.
+// Não calcula regras nem grava diretamente na base de dados; recebe dados e chama recordAdaptiveDecision quando o utilizador aplica, adia ou ignora um ajuste.
+// =============================================================================
 export default function AdaptivePlanPanel({
   adaptivePlan,
   adaptiveDecisions,

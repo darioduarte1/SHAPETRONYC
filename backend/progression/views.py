@@ -1,3 +1,10 @@
+# =============================================================================
+# views.py
+# -----------------------------------------------------------------------------
+# Implementa os endpoints da app progression.
+# Recebe registos de séries do frontend, permite desfazer entradas e devolve histórico por exercício.
+# É uma das principais pontes entre execução do treino e análise futura.
+# =============================================================================
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView

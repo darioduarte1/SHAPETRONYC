@@ -1,3 +1,10 @@
+// =============================================================================
+// ExerciseCalibrationPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual do treino experimental de calibração por exercício.
+// É usado dentro de cada exercício quando ainda não há dados fiáveis para definir o peso padrão da máquina.
+// Mostra séries experimentais, escala de cores, timer, bloqueios por escala de máquina e ações para guardar a calibração.
+// =============================================================================
 export default function ExerciseCalibrationPanel({
   exercise,
   needsCalibration,

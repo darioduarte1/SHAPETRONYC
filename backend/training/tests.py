@@ -1,3 +1,10 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app training.
+# Validam sessões, dashboards, calibração, escalas, blocos, memória, feedback e plano adaptativo.
+# Protegem a camada central que liga execução real e decisões futuras.
+# =============================================================================
 from datetime import timedelta
 
 from django.contrib.auth.models import User

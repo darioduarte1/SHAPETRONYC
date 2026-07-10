@@ -1,3 +1,10 @@
+# =============================================================================
+# serializers.py
+# -----------------------------------------------------------------------------
+# Transforma exercícios e escalas em JSON para a API.
+# É usado pelas views para enviar o catálogo ao frontend e validar dados de escala de máquina.
+# Ajuda a manter a comunicação entre frontend e backend estável.
+# =============================================================================
 from rest_framework import serializers
 from .models import Exercise
 

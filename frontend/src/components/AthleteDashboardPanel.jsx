@@ -1,3 +1,10 @@
+// =============================================================================
+// AthleteDashboardPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual do dashboard do atleta.
+// É usado no ecrã principal para mostrar evolução, volume, séries, calibrações, últimos treinos, alertas e memória disponível.
+// Recebe dados agregados do backend e funções de formatação vindas do App.jsx.
+// =============================================================================
 export default function AthleteDashboardPanel({
   dashboard,
   formatDate,

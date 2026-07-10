@@ -1,3 +1,10 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app progression.
+# Validam gravação de séries, histórico e comportamento de progressão ligado ao treino.
+# Protegem o núcleo de dados usado pela IA e pelas regras locais.
+# =============================================================================
 from types import SimpleNamespace
 
 from django.contrib.auth.models import User

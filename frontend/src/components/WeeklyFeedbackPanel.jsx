@@ -1,3 +1,10 @@
+// =============================================================================
+// WeeklyFeedbackPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual do feedback semanal.
+// É usado no ecrã principal para comunicar estado semanal, risco de deload, falhas recentes e tendência de volume.
+// Recebe labels e cores por props para traduzir estados técnicos em UI clara.
+// =============================================================================
 export default function WeeklyFeedbackPanel({
   feedback,
   getStatusLabel,

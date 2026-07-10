@@ -1,3 +1,10 @@
+# =============================================================================
+# urls.py
+# -----------------------------------------------------------------------------
+# Define as rotas HTTP da app accounts.
+# Liga URLs de perfis e autenticação simples às views correspondentes.
+# É incluído no mapa principal backend/config/urls.py.
+# =============================================================================
 from django.urls import path
 
 from .views import (

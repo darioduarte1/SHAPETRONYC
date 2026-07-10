@@ -1,3 +1,10 @@
+// =============================================================================
+// ExerciseSubstitutionPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual para trocar um exercício por outro.
+// É usado dentro do ExerciseCard quando o atleta abre a zona de substituição.
+// Mostra alternativas compatíveis e chama a ação de substituição recebida por props.
+// =============================================================================
 export default function ExerciseSubstitutionPanel({
   exercise,
   isOpen,

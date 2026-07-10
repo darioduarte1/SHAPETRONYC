@@ -1,3 +1,10 @@
+# =============================================================================
+# views.py
+# -----------------------------------------------------------------------------
+# Implementa os endpoints da app accounts.
+# Recebe pedidos do frontend para criar perfis, procurar atletas existentes e limpar utilizadores experimentais.
+# Coordena serializers, modelos e respostas HTTP sem concentrar regras de treino.
+# =============================================================================
 from django.contrib.auth.models import User
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction

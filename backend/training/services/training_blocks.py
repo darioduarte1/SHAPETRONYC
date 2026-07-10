@@ -1,3 +1,10 @@
+# =============================================================================
+# training_blocks.py
+# -----------------------------------------------------------------------------
+# Serviço de blocos de treino e periodização.
+# É usado para acompanhar fases como build, deload e retorno ao progresso.
+# Ajuda a app a tomar decisões semanais com base em volume, falhas e fadiga acumulada.
+# =============================================================================
 from collections import defaultdict
 from datetime import timedelta
 

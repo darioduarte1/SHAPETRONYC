@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+# =============================================================================
+# manage.py
+# -----------------------------------------------------------------------------
+# Ponto de entrada de linha de comandos do backend Django.
+# É usado para arrancar o servidor local, executar migrations, correr testes e aceder a todos os comandos de gestão do projeto.
+# Este ficheiro não contém regras de negócio; encaminha os comandos para a configuração Django definida em config.settings.
+# =============================================================================
 """Django's command-line utility for administrative tasks."""
 import os
 import sys

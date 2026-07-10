@@ -1,3 +1,10 @@
+// =============================================================================
+// WorkoutCard.jsx
+// -----------------------------------------------------------------------------
+// Componente visual de cada treino dentro do programa.
+// É usado pelo App.jsx para renderizar workouts, controlar abertura, iniciar/finalizar sessões e listar exercícios.
+// Distribui estado, helpers e ações para ExerciseCard mantendo a estrutura do treino organizada.
+// =============================================================================
 import ExerciseCard from "./ExerciseCard";
 
 export default function WorkoutCard({

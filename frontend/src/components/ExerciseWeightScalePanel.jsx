@@ -1,3 +1,10 @@
+// =============================================================================
+// ExerciseWeightScalePanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual para registar a escala de pesos de uma máquina.
+// É usado dentro do ExerciseCard e da calibração para garantir que a app conhece os pesos reais disponíveis.
+// Permite preencher placas, bolachas e incrementos antes de a IA recomendar cargas.
+// =============================================================================
 export default function ExerciseWeightScalePanel({
   exercise,
   isOpen,

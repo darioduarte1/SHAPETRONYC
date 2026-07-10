@@ -1,3 +1,10 @@
+// =============================================================================
+// HomeScreen.jsx
+// -----------------------------------------------------------------------------
+// Componente visual do ecrã inicial da app.
+// É usado pelo App.jsx no passo de entrada, permitindo criar novo perfil, entrar num atleta existente ou limpar atletas experimentais.
+// Recebe handlers e estado do App.jsx sem gerir diretamente chamadas à API.
+// =============================================================================
 export default function HomeScreen({
   loginUsername,
   setLoginUsername,

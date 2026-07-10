@@ -1,3 +1,10 @@
+# =============================================================================
+# views.py
+# -----------------------------------------------------------------------------
+# Implementa os endpoints principais da app training.
+# Recebe pedidos do frontend para iniciar/finalizar sessões, consultar dashboards, gerir calibração, escalas e recomendações adaptativas.
+# Coordena serializers, modelos e serviços de treino.
+# =============================================================================
 from django.utils import timezone
 
 from rest_framework.views import APIView

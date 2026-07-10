@@ -1,3 +1,10 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app accounts.
+# Verificam criação, consulta e regras essenciais dos perfis de atleta.
+# São usados para proteger o fluxo inicial da app contra regressões.
+# =============================================================================
 from django.contrib.auth.models import User
 from django.test import TestCase
 

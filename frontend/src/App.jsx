@@ -1,3 +1,10 @@
+// =============================================================================
+// App.jsx
+// -----------------------------------------------------------------------------
+// Componente principal da interface React.
+// Controla o fluxo da app: criação/login do atleta, geração do programa, dashboard, treino ativo, calibração, escalas e comunicação com a API.
+// Mantém grande parte do estado global do frontend e passa dados/funções para os componentes especializados.
+// =============================================================================
 import { useEffect, useState } from "react";
 import AdaptivePlanPanel from "./components/AdaptivePlanPanel";
 import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";

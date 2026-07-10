@@ -1,3 +1,10 @@
+# =============================================================================
+# weekly_feedback.py
+# -----------------------------------------------------------------------------
+# Serviço que calcula feedback semanal do atleta.
+# É usado para avaliar tendência de volume, falhas recentes, necessidade de deload e estado geral do bloco.
+# Transforma dados acumulados em recomendações semanais claras.
+# =============================================================================
 from training.services.athlete_dashboard import build_athlete_dashboard
 
 

@@ -1,3 +1,10 @@
+# =============================================================================
+# ai_training_decision_engine.py
+# -----------------------------------------------------------------------------
+# Motor de decisão para orientar a próxima série durante o treino.
+# É usado após o registo de uma série para recomendar manter, subir, baixar carga ou ajustar o plano.
+# Considera reps, RIR, falha, histórico e segurança antes de sugerir a próxima ação.
+# =============================================================================
 import json
 import socket
 import urllib.error

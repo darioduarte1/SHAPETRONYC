@@ -1,3 +1,10 @@
+// =============================================================================
+// WorkoutProgressionPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual das recomendações para o próximo treino.
+// É usado no ecrã principal para mostrar carga, séries, reps e RIR sugeridos por exercício.
+// Recebe recomendações já calculadas e ajuda o atleta a perceber a progressão planeada.
+// =============================================================================
 export default function WorkoutProgressionPanel({
   progression,
   getActionLabel,

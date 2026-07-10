@@ -1,3 +1,10 @@
+# =============================================================================
+# wsgi.py
+# -----------------------------------------------------------------------------
+# Expõe a aplicação Django em modo WSGI.
+# É usado por servidores tradicionais de produção quando o backend é publicado através de WSGI.
+# Carrega config.settings e entrega o objeto application ao servidor.
+# =============================================================================
 """
 WSGI config for config project.
 

@@ -1,3 +1,10 @@
+# =============================================================================
+# models.py
+# -----------------------------------------------------------------------------
+# Define os modelos da app programs.
+# Representa programas de treino, workouts e exercícios planeados que o atleta vai executar.
+# Estes modelos ligam o perfil do atleta à estrutura concreta do plano mostrado no frontend.
+# =============================================================================
 from django.db import models
 from exercises.models import Exercise
 

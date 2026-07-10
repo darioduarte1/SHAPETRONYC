@@ -1,3 +1,10 @@
+# =============================================================================
+# exercise_substitution.py
+# -----------------------------------------------------------------------------
+# Serviço que encontra substituições de exercício.
+# É usado quando o atleta troca um exercício dentro do treino por outro compatível.
+# Considera grupo muscular, equipamento e estrutura do programa para manter o plano coerente.
+# =============================================================================
 from exercises.models import Exercise
 from exercises.serializers import ExerciseSerializer
 from training.models import TrainingWorkoutExercise

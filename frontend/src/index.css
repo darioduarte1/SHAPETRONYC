@@ -1,3 +1,10 @@
+/* =============================================================================
+ * index.css
+ * -----------------------------------------------------------------------------
+ * Folha de estilos global do frontend.
+ * Define o visual da aplicação, incluindo layout, painéis, botões, tabelas de séries, calibração, dashboard e componentes adaptativos.
+ * É importada em main.jsx e aplicada a toda a interface React.
+ * ============================================================================= */
 :root {
   --text: #6b6375;
   --text-h: #08060d;

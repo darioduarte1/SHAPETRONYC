@@ -1,3 +1,10 @@
+// =============================================================================
+// ProfileForm.jsx
+// -----------------------------------------------------------------------------
+// Componente visual do formulário de criação de perfil.
+// É usado pelo App.jsx no onboarding para recolher username, género, idade, altura, peso, objetivo, nível e disponibilidade.
+// Envia os dados através da função createProfile recebida por props.
+// =============================================================================
 export default function ProfileForm({
   form,
   setForm,

@@ -1,3 +1,10 @@
+# =============================================================================
+# workout_progression_engine.py
+# -----------------------------------------------------------------------------
+# Motor que prepara recomendações para o próximo treino.
+# É usado no fim ou antes de uma sessão para decidir carga, séries, reps e RIR alvo por exercício.
+# Combina treino recente, calibração e escala da máquina para gerar progressão aplicável.
+# =============================================================================
 from exercises.services.weight_scale import (
     get_exercise_weight_scale,
     next_available_weight,

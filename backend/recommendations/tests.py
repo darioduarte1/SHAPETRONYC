@@ -1,3 +1,10 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app recommendations.
+# Validam regras dos motores de decisão, progressão, feedback e coaching.
+# Protegem o comportamento da IA local e das recomendações de treino.
+# =============================================================================
 from django.test import SimpleTestCase, override_settings
 from types import SimpleNamespace
 from unittest.mock import patch

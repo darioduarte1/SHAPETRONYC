@@ -1,3 +1,10 @@
+# =============================================================================
+# models.py
+# -----------------------------------------------------------------------------
+# Define os modelos da app exercises.
+# Guarda o catálogo de exercícios, respetiva máquina/equipamento, grupos musculares, imagens e escala de pesos quando aplicável.
+# Estes dados são usados por programas, substituições, calibração experimental e recomendações de carga.
+# =============================================================================
 from django.db import models
 
 

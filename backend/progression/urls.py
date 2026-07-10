@@ -1,3 +1,10 @@
+# =============================================================================
+# urls.py
+# -----------------------------------------------------------------------------
+# Define as rotas HTTP da app progression.
+# Liga endpoints de séries, histórico e sessão às views correspondentes.
+# É incluído no mapa principal backend/config/urls.py.
+# =============================================================================
 from django.urls import path
 from .views import ExerciseHistoryView, SetLogDetailView, SetLogListCreateView
 

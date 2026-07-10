@@ -1,3 +1,10 @@
+# =============================================================================
+# 0004_exercise_crop_image_urls.py
+# -----------------------------------------------------------------------------
+# Migração Django da app exercises.
+# É usada pelo sistema de migrations para criar ou alterar a estrutura da base de dados associada a exercises.
+# O ficheiro 0004_exercise_crop_image_urls deve ser mantido como histórico técnico da evolução dos modelos e aplicado automaticamente pelo manage.py migrate.
+# =============================================================================
 from django.db import migrations
 
 

@@ -1,3 +1,10 @@
+// =============================================================================
+// AiCoachSummaryPanel.jsx
+// -----------------------------------------------------------------------------
+// Componente visual que mostra o resumo textual do coach/IA.
+// É usado no ecrã principal do programa para apresentar feedback geral gerado a partir dos dados recentes do atleta.
+// Recebe a origem da decisão e o conteúdo já calculado, sem executar regras de treino.
+// =============================================================================
 export default function AiCoachSummaryPanel({
   summary,
   getSourceLabel,

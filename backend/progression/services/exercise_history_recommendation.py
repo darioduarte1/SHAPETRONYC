@@ -1,3 +1,10 @@
+# =============================================================================
+# exercise_history_recommendation.py
+# -----------------------------------------------------------------------------
+# Serviço que analisa histórico por exercício para sugerir progressão.
+# É usado para encontrar padrões recentes de carga, reps e esforço antes de recomendar a próxima abordagem.
+# Ajuda a app a adaptar pesos com base em dados reais do atleta.
+# =============================================================================
 from exercises.services.weight_scale import snap_to_available_weight
 
 TARGET_REPS = 12

@@ -1,3 +1,10 @@
+# =============================================================================
+# models.py
+# -----------------------------------------------------------------------------
+# Define os modelos de dados da app accounts.
+# Guarda o perfil do atleta, incluindo dados físicos, objetivo, nível e experiência usados para gerar e adaptar planos.
+# Estes modelos são usados por serializers, views, programas, treinos e motores de recomendação.
+# =============================================================================
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import (

@@ -1,3 +1,10 @@
+# =============================================================================
+# training_coach_engine.py
+# -----------------------------------------------------------------------------
+# Motor local de coaching durante o treino.
+# É usado para gerar instruções imediatas série a série com base na execução atual.
+# Aplica regras de falha, queda de performance, aquecimento e adaptação dentro da sessão.
+# =============================================================================
 import re
 
 from exercises.services.weight_scale import (

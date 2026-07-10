@@ -1,3 +1,10 @@
+# =============================================================================
+# serializers.py
+# -----------------------------------------------------------------------------
+# Transforma registos de progressão em JSON e valida séries enviadas pelo frontend.
+# É usado quando o atleta marca séries como feitas, desfaz registos ou consulta histórico.
+# Garante consistência entre inputs do treino e dados persistidos.
+# =============================================================================
 from rest_framework import serializers
 
 from .models import SetLog

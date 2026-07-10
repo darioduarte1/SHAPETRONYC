@@ -1,3 +1,10 @@
+# =============================================================================
+# adaptive_plan.py
+# -----------------------------------------------------------------------------
+# Serviço que constrói o plano adaptativo do atleta.
+# É usado para detetar exercícios que precisam de ajuste de carga, volume, RIR ou recuperação.
+# Transforma histórico e estado atual em recomendações acionáveis no painel adaptativo.
+# =============================================================================
 from training.models import TrainingProgram
 from training.services.athlete_dashboard import build_athlete_dashboard
 

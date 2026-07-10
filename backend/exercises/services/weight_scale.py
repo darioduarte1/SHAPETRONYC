@@ -1,3 +1,10 @@
+# =============================================================================
+# weight_scale.py
+# -----------------------------------------------------------------------------
+# Serviço responsável por trabalhar com escalas de peso das máquinas.
+# É usado para validar valores disponíveis e ajustar recomendações ao peso real mais próximo que a máquina permite.
+# Evita que a app sugira cargas impossíveis ou arredondamentos fora da escala registada.
+# =============================================================================
 DEFAULT_WEIGHT_STEP = 2.5
 
 

@@ -1,3 +1,10 @@
+# =============================================================================
+# exercise_calibration.py
+# -----------------------------------------------------------------------------
+# Serviço da calibração experimental por exercício.
+# É usado quando o atleta ainda não tem histórico fiável numa máquina e precisa descobrir o peso padrão.
+# Calcula peso base, confiança e dados úteis para o próximo treino respeitando a escala da máquina.
+# =============================================================================
 from exercises.services.weight_scale import (
     next_available_weight,
     number_or_none,

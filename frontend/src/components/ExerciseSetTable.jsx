@@ -1,3 +1,10 @@
+// =============================================================================
+// ExerciseSetTable.jsx
+// -----------------------------------------------------------------------------
+// Componente visual da tabela de séries de um exercício.
+// É usado pelo ExerciseCard para listar aquecimentos e séries normais, permitir editar carga/reps/esforço e marcar/desmarcar séries feitas.
+// Não decide a progressão; dispara ações recebidas por props para guardar ou desfazer séries.
+// =============================================================================
 export default function ExerciseSetTable({
   exercise,
   rows,

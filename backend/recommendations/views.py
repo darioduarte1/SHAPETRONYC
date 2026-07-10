@@ -1,3 +1,10 @@
+# =============================================================================
+# views.py
+# -----------------------------------------------------------------------------
+# Implementa os endpoints da app recommendations.
+# Recebe pedidos do frontend para decisões de treino, feedback e recomendações de progressão.
+# Coordena motores de serviço e devolve respostas prontas para a interface.
+# =============================================================================
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status

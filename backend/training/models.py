@@ -1,3 +1,10 @@
+# =============================================================================
+# models.py
+# -----------------------------------------------------------------------------
+# Define os modelos centrais da app training.
+# Guarda sessões de treino, memória do atleta, blocos de periodização, calibrações experimentais, escalas por exercício e decisões adaptativas.
+# Estes modelos ligam execução real, análise histórica e recomendações futuras.
+# =============================================================================
 from django.db import models
 from django.contrib.auth.models import User
 

@@ -1,3 +1,10 @@
+# =============================================================================
+# serializers.py
+# -----------------------------------------------------------------------------
+# Define serializers ligados às recomendações e decisões de treino.
+# É usado para validar e formatar dados quando o frontend pede orientação da IA ou das regras locais.
+# Mantém a API de recomendações consistente.
+# =============================================================================
 from rest_framework import serializers
 
 

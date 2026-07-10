@@ -1,3 +1,10 @@
+# =============================================================================
+# training_memory.py
+# -----------------------------------------------------------------------------
+# Serviço que atualiza e consulta a memória do atleta.
+# É usado após treinos e séries para criar padrões por exercício, carga, reps, RIR e resposta à fadiga.
+# Fornece contexto histórico para decisões futuras da IA e dos motores locais.
+# =============================================================================
 from collections import defaultdict
 
 from progression.models import SetLog

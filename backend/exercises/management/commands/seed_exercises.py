@@ -1,3 +1,10 @@
+# =============================================================================
+# seed_exercises.py
+# -----------------------------------------------------------------------------
+# Comando de gestão para popular o catálogo inicial de exercícios.
+# É executado manualmente através do manage.py quando é preciso criar ou atualizar exercícios base da app.
+# Centraliza nomes, grupos musculares, categorias, imagens e dados usados na geração dos programas.
+# =============================================================================
 from django.core.management.base import BaseCommand
 
 from exercises.models import Exercise
