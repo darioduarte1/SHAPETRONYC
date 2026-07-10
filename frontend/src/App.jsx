@@ -3,6 +3,7 @@ import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
 import ExerciseCalibrationPanel from "./components/ExerciseCalibrationPanel";
 import ExerciseSetTable from "./components/ExerciseSetTable";
+import ExerciseSubstitutionPanel from "./components/ExerciseSubstitutionPanel";
 import ExerciseWeightScalePanel from "./components/ExerciseWeightScalePanel";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -3266,45 +3267,14 @@ function App() {
                             saveWeightScale={saveWeightScale}
                           />
 
-                          {isSubstitutionOpen && !hasLoggedSets && (
-                            <div className="exercise-substitution-panel">
-                              <div className="exercise-substitution-header">
-                                <strong>Alternativas para {item.exercise_muscle_group}</strong>
-                                <span>Só aparecem exercícios do mesmo grupo muscular.</span>
-                              </div>
-
-                              {!substitutionData && (
-                                <p className="exercise-substitution-empty">A carregar alternativas...</p>
-                              )}
-
-                              {substitutionData?.options?.length === 0 && (
-                                <p className="exercise-substitution-empty">
-                                  Ainda não existem alternativas registadas para este grupo.
-                                </p>
-                              )}
-
-                              <div className="exercise-option-grid">
-                                {substitutionData?.options?.map((option) => (
-                                  <button
-                                    key={option.id}
-                                    className="exercise-option-card"
-                                    onClick={() => replaceExercise(item, option.id)}
-                                    disabled={isReplacing}
-                                  >
-                                    <img
-                                      src={option.image_url || "/exercise-screens/IMG_3620.PNG"}
-                                      alt={option.localized_name || option.name}
-                                    />
-                                    <span>
-                                      <strong>{option.name}</strong>
-                                      <small>{option.localized_name || option.equipment}</small>
-                                      <small>{option.equipment} · {option.movement_pattern}</small>
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          <ExerciseSubstitutionPanel
+                            exercise={item}
+                            isOpen={isSubstitutionOpen}
+                            hasLoggedSets={hasLoggedSets}
+                            substitutionData={substitutionData}
+                            isReplacing={isReplacing}
+                            replaceExercise={replaceExercise}
+                          />
 
                           {isOpen && (
                             <div style={{ marginTop: "12px" }}>
