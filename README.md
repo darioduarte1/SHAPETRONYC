@@ -128,6 +128,15 @@ Para validar tudo de uma vez:
 
 Este comando corre lint e build do frontend, valida a configuração Django, verifica se há migrations em falta e executa os testes principais do backend.
 
+## Desenvolvimento De Funcionalidades
+
+Antes de implementar funcionalidades maiores, usa:
+
+- `docs/DEVELOPMENT.md`
+- `docs/FEATURE_TEMPLATE.md`
+
+Estes ficheiros ajudam a manter a app organizada: contrato da feature, backend, frontend, regras, IA, testes e validação.
+
 ### Backend
 
 ```bash
