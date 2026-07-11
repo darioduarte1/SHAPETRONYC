@@ -18,6 +18,7 @@ export default function WorkoutCard({
   sessionNote,
   setSessionNote,
   constants,
+  experimentalMode = false,
   state,
   helpers,
   actions,
@@ -101,6 +102,7 @@ export default function WorkoutCard({
                 rows={rows}
                 guidance={guidance}
                 constants={constants}
+                experimentalMode={experimentalMode}
                 setForms={state.setForms}
                 menus={{
                   openRestMenuBySet: state.openRestMenuBySet,

@@ -22,6 +22,8 @@ export default function useTrainingSession({
   setCompletedCalibrationByExerciseId,
   setRemovedSetByKey,
   setOpenSetTypeMenuBySet,
+  notifyError = () => {},
+  notifySuccess = () => {},
 }) {
   const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
   const [sessionNotes, setSessionNotes] = useState({});
@@ -52,7 +54,7 @@ export default function useTrainingSession({
       });
     } catch (error) {
       console.error(error.data || error);
-      alert("Erro ao iniciar treino.");
+      notifyError("Erro ao iniciar treino.");
       return;
     }
 
@@ -78,7 +80,7 @@ export default function useTrainingSession({
     const sessionId = activeSessionByWorkout[workout.id];
 
     if (!sessionId) {
-      alert("Não existe sessão ativa para este treino.");
+      notifyError("Não existe sessão ativa para este treino.");
       return;
     }
 
@@ -91,7 +93,7 @@ export default function useTrainingSession({
       });
     } catch (error) {
       console.error(error.data || error);
-      alert("Erro ao terminar treino.");
+      notifyError("Erro ao terminar treino.");
       return;
     }
 
@@ -109,6 +111,7 @@ export default function useTrainingSession({
     setLatestWorkoutProgression(data.next_workout_progression || null);
     setLatestAiCoach(data.ai_coach_summary || null);
     setWorkoutStatusMessage(`Treino terminado: ${data.workout_name}`);
+    notifySuccess(`Treino terminado: ${data.workout_name}`);
     loadProgramPanels();
   }
 

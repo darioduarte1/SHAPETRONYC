@@ -15,6 +15,7 @@ export default function useExerciseSubstitutions({
   setExerciseLogsById,
   setOpenExerciseById,
   loadProgramPanels,
+  notifyError = () => {},
 }) {
   const [substitutionOptionsByExerciseId, setSubstitutionOptionsByExerciseId] = useState({});
   const [openSubstitutionByExerciseId, setOpenSubstitutionByExerciseId] = useState({});
@@ -36,7 +37,7 @@ export default function useExerciseSubstitutions({
       return data;
     } catch (error) {
       console.error(error.data || error);
-      alert("Não consegui carregar alternativas para este exercício.");
+      notifyError("Não consegui carregar alternativas para este exercício.");
       return null;
     }
   }
@@ -93,7 +94,7 @@ export default function useExerciseSubstitutions({
       await loadProgramPanels();
     } catch (error) {
       console.error(error);
-      alert("Não consegui contactar o servidor para trocar o exercício.");
+      notifyError("Não consegui contactar o servidor para trocar o exercício.");
     } finally {
       setIsReplacingExerciseById((currentState) => ({
         ...currentState,

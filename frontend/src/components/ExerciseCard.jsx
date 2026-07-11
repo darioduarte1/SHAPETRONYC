@@ -34,6 +34,7 @@ export default function ExerciseCard({
   rows,
   guidance,
   constants,
+  experimentalMode = false,
   setForms,
   menus,
   imageUrl,
@@ -135,6 +136,7 @@ export default function ExerciseCard({
               getDecisionSourceLabel={getDecisionSourceLabel}
               getLlmStatusLabel={getLlmStatusLabel}
               getConfidenceColor={getConfidenceColor}
+              showDebugPanel={experimentalMode}
             />
           )}
 

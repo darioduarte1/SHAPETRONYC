@@ -17,6 +17,7 @@ export default function useExerciseCalibration({
   getExerciseLogs,
   setExerciseLogsById,
   loadExerciseHistory,
+  notifyError = () => {},
 }) {
   const [calibrationFormsByExerciseId, setCalibrationFormsByExerciseId] = useState({});
   const [isSavingCalibrationByExerciseId, setIsSavingCalibrationByExerciseId] = useState({});
@@ -133,7 +134,7 @@ export default function useExerciseCalibration({
     const calibrationRestSeconds = restTimers[exercise.id] || 0;
 
     if (!calibrationState.scale_configured) {
-      alert("Preenche primeiro a escala da máquina antes de guardar séries experimentais.");
+      notifyError("Preenche primeiro a escala da máquina antes de guardar séries experimentais.");
       return;
     }
 
@@ -142,7 +143,7 @@ export default function useExerciseCalibration({
     }
 
     if (!formData.weight_used || !formData.result_color) {
-      alert("Preenche o peso e escolhe a cor da série experimental.");
+      notifyError("Preenche o peso e escolhe a cor da série experimental.");
       return;
     }
 
@@ -194,7 +195,7 @@ export default function useExerciseCalibration({
       await loadExerciseHistory(exercise);
     } catch (error) {
       console.error(error);
-      alert("Não consegui contactar o servidor para guardar a calibração.");
+      notifyError("Não consegui contactar o servidor para guardar a calibração.");
     } finally {
       setIsSavingCalibrationByExerciseId((currentState) => ({
         ...currentState,

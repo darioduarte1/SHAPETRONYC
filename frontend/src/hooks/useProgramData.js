@@ -9,7 +9,12 @@
 import { useState } from "react";
 import * as trainingApi from "../api/trainingApi";
 
-export default function useProgramData({ profileId, setStep, resetTrainingState }) {
+export default function useProgramData({
+  profileId,
+  setStep,
+  resetTrainingState,
+  notifyError = () => {},
+}) {
   const [program, setProgram] = useState(null);
   const [programError, setProgramError] = useState("");
   const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
@@ -149,7 +154,7 @@ export default function useProgramData({ profileId, setStep, resetTrainingState 
 
   async function recordAdaptiveDecision(recommendation, decisionStatus) {
     if (!profileId) {
-      alert("Não encontrei o perfil ativo.");
+      notifyError("Não encontrei o perfil ativo.");
       return;
     }
 
@@ -178,7 +183,7 @@ export default function useProgramData({ profileId, setStep, resetTrainingState 
       });
     } catch (error) {
       console.error(error.data || error);
-      alert("Não consegui gravar a decisão adaptativa.");
+      notifyError("Não consegui gravar a decisão adaptativa.");
       data = null;
     }
 

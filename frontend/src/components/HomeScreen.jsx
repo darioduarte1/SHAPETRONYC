@@ -6,6 +6,7 @@
 // Recebe handlers e estado do App.jsx sem gerir diretamente chamadas à API.
 // =============================================================================
 export default function HomeScreen({
+  experimentalMode = false,
   loginUsername,
   setLoginUsername,
   loginError,
@@ -77,25 +78,27 @@ export default function HomeScreen({
         </form>
       </section>
 
-      <section className="home-experimental-panel">
-        <div>
-          <span className="profile-kicker">Experimental</span>
-          <h2>Limpar atletas de teste</h2>
-          <p>
-            Apaga os atletas criados durante testes e todos os dados associados: perfis, programas,
-            sessões, séries, calibrações, memórias e escalas.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="home-danger-button"
-          onClick={deleteExperimentalUsers}
-          disabled={isDeletingExperimentalUsers}
-        >
-          {isDeletingExperimentalUsers ? "A apagar..." : "Apagar atletas experimentais"}
-        </button>
-        {deleteUsersMessage && <p className="home-delete-message">{deleteUsersMessage}</p>}
-      </section>
+      {experimentalMode && (
+        <section className="home-experimental-panel">
+          <div>
+            <span className="profile-kicker">Experimental</span>
+            <h2>Limpar atletas de teste</h2>
+            <p>
+              Apaga os atletas criados durante testes e todos os dados associados: perfis, programas,
+              sessões, séries, calibrações, memórias e escalas.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="home-danger-button"
+            onClick={deleteExperimentalUsers}
+            disabled={isDeletingExperimentalUsers}
+          >
+            {isDeletingExperimentalUsers ? "A apagar..." : "Apagar atletas experimentais"}
+          </button>
+          {deleteUsersMessage && <p className="home-delete-message">{deleteUsersMessage}</p>}
+        </section>
+      )}
     </div>
   );
 }

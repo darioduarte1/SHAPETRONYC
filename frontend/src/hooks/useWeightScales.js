@@ -14,6 +14,7 @@ export default function useWeightScales({
   activeSessionByWorkout,
   setProgram,
   loadExerciseHistory,
+  notifyError = () => {},
 }) {
   const [openWeightScaleByExerciseId, setOpenWeightScaleByExerciseId] = useState({});
   const [weightScaleFormsByExerciseId, setWeightScaleFormsByExerciseId] = useState({});
@@ -201,7 +202,7 @@ export default function useWeightScales({
       }
     } catch (error) {
       console.error(error);
-      alert("Não consegui contactar o servidor para guardar a escala de pesos.");
+      notifyError("Não consegui contactar o servidor para guardar a escala de pesos.");
     } finally {
       setIsSavingWeightScaleByExerciseId((currentState) => ({
         ...currentState,

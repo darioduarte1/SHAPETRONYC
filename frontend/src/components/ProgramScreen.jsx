@@ -52,6 +52,7 @@ export default function ProgramScreen({
   sessionNotes,
   openWorkoutId,
   workoutStatusMessage,
+  experimentalMode = false,
   setSessionNotes,
   setForms,
   openExerciseById,
@@ -178,6 +179,7 @@ export default function ProgramScreen({
               })
             }
             constants={{ targetReps: TARGET_REPS, setTypes: SET_TYPES, warmupEffort: WARMUP_EFFORT }}
+            experimentalMode={experimentalMode}
             state={{
               setForms,
               openExerciseById,

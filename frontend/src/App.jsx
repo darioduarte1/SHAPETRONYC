@@ -6,9 +6,11 @@
 // Mantém grande parte do estado global do frontend e passa dados/funções para os componentes especializados.
 // =============================================================================
 import { useState } from "react";
+import AppMessages from "./components/AppMessages";
 import HomeScreen from "./components/HomeScreen";
 import ProgramScreen from "./components/ProgramScreen";
 import ProfileForm from "./components/ProfileForm";
+import useAppMessages from "./hooks/useAppMessages";
 import useCoachContext from "./hooks/useCoachContext";
 import useExerciseCalibration from "./hooks/useExerciseCalibration";
 import useExerciseGuidance from "./hooks/useExerciseGuidance";
@@ -23,6 +25,7 @@ import useSetLogging from "./hooks/useSetLogging";
 import useTrainingSession from "./hooks/useTrainingSession";
 import useWeightScales from "./hooks/useWeightScales";
 import useWorkoutExerciseActions from "./hooks/useWorkoutExerciseActions";
+import { EXPERIMENTAL_MODE } from "./utils/appConfig";
 
 function App() {
   const [step, setStep] = useState(1);
@@ -30,6 +33,12 @@ function App() {
   const [userId, setUserId] = useState(null);
   const [recommendations, setRecommendations] = useState({});
   const [openExerciseById, setOpenExerciseById] = useState({});
+  const {
+    messages,
+    dismissMessage,
+    notifyError,
+    notifySuccess,
+  } = useAppMessages();
 
   const {
     restTimers,
@@ -98,7 +107,7 @@ function App() {
     loadProgramPanels,
     generateProgram,
     recordAdaptiveDecision,
-  } = useProgramData({ profileId, setStep, resetTrainingState });
+  } = useProgramData({ profileId, setStep, resetTrainingState, notifyError });
 
   function resetAllTrainingState() {
     resetTrainingState();
@@ -168,6 +177,8 @@ function App() {
     loadProgramPanels,
     resetAllTrainingState,
     resetAllAppState,
+    notifyError,
+    notifySuccess,
   });
 
   const {
@@ -202,6 +213,7 @@ function App() {
     getExerciseLogs,
     setExerciseLogsById,
     loadExerciseHistory,
+    notifyError,
   });
 
   const {
@@ -219,6 +231,7 @@ function App() {
     setExerciseLogsById,
     setOpenExerciseById,
     loadProgramPanels,
+    notifyError,
   });
 
   const {
@@ -246,6 +259,8 @@ function App() {
     setCompletedCalibrationByExerciseId,
     setRemovedSetByKey,
     setOpenSetTypeMenuBySet,
+    notifyError,
+    notifySuccess,
   });
 
   const {
@@ -267,6 +282,7 @@ function App() {
     activeSessionByWorkout,
     setProgram,
     loadExerciseHistory,
+    notifyError,
   });
 
   const {
@@ -369,6 +385,7 @@ function App() {
     getRepsInputValue,
     buildUserCoachContext,
     buildExerciseCoachContext,
+    notifyError,
   });
 
   function exerciseNeedsCalibration(exercise) {
@@ -378,9 +395,11 @@ function App() {
   return (
     <div className={step === 1 ? "app-shell home-app-shell" : step === 2 ? "app-shell profile-app-shell" : "app-shell"}>
       <h1>SHAPETRONYC</h1>
+      <AppMessages messages={messages} dismissMessage={dismissMessage} />
 
       {step === 1 && (
         <HomeScreen
+          experimentalMode={EXPERIMENTAL_MODE}
           loginUsername={loginUsername}
           setLoginUsername={setLoginUsername}
           loginError={loginError}
@@ -429,6 +448,7 @@ function App() {
           sessionNotes={sessionNotes}
           openWorkoutId={openWorkoutId}
           workoutStatusMessage={workoutStatusMessage}
+          experimentalMode={EXPERIMENTAL_MODE}
           setSessionNotes={setSessionNotes}
           setForms={setForms}
           openExerciseById={openExerciseById}

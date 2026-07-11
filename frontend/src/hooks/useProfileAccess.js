@@ -46,6 +46,8 @@ export default function useProfileAccess({
   loadProgramPanels,
   resetAllTrainingState,
   resetAllAppState,
+  notifyError = () => {},
+  notifySuccess = () => {},
 }) {
   const [loginUsername, setLoginUsername] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -70,7 +72,7 @@ export default function useProfileAccess({
 
   async function exportUserTrainingData() {
     if (!profileId) {
-      alert("Não encontrei o perfil ativo para exportar.");
+      notifyError("Não encontrei o perfil ativo para exportar.");
       return;
     }
 
@@ -88,7 +90,7 @@ export default function useProfileAccess({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert("Não consegui contactar o servidor para exportar o histórico.");
+      notifyError("Não consegui contactar o servidor para exportar o histórico.");
     }
   }
 
@@ -164,7 +166,7 @@ export default function useProfileAccess({
       userData = await accountsApi.createUser({ username: form.username });
     } catch (error) {
       console.error(error.data || error);
-      alert("Erro ao criar utilizador. Confirma os dados e tenta novamente.");
+      notifyError("Erro ao criar utilizador. Confirma os dados e tenta novamente.");
       return;
     }
 
@@ -187,7 +189,7 @@ export default function useProfileAccess({
       setStep(3);
     } catch (error) {
       console.error(error.data || error);
-      alert("Erro ao criar perfil. Confirma os dados e tenta novamente.");
+      notifyError("Erro ao criar perfil. Confirma os dados e tenta novamente.");
     }
   }
 
@@ -214,9 +216,11 @@ export default function useProfileAccess({
       resetAllAppState();
       setStep(1);
       setDeleteUsersMessage(`${data.deleted_users} atleta(s) experimental(is) apagado(s).`);
+      notifySuccess(`${data.deleted_users} atleta(s) experimental(is) apagado(s).`);
     } catch (error) {
       console.error(error);
       setDeleteUsersMessage("Erro de ligação ao apagar atletas experimentais.");
+      notifyError("Erro de ligação ao apagar atletas experimentais.");
     } finally {
       setIsDeletingExperimentalUsers(false);
     }

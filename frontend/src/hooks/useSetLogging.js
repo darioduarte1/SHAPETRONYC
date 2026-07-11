@@ -60,6 +60,7 @@ export default function useSetLogging({
   getRepsInputValue,
   buildUserCoachContext,
   buildExerciseCoachContext,
+  notifyError = () => {},
 }) {
   async function saveSet(exercise, sourceSetNumber, displaySetNumber, effortOption) {
     const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
@@ -83,12 +84,12 @@ export default function useSetLogging({
     const restSeconds = getRestSecondsForRow(setFormKey);
 
     if (!sessionId) {
-      alert("Primeiro tens de iniciar o treino com Start Workout.");
+      notifyError("Primeiro tens de iniciar o treino com Start Workout.");
       return;
     }
 
     if (weightUsed === "" || repsCompleted === "") {
-      alert("Preenche o peso e as reps antes de confirmar a série.");
+      notifyError("Preenche o peso e as reps antes de confirmar a série.");
       return;
     }
 
@@ -113,7 +114,7 @@ export default function useSetLogging({
       });
     } catch (error) {
       console.error(error.data || error);
-      alert("Erro ao guardar a série. Vê a consola.");
+      notifyError("Erro ao guardar a série. Vê a consola.");
       return;
     }
 
@@ -291,7 +292,7 @@ export default function useSetLogging({
       await Promise.all(setLogsToRemove.map((setLog) => progressionApi.deleteSetLog(setLog.id)));
     } catch (error) {
       console.error(error.data || error);
-      alert("Não consegui desfazer a série. Tenta novamente.");
+      notifyError("Não consegui desfazer a série. Tenta novamente.");
       return;
     }
 

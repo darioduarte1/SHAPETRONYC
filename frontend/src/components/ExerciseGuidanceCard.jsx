@@ -17,6 +17,7 @@ export default function ExerciseGuidanceCard({
   getDecisionSourceLabel,
   getLlmStatusLabel,
   getConfidenceColor,
+  showDebugPanel = false,
 }) {
   return (
     <div className="exercise-guidance-card">
@@ -76,7 +77,7 @@ export default function ExerciseGuidanceCard({
         </div>
       )}
 
-      {!guidance.isResting && (
+      {showDebugPanel && !guidance.isResting && (
         <CoachDecisionDebugPanel envelope={guidance.decisionEnvelope} />
       )}
     </div>
