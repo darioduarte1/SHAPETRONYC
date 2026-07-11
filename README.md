@@ -75,11 +75,20 @@ Nota: no browser integrado do Codex, `localhost:5173` funcionou melhor do que `1
 
 ## Configuração útil
 
+Existem exemplos de configuração em:
+
+- `backend/.env.example`
+- `frontend/.env.example`
+
 ### Backend
 
 Variáveis opcionais:
 
 ```bash
+DJANGO_SECRET_KEY=change-me-before-production
+DJANGO_DEBUG=true
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 OPENAI_API_KEY=...
 AI_TRAINING_DECISION_PROVIDER=local|openai|ollama
 AI_COACH_MODEL=gpt-5.5
