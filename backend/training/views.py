@@ -1,3 +1,10 @@
+# =============================================================================
+# views.py
+# -----------------------------------------------------------------------------
+# Implementa os endpoints principais da app training.
+# Recebe pedidos do frontend para iniciar/finalizar sessões, consultar dashboards, gerir calibração, escalas e recomendações adaptativas.
+# Coordena serializers, modelos e serviços de treino.
+# =============================================================================
 from django.utils import timezone
 
 from rest_framework.views import APIView
@@ -10,9 +17,34 @@ from recommendations.services.ai_coach_engine import generate_session_ai_coach_s
 from recommendations.services.workout_progression_engine import calculate_workout_progression
 
 from .serializers import TrainingProgramSerializer, WorkoutSessionSerializer
+from .services.adaptive_plan import build_adaptive_plan
+from .services.adaptive_plan_decisions import (
+    apply_adaptive_plan_recommendation,
+    list_adaptive_plan_decisions,
+)
 from .services.athlete_dashboard import build_athlete_dashboard
+from .services.training_memory import refresh_training_memory
 from .services.training_generator import generate_training_program
-from .models import TrainingProgram, TrainingWorkout, WorkoutSession
+from .services.training_blocks import build_training_block, list_training_blocks
+from .services.exercise_substitution import get_substitution_options, replace_training_exercise
+from .services.exercise_calibration import (
+    get_exercise_calibration_state,
+    upsert_exercise_calibration,
+)
+from .services.user_exercise_weight_scale import (
+    get_user_exercise_weight_scale,
+    serialize_user_exercise_weight_scale,
+    upsert_user_exercise_weight_scale,
+)
+from .services.weekly_feedback import build_weekly_feedback
+from .models import (
+    ExerciseCalibration,
+    TrainingProgram,
+    TrainingWorkout,
+    TrainingWorkoutExercise,
+    WorkoutSession,
+)
+from exercises.models import Exercise
 
 
 class GenerateProgramView(APIView):
@@ -120,13 +152,36 @@ class FinishWorkoutSessionView(APIView):
             "set_number",
             "created_at",
         )
-        progression = calculate_workout_progression(session.workout, set_logs)
+        workout_exercise_ids = session.workout.exercises.values_list("exercise_id", flat=True)
+        calibrations = ExerciseCalibration.objects.filter(
+            user=session.user,
+            exercise_id__in=workout_exercise_ids,
+        ).select_related("exercise")
+
+        if session.started_at and session.completed_at:
+            session_calibrations = calibrations.filter(
+                updated_at__gte=session.started_at,
+                updated_at__lte=session.completed_at,
+            )
+        else:
+            session_calibrations = calibrations.none()
+
+        if not set_logs.exists() and not session_calibrations.exists():
+            session_calibrations = calibrations
+
+        progression = calculate_workout_progression(session.workout, set_logs, session_calibrations)
         ai_coach_summary = generate_session_ai_coach_summary(
             session.workout,
             set_logs,
             progression,
             notes,
+            session_calibrations,
         )
+        try:
+            profile = UserProfile.objects.get(user=session.user)
+            refresh_training_memory(profile)
+        except UserProfile.DoesNotExist:
+            pass
 
         return Response(
             {
@@ -164,3 +219,270 @@ class AthleteDashboardView(APIView):
             )
 
         return Response(build_athlete_dashboard(profile))
+
+
+class AdaptivePlanView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(build_adaptive_plan(profile))
+
+
+class AdaptivePlanDecisionListView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "profile_id": profile.id,
+            "decisions": list_adaptive_plan_decisions(profile),
+        })
+
+
+class ApplyAdaptivePlanRecommendationView(APIView):
+
+    def post(self, request):
+        profile_id = request.data.get("profile_id")
+        training_exercise_id = request.data.get("training_exercise_id")
+        decision_status = request.data.get("status", "APPLIED")
+
+        if not profile_id or not training_exercise_id:
+            return Response(
+                {"error": "profile_id and training_exercise_id are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = apply_adaptive_plan_recommendation(
+                profile,
+                int(training_exercise_id),
+                decision_status,
+            )
+        except (ValueError, TypeError) as error:
+            return Response(
+                {"error": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except TrainingWorkoutExercise.DoesNotExist:
+            return Response(
+                {"error": "Adaptive recommendation not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class WeeklyFeedbackView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(build_weekly_feedback(profile))
+
+
+class TrainingBlockView(APIView):
+
+    def get(self, request, profile_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            **build_training_block(profile),
+            "history": list_training_blocks(profile),
+        })
+
+
+class ExerciseSubstitutionOptionsView(APIView):
+
+    def get(self, request, training_exercise_id):
+        try:
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+            )
+        except TrainingWorkoutExercise.DoesNotExist:
+            return Response(
+                {"error": "Training exercise not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "training_exercise": training_exercise.id,
+            "exercise": training_exercise.exercise_id,
+            "muscle_group": training_exercise.exercise.muscle_group,
+            "options": get_substitution_options(training_exercise),
+        })
+
+
+class ReplaceTrainingExerciseView(APIView):
+
+    def post(self, request):
+        training_exercise_id = request.data.get("training_exercise_id")
+        replacement_exercise_id = request.data.get("replacement_exercise_id")
+
+        if not training_exercise_id or not replacement_exercise_id:
+            return Response(
+                {"error": "training_exercise_id and replacement_exercise_id are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+            )
+            updated_training_exercise = replace_training_exercise(
+                training_exercise,
+                int(replacement_exercise_id),
+            )
+        except (ValueError, TypeError) as error:
+            return Response(
+                {"error": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except TrainingWorkoutExercise.DoesNotExist:
+            return Response(
+                {"error": "Training exercise not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exercise.DoesNotExist:
+            return Response(
+                {"error": "Replacement exercise not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(TrainingProgramSerializer(updated_training_exercise.workout.program).data)
+
+
+class ExerciseCalibrationView(APIView):
+
+    def get(self, request, profile_id, training_exercise_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Calibration target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(get_exercise_calibration_state(profile.user, training_exercise.exercise))
+
+
+class ExerciseWeightScaleView(APIView):
+
+    def get(self, request, profile_id, training_exercise_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Weight scale target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(serialize_user_exercise_weight_scale(profile.user, training_exercise.exercise))
+
+    def patch(self, request, profile_id, training_exercise_id):
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Weight scale target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        scale = upsert_user_exercise_weight_scale(
+            profile.user,
+            training_exercise.exercise,
+            request.data.get("main_weight_options", []),
+            request.data.get("micro_weight_options", []),
+        )
+
+        return Response(scale, status=status.HTTP_200_OK)
+
+
+class SaveExerciseCalibrationView(APIView):
+
+    def post(self, request):
+        profile_id = request.data.get("profile_id")
+        training_exercise_id = request.data.get("training_exercise_id")
+
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+            training_exercise = TrainingWorkoutExercise.objects.select_related("exercise").get(
+                id=training_exercise_id,
+                workout__program__user=profile.user,
+            )
+        except (UserProfile.DoesNotExist, TrainingWorkoutExercise.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Calibration target not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        scale = get_user_exercise_weight_scale(profile.user, training_exercise.exercise)
+
+        if not scale["configured"]:
+            return Response(
+                {
+                    "error": "A escala da máquina é obrigatória antes da calibração experimental.",
+                    "reason": "scale_required",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        calibration = upsert_exercise_calibration(
+            profile.user,
+            training_exercise.exercise,
+            {
+                "weight_used": request.data.get("weight_used"),
+                "result_color": request.data.get("result_color"),
+                "reps_completed": request.data.get("reps_completed"),
+                "rir": request.data.get("rir"),
+                "reached_failure": request.data.get("reached_failure", False),
+                "notes": request.data.get("notes", ""),
+            },
+            notes=request.data.get("notes", ""),
+        )
+
+        return Response(calibration, status=status.HTTP_200_OK)

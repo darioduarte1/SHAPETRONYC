@@ -1,11 +1,90 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app progression.
+# Validam gravação de séries, histórico e comportamento de progressão ligado ao treino.
+# Protegem o núcleo de dados usado pela IA e pelas regras locais.
+# =============================================================================
 from types import SimpleNamespace
 
-from django.test import SimpleTestCase
+from django.contrib.auth.models import User
+from django.test import SimpleTestCase, TestCase
+from rest_framework.test import APIClient
 
+from exercises.models import Exercise
+from progression.serializers import SetLogSerializer
 from progression.services.exercise_history_recommendation import (
     build_history_based_recommended_sets,
     calculate_recommended_set,
 )
+from progression.models import SetLog
+from training.models import (
+    TrainingProgram,
+    TrainingWorkout,
+    TrainingWorkoutExercise,
+    WorkoutSession,
+)
+
+
+class SetLogSerializerTests(SimpleTestCase):
+    def test_warmup_sets_do_not_keep_rir_or_failure(self):
+        serializer = SetLogSerializer()
+
+        cleaned_attrs = serializer.validate({
+            "set_type": "WARMUP",
+            "rir": 1,
+            "reached_failure": True,
+        })
+
+        self.assertIsNone(cleaned_attrs["rir"])
+        self.assertFalse(cleaned_attrs["reached_failure"])
+
+
+class SetLogApiTests(TestCase):
+    def test_set_log_can_be_deleted_when_user_undoes_completed_set(self):
+        user = User.objects.create_user(username="athlete", password="test-pass")
+        exercise = Exercise.objects.create(
+            name="Chest Press Machine",
+            muscle_group="Chest",
+            equipment="Machine",
+        )
+        program = TrainingProgram.objects.create(
+            user=user,
+            name="Program",
+            goal="HYPERTROPHY",
+            level="BEGINNER",
+            days_per_week=3,
+        )
+        workout = TrainingWorkout.objects.create(
+            program=program,
+            name="Push",
+            order=1,
+        )
+        training_exercise = TrainingWorkoutExercise.objects.create(
+            workout=workout,
+            exercise=exercise,
+            order=1,
+            sets=3,
+        )
+        session = WorkoutSession.objects.create(
+            user=user,
+            workout=workout,
+        )
+        set_log = SetLog.objects.create(
+            user=user,
+            workout_session=session,
+            training_exercise=training_exercise,
+            exercise=exercise,
+            set_number=1,
+            set_type="WARMUP",
+            weight_used=18,
+            reps_completed=8,
+        )
+
+        response = APIClient().delete(f"/api/progression/set-logs/{set_log.id}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(SetLog.objects.filter(id=set_log.id).exists())
 
 
 class ExerciseHistoryRecommendationTests(SimpleTestCase):
@@ -59,7 +138,7 @@ class ExerciseHistoryRecommendationTests(SimpleTestCase):
         self.assertEqual(recommendations[1]["set_type"], "WORKING")
         self.assertEqual(recommendations[1]["recommended_weight"], 52.5)
         self.assertEqual(recommendations[1]["confidence"], "alta")
-        self.assertEqual(len(recommendations), 4)
+        self.assertEqual(len(recommendations), 2)
 
     def test_heavier_compound_exercise_uses_multiple_warmup_ramp_sets(self):
         recent_session_sets = [
@@ -92,7 +171,7 @@ class ExerciseHistoryRecommendationTests(SimpleTestCase):
         self.assertEqual(recommendations[1]["recommended_reps"], 4)
         self.assertEqual(recommendations[2]["recommended_weight"], 72.5)
         self.assertEqual(recommendations[2]["set_number"], 3)
-        self.assertEqual(len(recommendations), 5)
+        self.assertEqual(len(recommendations), 3)
 
     def test_very_heavy_compound_exercise_uses_three_warmups_before_working_set(self):
         recent_session_sets = [
@@ -121,6 +200,79 @@ class ExerciseHistoryRecommendationTests(SimpleTestCase):
         self.assertEqual([set_log["set_type"] for set_log in recommendations[:4]], ["WARMUP", "WARMUP", "WARMUP", "WORKING"])
         self.assertEqual([set_log["recommended_reps"] for set_log in recommendations[:3]], [8, 5, 2])
         self.assertEqual(recommendations[3]["recommended_weight"], 102.5)
+        self.assertEqual(recommendations[3]["set_number"], 4)
+
+    def test_next_workout_preserves_previous_warmup_count_when_load_drops(self):
+        recent_session_sets = [
+            [
+                SimpleNamespace(
+                    set_type="WARMUP",
+                    weight_used=18,
+                    reps_completed=12,
+                    rir=3,
+                    reached_failure=False,
+                ),
+                SimpleNamespace(
+                    set_type="WARMUP",
+                    weight_used=25,
+                    reps_completed=12,
+                    rir=3,
+                    reached_failure=False,
+                ),
+                SimpleNamespace(
+                    set_type="WARMUP",
+                    weight_used=32,
+                    reps_completed=12,
+                    rir=3,
+                    reached_failure=False,
+                ),
+                SimpleNamespace(
+                    set_type="WORKING",
+                    weight_used=39,
+                    reps_completed=12,
+                    rir=2,
+                    reached_failure=False,
+                ),
+                SimpleNamespace(
+                    set_type="WORKING",
+                    weight_used=39,
+                    reps_completed=12,
+                    rir=2,
+                    reached_failure=False,
+                ),
+                SimpleNamespace(
+                    set_type="WORKING",
+                    weight_used=45,
+                    reps_completed=8,
+                    rir=None,
+                    reached_failure=True,
+                ),
+                SimpleNamespace(
+                    set_type="WORKING",
+                    weight_used=45,
+                    reps_completed=8,
+                    rir=None,
+                    reached_failure=True,
+                ),
+            ]
+        ]
+        exercise_profile = SimpleNamespace(
+            is_compound=True,
+            movement_pattern="HORIZONTAL_PUSH",
+        )
+
+        recommendations = build_history_based_recommended_sets(
+            recent_session_sets,
+            planned_working_sets=4,
+            exercise_profile=exercise_profile,
+        )
+
+        self.assertEqual(
+            [set_log["set_type"] for set_log in recommendations[:4]],
+            ["WARMUP", "WARMUP", "WARMUP", "WORKING"],
+        )
+        self.assertEqual(recommendations[1]["recommended_weight"], 25)
+        self.assertEqual(recommendations[2]["recommended_weight"], 32)
         self.assertEqual(recommendations[3]["set_number"], 4)
 
     def test_last_15_history_reduces_first_working_set_after_misses(self):

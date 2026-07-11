@@ -1,9 +1,26 @@
+# =============================================================================
+# tests.py
+# -----------------------------------------------------------------------------
+# Testes automáticos da app accounts.
+# Verificam criação, consulta e regras essenciais dos perfis de atleta.
+# São usados para proteger o fluxo inicial da app contra regressões.
+# =============================================================================
 from django.contrib.auth.models import User
 from django.test import TestCase
 
 from rest_framework.test import APIClient
 
 from accounts.models import UserProfile
+from exercises.models import Exercise
+from progression.models import SetLog
+from training.models import (
+    ExerciseCalibration,
+    TrainingProgram,
+    TrainingWorkout,
+    TrainingWorkoutExercise,
+    UserExerciseWeightScale,
+    WorkoutSession,
+)
 
 
 class UserProfileEndpointTests(TestCase):
@@ -55,3 +72,179 @@ class UserProfileEndpointTests(TestCase):
         profile = UserProfile.objects.get(user=user)
         self.assertEqual(profile.weight_kg, 80)
         self.assertEqual(profile.days_per_week, 4)
+
+    def test_exports_user_training_history_file(self):
+        user = User.objects.create(username="export_user")
+        profile = UserProfile.objects.create(
+            user=user,
+            gender="MALE",
+            age=34,
+            height_cm=172,
+            weight_kg=72,
+            goal="HYPERTROPHY",
+            level="INTERMEDIATE",
+            training_experience="ONE_TO_THREE",
+            days_per_week=5,
+        )
+        program = TrainingProgram.objects.create(
+            user=user,
+            name="Export Program",
+            goal="HYPERTROPHY",
+            level="INTERMEDIATE",
+            days_per_week=5,
+        )
+        workout = TrainingWorkout.objects.create(
+            program=program,
+            name="Push",
+            order=1,
+        )
+        exercise = Exercise.objects.create(
+            name="Chest Press Machine",
+            muscle_group="Chest",
+            equipment="Machine",
+            movement_pattern="HORIZONTAL_PUSH",
+            is_compound=True,
+        )
+        UserExerciseWeightScale.objects.create(
+            user=user,
+            exercise=exercise,
+            main_weight_options=[10, 20, 30],
+            micro_weight_options=[1, 2],
+        )
+        training_exercise = TrainingWorkoutExercise.objects.create(
+            workout=workout,
+            exercise=exercise,
+            order=1,
+            sets=3,
+            target_min_reps=10,
+            target_max_reps=12,
+            target_rir=2,
+        )
+        session = WorkoutSession.objects.create(
+            user=user,
+            workout=workout,
+            status="COMPLETED",
+        )
+        SetLog.objects.create(
+            user=user,
+            workout_session=session,
+            training_exercise=training_exercise,
+            exercise=exercise,
+            set_number=1,
+            set_type="WORKING",
+            weight_used=20,
+            reps_completed=12,
+            rir=2,
+            reached_failure=False,
+        )
+        ExerciseCalibration.objects.create(
+            user=user,
+            exercise=exercise,
+            status="CALIBRATED",
+            estimated_working_weight=20,
+            confidence="média",
+            calibration_sets=[
+                {
+                    "weight_used": 20,
+                    "reps_completed": 12,
+                    "rir": 3,
+                    "reached_failure": False,
+                }
+            ],
+        )
+
+        response = self.client.get(f"/api/accounts/profiles/{profile.id}/export/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment", response["Content-Disposition"])
+
+        data = response.json()
+        self.assertEqual(data["profile"]["username"], "export_user")
+        self.assertEqual(data["programs"][0]["workouts"][0]["name"], "Push")
+        self.assertEqual(data["set_logs"][0]["exercise_name"], "Chest Press Machine")
+        self.assertEqual(
+            data["programs"][0]["workouts"][0]["exercises"][0]["main_weight_options"],
+            [10, 20, 30],
+        )
+        self.assertEqual(data["exercise_calibrations"][0]["estimated_working_weight"], 20)
+
+    def test_experimental_delete_users_removes_user_data_but_keeps_exercises_and_admins(self):
+        admin = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="test-pass",
+        )
+        user = User.objects.create(username="delete_me")
+        UserProfile.objects.create(
+            user=user,
+            gender="MALE",
+            age=34,
+            height_cm=172,
+            weight_kg=72,
+            goal="HYPERTROPHY",
+            level="INTERMEDIATE",
+            training_experience="ONE_TO_THREE",
+            days_per_week=5,
+        )
+        exercise = Exercise.objects.create(
+            name="Chest Press Machine",
+            muscle_group="Chest",
+            equipment="Machine",
+        )
+        program = TrainingProgram.objects.create(
+            user=user,
+            name="Delete Program",
+            goal="HYPERTROPHY",
+            level="INTERMEDIATE",
+            days_per_week=5,
+        )
+        workout = TrainingWorkout.objects.create(
+            program=program,
+            name="Push",
+            order=1,
+        )
+        training_exercise = TrainingWorkoutExercise.objects.create(
+            workout=workout,
+            exercise=exercise,
+            order=1,
+        )
+        session = WorkoutSession.objects.create(
+            user=user,
+            workout=workout,
+        )
+        SetLog.objects.create(
+            user=user,
+            workout_session=session,
+            training_exercise=training_exercise,
+            exercise=exercise,
+            set_number=1,
+            set_type="WORKING",
+            weight_used=20,
+            reps_completed=12,
+        )
+        ExerciseCalibration.objects.create(
+            user=user,
+            exercise=exercise,
+            status="CALIBRATED",
+            estimated_working_weight=20,
+        )
+        UserExerciseWeightScale.objects.create(
+            user=user,
+            exercise=exercise,
+            main_weight_options=[10, 20, 30],
+            micro_weight_options=[],
+        )
+
+        response = self.client.delete("/api/accounts/experimental/delete-users/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["deleted_users"], 1)
+        self.assertTrue(User.objects.filter(id=admin.id).exists())
+        self.assertFalse(User.objects.filter(id=user.id).exists())
+        self.assertFalse(UserProfile.objects.filter(user=user).exists())
+        self.assertFalse(TrainingProgram.objects.filter(user=user).exists())
+        self.assertFalse(WorkoutSession.objects.filter(user=user).exists())
+        self.assertFalse(SetLog.objects.filter(user=user).exists())
+        self.assertFalse(ExerciseCalibration.objects.filter(user=user).exists())
+        self.assertFalse(UserExerciseWeightScale.objects.filter(user=user).exists())
+        self.assertTrue(Exercise.objects.filter(id=exercise.id).exists())

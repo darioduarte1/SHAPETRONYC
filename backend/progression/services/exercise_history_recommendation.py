@@ -1,3 +1,12 @@
+# =============================================================================
+# exercise_history_recommendation.py
+# -----------------------------------------------------------------------------
+# Serviço que analisa histórico por exercício para sugerir progressão.
+# É usado para encontrar padrões recentes de carga, reps e esforço antes de recomendar a próxima abordagem.
+# Ajuda a app a adaptar pesos com base em dados reais do atleta.
+# =============================================================================
+from exercises.services.weight_scale import snap_to_available_weight
+
 TARGET_REPS = 12
 WEIGHT_STEP = 2.5
 HISTORY_LIMIT = 15
@@ -30,6 +39,10 @@ def average(values):
 
 def is_working_set(set_log):
     return getattr(set_log, "set_type", None) == "WORKING"
+
+
+def is_warmup_set(set_log):
+    return getattr(set_log, "set_type", None) == "WARMUP"
 
 
 def set_reached_target(set_log, target_reps=TARGET_REPS):
@@ -320,7 +333,10 @@ def calculate_warmups_from_first_working_set(
 
     return [
         {
-            "recommended_weight": round_recommended_weight(first_weight * warmup_step["ratio"]),
+            "recommended_weight": snap_to_available_weight(
+                first_weight * warmup_step["ratio"],
+                exercise_profile,
+            ),
             "recommended_reps": min(target_reps, warmup_step["reps"]),
             "reason": "Aquecimento progressivo calculado para chegar à primeira série normal com técnica pronta e pouca fadiga.",
             "confidence": first_working_set.get("confidence", "média"),
@@ -335,6 +351,51 @@ def calculate_warmups_from_first_working_set(
     ]
 
 
+def snap_recommendation_weight(recommendation, exercise_profile=None, direction="nearest"):
+    recommended_weight = number_or_none(recommendation.get("recommended_weight"))
+
+    if recommended_weight is None:
+        return recommendation
+
+    return {
+        **recommendation,
+        "recommended_weight": snap_to_available_weight(
+            recommended_weight,
+            exercise_profile,
+            direction,
+        ),
+    }
+
+
+def preserve_previous_warmup_structure(warmup_sets, recent_session_sets):
+    if not recent_session_sets:
+        return warmup_sets
+
+    previous_warmups = [
+        set_log for set_log in recent_session_sets[0] if is_warmup_set(set_log)
+    ]
+
+    if len(previous_warmups) <= len(warmup_sets):
+        return warmup_sets
+
+    preserved_warmups = list(warmup_sets)
+
+    for previous_warmup in previous_warmups[len(warmup_sets):]:
+        preserved_warmups.append({
+            "recommended_weight": snap_to_available_weight(previous_warmup.weight_used),
+            "recommended_reps": int(previous_warmup.reps_completed),
+            "reason": "Aquecimento preservado da sessão anterior para manter a mesma preparação antes das séries normais.",
+            "confidence": "média",
+            "decision_basis": [
+                "A sessão anterior usou mais aquecimentos neste exercício",
+                "A estrutura de aquecimento não deve ser reduzida automaticamente entre treinos",
+            ],
+            "source": "previous_warmup_structure",
+        })
+
+    return preserved_warmups
+
+
 def build_history_based_recommended_sets(
     recent_session_sets,
     planned_working_sets,
@@ -342,11 +403,13 @@ def build_history_based_recommended_sets(
     exercise_profile=None,
 ):
     first_working_set = calculate_first_working_set_from_history(recent_session_sets, target_reps)
+    first_working_set = snap_recommendation_weight(first_working_set, exercise_profile)
     warmup_sets = calculate_warmups_from_first_working_set(
         first_working_set,
         target_reps,
         exercise_profile,
     )
+    warmup_sets = preserve_previous_warmup_structure(warmup_sets, recent_session_sets)
     recommended_sets = [
         {
             "set_number": index,
@@ -357,25 +420,16 @@ def build_history_based_recommended_sets(
     ]
     warmup_count = len(warmup_sets)
 
-    for set_number in range(1, planned_working_sets + 1):
-        if set_number == 1:
-            set_recommendation = first_working_set
-        else:
-            set_recommendation = {
-                **first_working_set,
-                "reason": "Esta série começa pela previsão do histórico e será ajustada depois das séries anteriores de hoje.",
-                "decision_basis": [
-                    *first_working_set.get("decision_basis", []),
-                    "Será recalculada com o desempenho da sessão atual",
-                ],
-            }
-
-        recommended_sets.append(
-            {
-                "set_number": warmup_count + set_number,
-                "set_type": "WORKING",
-                **set_recommendation,
-            }
-        )
+    recommended_sets.append(
+        {
+            "set_number": warmup_count + 1,
+            "set_type": "WORKING",
+            **first_working_set,
+            "decision_basis": [
+                *first_working_set.get("decision_basis", []),
+                "Só a primeira série normal é pré-preenchida no início do treino",
+            ],
+        }
+    )
 
     return recommended_sets

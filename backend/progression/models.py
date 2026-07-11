@@ -1,3 +1,10 @@
+# =============================================================================
+# models.py
+# -----------------------------------------------------------------------------
+# Define os modelos da app progression.
+# Guarda séries realizadas, carga usada, reps, RIR/falha, tipo de série e ligação à sessão de treino.
+# Estes dados alimentam memória, dashboards, recomendações e decisões série a série.
+# =============================================================================
 from django.db import models
 from django.contrib.auth.models import User
 

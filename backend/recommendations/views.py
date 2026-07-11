@@ -1,8 +1,16 @@
+# =============================================================================
+# views.py
+# -----------------------------------------------------------------------------
+# Implementa os endpoints da app recommendations.
+# Recebe pedidos do frontend para decisões de treino, feedback e recomendações de progressão.
+# Coordena motores de serviço e devolve respostas prontas para a interface.
+# =============================================================================
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
 from accounts.models import UserProfile
+from training.services.user_exercise_weight_scale import get_user_exercise_weight_scale
 from training.models import TrainingWorkoutExercise
 
 from .serializers import NextSetRecommendationSerializer
@@ -35,7 +43,7 @@ def build_user_context(profile_id, provided_context):
     return context
 
 
-def build_exercise_context(training_exercise_id, provided_context):
+def build_exercise_context(training_exercise_id, provided_context, profile_id=None):
     context = dict(provided_context or {})
 
     if not training_exercise_id:
@@ -50,6 +58,19 @@ def build_exercise_context(training_exercise_id, provided_context):
         return context
 
     exercise = training_exercise.exercise
+    profile = None
+
+    if profile_id:
+        try:
+            profile = UserProfile.objects.get(id=profile_id)
+        except (UserProfile.DoesNotExist, ValueError):
+            profile = None
+
+    weight_scale = (
+        get_user_exercise_weight_scale(profile.user, exercise)
+        if profile else
+        get_user_exercise_weight_scale(training_exercise.workout.program.user, exercise)
+    )
     context.update({
         "exercise_id": exercise.id,
         "exercise_name": exercise.name,
@@ -61,8 +82,13 @@ def build_exercise_context(training_exercise_id, provided_context):
         "target_max_reps": training_exercise.target_max_reps,
         "target_rir": training_exercise.target_rir,
         "planned_sets": training_exercise.sets,
+        "exercise_order_in_workout": training_exercise.order,
+        "total_exercises_in_workout": training_exercise.workout.exercises.count(),
         "workout_id": training_exercise.workout_id,
         "workout_name": training_exercise.workout.name,
+        "main_weight_options": weight_scale["main_weight_options"],
+        "micro_weight_options": weight_scale["micro_weight_options"],
+        "weight_scale": weight_scale,
     })
 
     return context
@@ -80,6 +106,7 @@ class NextSetRecommendationView(APIView):
         exercise_context = build_exercise_context(
             data.get("training_exercise_id"),
             data.get("exercise_context", {}),
+            data.get("profile_id"),
         )
         session_context = {
             **data.get("session_context", {}),

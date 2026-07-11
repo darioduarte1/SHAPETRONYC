@@ -1,3 +1,10 @@
+# =============================================================================
+# models.py
+# -----------------------------------------------------------------------------
+# Define os modelos da app exercises.
+# Guarda o catálogo de exercícios, respetiva máquina/equipamento, grupos musculares, imagens e escala de pesos quando aplicável.
+# Estes dados são usados por programas, substituições, calibração experimental e recomendações de carga.
+# =============================================================================
 from django.db import models
 
 
@@ -23,8 +30,12 @@ class Exercise(models.Model):
     ]
 
     name = models.CharField(max_length=100)
+    localized_name = models.CharField(max_length=120, blank=True)
     muscle_group = models.CharField(max_length=50)
     equipment = models.CharField(max_length=50)
+    image_url = models.CharField(max_length=255, blank=True)
+    main_weight_options = models.JSONField(default=list, blank=True)
+    micro_weight_options = models.JSONField(default=list, blank=True)
 
     movement_pattern = models.CharField(
         max_length=50,

@@ -1,1186 +1,407 @@
-import { useEffect, useState } from "react";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-const DEFAULT_REST_SECONDS = 120;
-const TARGET_REPS = 12;
-
-const SET_TYPES = [
-  { value: "WARMUP", label: "Aquecimento", shortLabel: "W", color: "#eab308" },
-  { value: "WORKING", label: "Normal", shortLabel: "N", color: "#f8fafc" },
-  { value: "DROP", label: "Drop", shortLabel: "D", color: "#ef4444" },
-];
-
-const EFFORT_OPTIONS = [
-  { value: "FAILURE", label: "FALHA", color: "#ef4444", reachedFailure: true, rir: null },
-  { value: "RIR_0_1", label: "RIR 0/1", color: "#f97316", reachedFailure: false, rir: 1 },
-  { value: "RIR_2_3", label: "RIR 2/3", color: "#eab308", reachedFailure: false, rir: 2 },
-  { value: "RIR_4_PLUS", label: "RIR 4+", color: "#22c55e", reachedFailure: false, rir: 4 },
-];
+// =============================================================================
+// App.jsx
+// -----------------------------------------------------------------------------
+// Componente principal da interface React.
+// Controla o fluxo da app: criação/login do atleta, geração do programa, dashboard, treino ativo, calibração, escalas e comunicação com a API.
+// Mantém grande parte do estado global do frontend e passa dados/funções para os componentes especializados.
+// =============================================================================
+import { useState } from "react";
+import HomeScreen from "./components/HomeScreen";
+import ProgramScreen from "./components/ProgramScreen";
+import ProfileForm from "./components/ProfileForm";
+import useCoachContext from "./hooks/useCoachContext";
+import useExerciseCalibration from "./hooks/useExerciseCalibration";
+import useExerciseGuidance from "./hooks/useExerciseGuidance";
+import useExerciseHistory from "./hooks/useExerciseHistory";
+import useExerciseSetRows from "./hooks/useExerciseSetRows";
+import useExerciseSubstitutions from "./hooks/useExerciseSubstitutions";
+import useProfileAccess from "./hooks/useProfileAccess";
+import useProgramData from "./hooks/useProgramData";
+import useRestTimers from "./hooks/useRestTimers";
+import useSetControls from "./hooks/useSetControls";
+import useSetLogging from "./hooks/useSetLogging";
+import useTrainingSession from "./hooks/useTrainingSession";
+import useWeightScales from "./hooks/useWeightScales";
+import useWorkoutExerciseActions from "./hooks/useWorkoutExerciseActions";
 
 function App() {
   const [step, setStep] = useState(1);
   const [profileId, setProfileId] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [program, setProgram] = useState(null);
-  const [programError, setProgramError] = useState("");
-  const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
-  const [setForms, setSetForms] = useState({});
   const [recommendations, setRecommendations] = useState({});
-  const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
-  const [sessionNotes, setSessionNotes] = useState({});
   const [openExerciseById, setOpenExerciseById] = useState({});
-  const [openWorkoutId, setOpenWorkoutId] = useState(null);
-  const [exerciseLogsById, setExerciseLogsById] = useState({});
-  const [exerciseRowCounts, setExerciseRowCounts] = useState({});
-  const [restTimers, setRestTimers] = useState({});
-  const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
-  const [openRestMenuBySet, setOpenRestMenuBySet] = useState({});
-  const [openSetTypeMenuBySet, setOpenSetTypeMenuBySet] = useState({});
-  const [removedSetByKey, setRemovedSetByKey] = useState({});
-  const [latestWorkoutProgression, setLatestWorkoutProgression] = useState(null);
-  const [latestAiCoach, setLatestAiCoach] = useState(null);
-  const [athleteDashboard, setAthleteDashboard] = useState(null);
 
-  const [form, setForm] = useState({
-    username: "",
-    gender: "MALE",
-    age: 34,
-    height_cm: 172,
-    weight_kg: 72,
-    goal: "HYPERTROPHY",
-    level: "INTERMEDIATE",
-    training_experience: "ONE_TO_THREE",
-    days_per_week: 5,
-  });
-
-  useEffect(() => {
-    const hasRunningTimer = Object.values(restTimers).some((seconds) => seconds > 0);
-
-    if (!hasRunningTimer) {
-      return;
-    }
-
-    const timerId = window.setInterval(() => {
-      setRestTimers((currentTimers) =>
-        Object.fromEntries(
-          Object.entries(currentTimers).map(([exerciseId, seconds]) => [
-            exerciseId,
-            Math.max(0, seconds - 1),
-          ])
-        )
-      );
-    }, 1000);
-
-    return () => window.clearInterval(timerId);
-  }, [restTimers]);
-
-  function getActiveWorkoutId() {
-    return Object.keys(activeSessionByWorkout).find((workoutId) =>
-      Boolean(activeSessionByWorkout[workoutId])
-    );
-  }
-
-  function getSetFormKey(trainingExerciseId, setNumber) {
-    return `${trainingExerciseId}-${setNumber}`;
-  }
-
-  function getSetTypeMeta(setType) {
-    return SET_TYPES.find((type) => type.value === setType) || SET_TYPES[1];
-  }
-
-  function getEffortMetaFromSet(setLog) {
-    if (!setLog) {
-      return null;
-    }
-
-    if (setLog.reached_failure) {
-      return EFFORT_OPTIONS[0];
-    }
-
-    if (setLog.rir === null || setLog.rir === undefined) {
-      return null;
-    }
-
-    if (setLog.rir <= 1) {
-      return EFFORT_OPTIONS[1];
-    }
-
-    if (setLog.rir <= 3) {
-      return EFFORT_OPTIONS[2];
-    }
-
-    return EFFORT_OPTIONS[3];
-  }
-
-  function getExerciseLogs(trainingExerciseId) {
-    return exerciseLogsById[trainingExerciseId] || {
-      previous_sets: [],
-      current_sets: [],
-      history_sets: [],
-      previous_session: null,
-      recommended_sets: [],
-    };
-  }
-
-  function getCurrentSetForRow(trainingExerciseId, setNumber) {
-    return getExerciseLogs(trainingExerciseId).current_sets.find(
-      (setLog) => Number(setLog.set_number) === setNumber
-    );
-  }
-
-  function normalizeSetType(setType) {
-    return setType || "WORKING";
-  }
-
-  function getPreviousSetByTypePosition(trainingExerciseId, setType, typePosition) {
-    return getExerciseLogs(trainingExerciseId).previous_sets.filter(
-      (setLog) => normalizeSetType(setLog.set_type) === setType
-    )[typePosition - 1] || null;
-  }
-
-  function getRecommendedSetRecordForRow(trainingExerciseId, setNumber, setType = null) {
-    return getExerciseLogs(trainingExerciseId).recommended_sets.find(
-      (setRecommendation) =>
-        Number(setRecommendation.set_number) === setNumber &&
-        (!setType || setRecommendation.set_type === setType)
-    );
-  }
-
-  function getRecommendedSetForRow(trainingExerciseId, setNumber, setType = null) {
-    const recommendedSet = getRecommendedSetRecordForRow(trainingExerciseId, setNumber, setType);
-
-    return {
-      weight: recommendedSet?.recommended_weight ?? "",
-      reps: recommendedSet?.recommended_reps ?? "",
-      reason: recommendedSet?.reason ?? "",
-      source: recommendedSet?.source ?? "",
-      confidence: recommendedSet?.confidence ?? "",
-      decisionBasis: recommendedSet?.decision_basis ?? [],
-    };
-  }
-
-  function getExerciseRowCount(exercise) {
-    const logs = getExerciseLogs(exercise.id);
-
-    return Math.max(
-      exerciseRowCounts[exercise.id] || 0,
-      exercise.sets + 1,
-      logs.previous_sets.length,
-      logs.current_sets.length,
-      logs.recommended_sets.length,
-      1
-    );
-  }
-
-  function getExerciseRows(exercise) {
-    const rowCount = getExerciseRowCount(exercise);
-    const visibleSourceRows = Array.from({ length: rowCount }, (_, index) => index + 1).filter((sourceSetNumber) => {
-      const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
-
-      return !removedSetByKey[setFormKey];
-    });
-
-    return visibleSourceRows.map((sourceSetNumber, index) => ({
-      sourceSetNumber,
-      displaySetNumber: index + 1,
-    }));
-  }
-
-  function getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
-    const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
-    const currentSet = getCurrentSetForRow(exercise.id, displaySetNumber);
-    const recommendedSet = getRecommendedSetRecordForRow(exercise.id, sourceSetNumber);
-    const hasCurrentSets = getExerciseLogs(exercise.id).current_sets.length > 0;
-
-    if (!currentSet && !setForms[setFormKey]?.set_type && !hasCurrentSets && sourceSetNumber === 1) {
-      return "WARMUP";
-    }
-
-    return currentSet?.set_type || setForms[setFormKey]?.set_type || recommendedSet?.set_type || "WORKING";
-  }
-
-  function getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
-    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
-    const currentRowIndex = rows.findIndex((row) => row.sourceSetNumber === sourceSetNumber);
-
-    return rows.slice(0, currentRowIndex + 1).filter(
-      (row) => getSetTypeForExerciseRow(exercise, row.sourceSetNumber, row.displaySetNumber) === rowSetType
-    ).length;
-  }
-
-  function getPreviousSetForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
-    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
-    const typePosition = getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
-
-    return getPreviousSetByTypePosition(exercise.id, rowSetType, typePosition);
-  }
-
-  function getWarmupReferenceSet(exercise, rows, sourceSetNumber, displaySetNumber) {
-    const typePosition = getSetTypePositionForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
-
-    return getPreviousSetByTypePosition(exercise.id, "WARMUP", typePosition);
-  }
-
-  function getVisibleSetLabel(exercise, rows, sourceSetNumber, displaySetNumber) {
-    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
-    const sameTypeRows = rows.filter((row) =>
-      getSetTypeForExerciseRow(exercise, row.sourceSetNumber, row.displaySetNumber) === rowSetType
-    );
-    const sameTypeIndex = sameTypeRows.findIndex((row) => row.sourceSetNumber === sourceSetNumber) + 1;
-
-    if (rowSetType === "WARMUP") {
-      return sameTypeRows.length > 1 ? `W${sameTypeIndex}` : "W";
-    }
-
-    if (rowSetType === "DROP") {
-      return sameTypeRows.length > 1 ? `D${sameTypeIndex}` : "D";
-    }
-
-    return String(sameTypeIndex);
-  }
-
-  function getPlannedValuesForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber) {
-    const rowSetType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
-
-    if (rowSetType === "WARMUP") {
-      const warmupReferenceSet = getWarmupReferenceSet(exercise, rows, sourceSetNumber, displaySetNumber);
-      const recommendedWarmup = getRecommendedSetForRow(exercise.id, sourceSetNumber, "WARMUP");
-
-      return {
-        weight: recommendedWarmup.weight || warmupReferenceSet?.weight_used || "",
-        reps: recommendedWarmup.reps || warmupReferenceSet?.reps_completed || "",
-        reason: recommendedWarmup.reason,
-        source: recommendedWarmup.source,
-        confidence: recommendedWarmup.confidence,
-        decisionBasis: recommendedWarmup.decisionBasis,
-      };
-    }
-
-    return getRecommendedSetForRow(exercise.id, sourceSetNumber, "WORKING");
-  }
-
-  function shouldForceFailureEffort(setType, repsCompleted) {
-    return setType === "WORKING" && Number(repsCompleted) < TARGET_REPS;
-  }
-
-  function getEffortOptionsForSet(setType, repsCompleted) {
-    return shouldForceFailureEffort(setType, repsCompleted) ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS;
-  }
-
-  function formatTimer(totalSeconds) {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${minutes}min ${String(seconds).padStart(2, "0")}s`;
-  }
-
-  function getRestSecondsForRow(setFormKey) {
-    return Number(setForms[setFormKey]?.rest_seconds || DEFAULT_REST_SECONDS);
-  }
-
-  function formatPreviousSet(setLog) {
-    if (!setLog) {
-      return "-";
-    }
-
-    const effortMeta = getEffortMetaFromSet(setLog);
-    const effortLabel = effortMeta ? ` ${effortMeta.label}` : "";
-
-    return `${setLog.weight_used}kg x ${setLog.reps_completed}${effortLabel}`;
-  }
-
-  function serializeSetForCoach(setLog) {
-    return {
-      workout_session: setLog.workout_session,
-      session_id: setLog.workout_session,
-      set_number: Number(setLog.set_number),
-      set_type: setLog.set_type,
-      weight_used: Number(setLog.weight_used),
-      reps_completed: Number(setLog.reps_completed),
-      rir: setLog.rir,
-      reached_failure: Boolean(setLog.reached_failure),
-      notes: setLog.notes || "",
-      created_at: setLog.created_at,
-    };
-  }
-
-  function getRepsInputValue(repsValue, fallbackReps) {
-    if (typeof repsValue === "number") {
-      return repsValue;
-    }
-
-    const match = String(repsValue || "").match(/\d+/g);
-
-    if (!match?.length) {
-      return fallbackReps;
-    }
-
-    return Number(match[match.length - 1]);
-  }
-
-  function getExerciseTargetLabel(exercise) {
-    if (!exercise.target_min_reps || !exercise.target_max_reps) {
-      return `${TARGET_REPS}`;
-    }
-
-    if (exercise.target_min_reps === exercise.target_max_reps) {
-      return `${exercise.target_max_reps}`;
-    }
-
-    return `${exercise.target_min_reps}-${exercise.target_max_reps}`;
-  }
-
-  function buildUserCoachContext() {
-    return {
-      user_id: userId,
-      goal: form.goal,
-      level: form.level,
-      training_experience: form.training_experience,
-      days_per_week: Number(form.days_per_week),
-      body_weight: Number(form.weight_kg),
-      age: Number(form.age),
-      gender: form.gender,
-    };
-  }
-
-  function buildExerciseCoachContext(exercise) {
-    return {
-      exercise_id: exercise.exercise,
-      exercise_name: exercise.exercise_name,
-      muscle_group: exercise.exercise_muscle_group,
-      movement_pattern: exercise.exercise_movement_pattern,
-      is_compound: Boolean(exercise.exercise_is_compound),
-      equipment: exercise.exercise_equipment,
-      target_min_reps: exercise.target_min_reps,
-      target_max_reps: exercise.target_max_reps,
-      target_rir: exercise.target_rir,
-      planned_sets: exercise.sets,
-    };
-  }
-
-  function getNextExerciseRow(exercise, rows) {
-    return rows.find((row) => !getCurrentSetForRow(exercise.id, row.displaySetNumber));
-  }
-
-  function getGuidanceForExercise(exercise, rows, restSeconds) {
-    if (restSeconds > 0) {
-      return {
-        eyebrow: "Descanso",
-        title: "Aguarda antes da próxima série",
-        message: "Respira, recupera a técnica e prepara a próxima execução.",
-        isResting: true,
-      };
-    }
-
-    const latestRecommendation = recommendations[exercise.id];
-
-    if (latestRecommendation?.exercise_status === "complete") {
-      return {
-        eyebrow: "Exercício concluído",
-        title: latestRecommendation.guidance_title || "Passa para o próximo exercício",
-        message: latestRecommendation.guidance_message || "O coach decidiu que continuar agora acrescenta mais fadiga do que benefício.",
-        reason: latestRecommendation.reason,
-        isResting: false,
-        source: latestRecommendation.source,
-        confidence: latestRecommendation.confidence,
-        llmStatus: latestRecommendation.llm_status,
-        guardrailApplied: latestRecommendation.guardrail_applied,
-        guardrailReason: latestRecommendation.guardrail_reason,
-        decisionBasis: latestRecommendation.decision_basis || [],
-      };
-    }
-
-    const nextRow = getNextExerciseRow(exercise, rows);
-
-    if (!nextRow) {
-      return {
-        eyebrow: "Exercício concluído",
-        title: "Todas as séries deste exercício estão registadas",
-        message: "Segue para o próximo exercício quando te sentires pronto.",
-        isResting: false,
-      };
-    }
-
-    const rowSetType = getSetTypeForExerciseRow(exercise, nextRow.sourceSetNumber, nextRow.displaySetNumber);
-    const visibleSetLabel = getVisibleSetLabel(exercise, rows, nextRow.sourceSetNumber, nextRow.displaySetNumber);
-    const plannedValues = getPlannedValuesForExerciseRow(
-      exercise,
-      rows,
-      nextRow.sourceSetNumber,
-      nextRow.displaySetNumber
-    );
-    const warmupReferenceSet = getWarmupReferenceSet(
-      exercise,
-      rows,
-      nextRow.sourceSetNumber,
-      nextRow.displaySetNumber
-    );
-    const recommendedWeight = plannedValues.weight || latestRecommendation?.recommended_weight;
-    const recommendedReps = plannedValues.reps || latestRecommendation?.target_reps;
-    const targetLabel = latestRecommendation?.target_reps_label || getExerciseTargetLabel(exercise);
-    const hasLoadTarget = recommendedWeight !== "" && recommendedWeight !== undefined && recommendedReps;
-    const loadCue = hasLoadTarget
-      ? `Aponta para ${recommendedWeight}kg x ${targetLabel} reps.`
-      : `Trabalha com o objectivo de chegar às ${targetLabel} reps.`;
-    const warmupCue = plannedValues.weight && plannedValues.reps
-        ? `Aquecimento recomendado: ${plannedValues.weight}kg x ${plannedValues.reps} reps.`
-      : warmupReferenceSet
-        ? `Mantém a referência anterior de ${warmupReferenceSet.weight_used}kg x ${warmupReferenceSet.reps_completed} reps.`
-      : `Sobe a carga gradualmente até sentires o movimento pronto.`;
-    const coachTitle = latestRecommendation?.guidance_title;
-    const coachMessage = latestRecommendation?.guidance_message;
-    const reason = latestRecommendation?.reason || plannedValues.reason || "";
-    const coachMetadata = {
-      source: latestRecommendation?.source || plannedValues.source,
-      confidence: latestRecommendation?.confidence || plannedValues.confidence,
-      llmStatus: latestRecommendation?.llm_status,
-      guardrailApplied: latestRecommendation?.guardrail_applied,
-      guardrailReason: latestRecommendation?.guardrail_reason,
-      decisionBasis: latestRecommendation?.decision_basis || plannedValues.decisionBasis || [],
-    };
-
-    if (rowSetType === "WARMUP") {
-      return {
-        eyebrow: "Próximo passo",
-        title: `Faz a série ${visibleSetLabel} de aquecimento`,
-        message: `Usa uma carga controlada para preparar o movimento. ${warmupCue}`,
-        reason: "",
-        isResting: false,
-        ...coachMetadata,
-      };
-    }
-
-    if (rowSetType === "DROP") {
-      return {
-        eyebrow: "Próximo passo",
-        title: coachTitle ? `Série ${visibleSetLabel}: ${coachTitle}` : `Faz a série ${visibleSetLabel} em drop`,
-        message: coachMessage ? `${coachMessage} ${loadCue}` : `Reduz a carga e mantém a execução limpa até ao alvo. ${loadCue}`,
-        reason,
-        isResting: false,
-        ...coachMetadata,
-      };
-    }
-
-    return {
-      eyebrow: "Próximo passo",
-      title: coachTitle ? `Série ${visibleSetLabel}: ${coachTitle}` : `Faz a série ${visibleSetLabel}`,
-      message: coachMessage ? `${coachMessage} ${loadCue}` : `Mantém o controlo e respeita o esforço planeado. ${loadCue}`,
-      reason,
-      isResting: false,
-      ...coachMetadata,
-    };
-  }
-
-  function getWorkoutSessionStats(workout) {
-    const workoutExercises = workout.exercises || [];
-    const currentSets = workoutExercises.flatMap(
-      (exercise) => getExerciseLogs(exercise.id).current_sets
-    );
-    const volume = currentSets.reduce(
-      (total, setLog) => total + Number(setLog.weight_used) * Number(setLog.reps_completed),
-      0
-    );
-
-    return {
-      sets: currentSets.length,
-      volume,
-    };
-  }
-
-  function formatNumber(value, digits = 1) {
-    return Number(value || 0).toFixed(digits);
-  }
-
-  function formatDashboardDate(dateValue) {
-    if (!dateValue) {
-      return "-";
-    }
-
-    return new Date(dateValue).toLocaleDateString("pt-PT", {
-      day: "2-digit",
-      month: "short",
-    });
-  }
-
-  function getDashboardMaxWeeklyVolume(dashboard) {
-    return Math.max(
-      ...((dashboard?.weekly_volume || []).map((week) => Number(week.volume) || 0)),
-      1
-    );
-  }
-
-  function getProgressionActionLabel(action) {
-    const labels = {
-      increase_load: "Subir carga",
-      maintain_load: "Manter carga",
-      reduce_volume: "Reduzir volume",
-      adjust_target_rir: "Alterar RIR",
-      maintain: "Manter plano",
-    };
-
-    return labels[action] || "Recomendação";
-  }
-
-  function formatProgressionTarget(recommendation) {
-    const weightLabel = recommendation.recommended_weight === "" || recommendation.recommended_weight === null
-      ? "carga do plano"
-      : `${recommendation.recommended_weight}kg`;
-
-    return `${weightLabel} | ${recommendation.recommended_sets} séries | ${recommendation.target_reps} reps | RIR ${recommendation.target_rir}`;
-  }
-
-  function getAiCoachSourceLabel(status) {
-    const labels = {
-      llm_enabled: "OpenAI",
-      llm_error: "Fallback local",
-      llm_disabled: "Fallback local",
-    };
-
-    return labels[status] || "Coach";
-  }
-
-  function getDecisionSourceLabel(source) {
-    const labels = {
-      hybrid_local_training_coach: "Coach híbrido local",
-      hybrid_local_workout_progression: "Progressão híbrida local",
-      openai_training_decision: "IA OpenAI série a série",
-      ollama_training_decision: "IA Ollama local",
-      last_15_workout_history: "Histórico últimos 15 treinos",
-      warmup_from_first_working_set: "Aquecimento proporcional",
-      warmup_ramp_from_first_working_set: "Aquecimento progressivo",
-      training_coach_engine: "Motor local",
-    };
-
-    return labels[source] || "Motor local";
-  }
-
-  function getLlmStatusLabel(status) {
-    const labels = {
-      llm_enabled: "IA ativa",
-      llm_error: "Fallback local",
-      llm_disabled: "Regras locais",
-    };
-
-    return labels[status] || "";
-  }
-
-  function getConfidenceColor(confidence) {
-    const colors = {
-      alta: "#22c55e",
-      média: "#eab308",
-      baixa: "#f97316",
-    };
-
-    return colors[confidence] || "#94a3b8";
-  }
-
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  }
-
-  function updateSetForm(setFormKey, field, value) {
-    setSetForms({
-      ...setForms,
-      [setFormKey]: {
-        ...setForms[setFormKey],
-        [field]: value,
-      },
-    });
-  }
-
-  async function loadAthleteDashboard(profileIdOverride = null) {
-    const dashboardProfileId = profileIdOverride || profileId;
-
-    if (!dashboardProfileId) {
-      return null;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/training/dashboard/${dashboardProfileId}/`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
-      return null;
-    }
-
-    setAthleteDashboard(data);
-    return data;
-  }
-
-  function toggleWorkout(workoutId) {
-    if (getActiveWorkoutId()) {
-      return;
-    }
-
-    setOpenWorkoutId(openWorkoutId === workoutId ? null : workoutId);
-  }
-
-  async function toggleExercise(exercise) {
-    const isOpening = !openExerciseById[exercise.id];
-
-    setOpenExerciseById({
-      ...openExerciseById,
-      [exercise.id]: isOpening,
-    });
-
-    if (isOpening) {
-      await loadExerciseHistory(exercise);
-    }
-  }
-
-  function addExerciseRow(exercise) {
-    setExerciseRowCounts({
-      ...exerciseRowCounts,
-      [exercise.id]: getExerciseRowCount(exercise) + 1,
-    });
-  }
-
-  function removeExerciseRow(exercise, sourceSetNumber, displaySetNumber) {
-    const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
-
-    if (getCurrentSetForRow(exercise.id, displaySetNumber)) {
-      return;
-    }
-
-    setRemovedSetByKey({
-      ...removedSetByKey,
-      [setFormKey]: true,
-    });
-
-    setSetForms((currentSetForms) => {
-      const nextSetForms = { ...currentSetForms };
-      delete nextSetForms[setFormKey];
-      return nextSetForms;
-    });
-
-    setOpenRestMenuBySet({
-      ...openRestMenuBySet,
-      [setFormKey]: false,
-    });
-
-    setOpenCompletionMenuBySet({
-      ...openCompletionMenuBySet,
-      [setFormKey]: false,
-    });
-
-    setOpenSetTypeMenuBySet({
-      ...openSetTypeMenuBySet,
-      [setFormKey]: false,
-    });
-  }
-
-  async function loadExerciseHistory(exercise, sessionIdOverride = null) {
-    const sessionId = sessionIdOverride || activeSessionByWorkout[exercise.workout];
-
-    if (!profileId || !sessionId) {
-      return null;
-    }
-
-    const params = new URLSearchParams({
-      profile_id: profileId,
-      exercise_id: exercise.exercise,
-      training_exercise_id: exercise.id,
-      session_id: sessionId,
-    });
-
-    const response = await fetch(`${API_BASE_URL}/api/progression/exercise-history/?${params}`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
-      return null;
-    }
-
-    setExerciseLogsById((currentLogs) => ({
-      ...currentLogs,
-      [exercise.id]: data,
-    }));
-
-    setExerciseRowCounts((currentCounts) => ({
-      ...currentCounts,
-      [exercise.id]: Math.max(
-        currentCounts[exercise.id] || 0,
-        exercise.sets + 1,
-        data.previous_sets.length,
-        data.current_sets.length,
-        data.recommended_sets.length,
-        1
-      ),
-    }));
-
-    return data;
-  }
-
-  async function createProfile(e) {
-    e.preventDefault();
-    setProgramError("");
-
-    const userResponse = await fetch(`${API_BASE_URL}/api/accounts/create-user/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: form.username }),
-    });
-
-    const userData = await userResponse.json();
-
-    if (!userResponse.ok) {
-      console.error(userData);
-      alert("Erro ao criar utilizador. Confirma os dados e tenta novamente.");
-      return;
-    }
-
-    setUserId(userData.id);
-
-    const profileResponse = await fetch(`${API_BASE_URL}/api/accounts/profiles/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user: userData.id,
-        gender: form.gender,
-        age: Number(form.age),
-        height_cm: Number(form.height_cm),
-        weight_kg: Number(form.weight_kg),
-        goal: form.goal,
-        level: form.level,
-        training_experience: form.training_experience,
-        days_per_week: Number(form.days_per_week),
-      }),
-    });
-
-    const profileData = await profileResponse.json();
-
-    if (!profileResponse.ok) {
-      console.error(profileData);
-      alert("Erro ao criar perfil. Confirma os dados e tenta novamente.");
-      return;
-    }
-
-    setProfileId(profileData.id);
-    setStep(3);
-  }
-
-  async function generateProgram() {
-    if (!profileId) {
-      setProgramError("Não encontrei o perfil activo. Volta a criar o perfil antes de gerar o programa.");
-      return;
-    }
-
-    setProgramError("");
-    setIsGeneratingProgram(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/training/generate-program/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile_id: profileId }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(data);
-        setProgramError(data.error || "Não foi possível gerar o programa. Tenta novamente.");
-        return;
-      }
-
-      if (!Array.isArray(data.workouts)) {
-        console.error(data);
-        setProgramError("A resposta do programa veio incompleta. Tenta novamente.");
-        return;
-      }
-
-      setProgram(data);
-      setOpenWorkoutId(null);
-      setLatestWorkoutProgression(null);
-      setLatestAiCoach(null);
-      setRecommendations({});
-      setExerciseLogsById({});
-      setExerciseRowCounts({});
-      setRemovedSetByKey({});
-      setOpenSetTypeMenuBySet({});
-      loadAthleteDashboard(profileId);
-      setStep(4);
-    } catch (error) {
-      console.error(error);
-      setProgramError("Não consegui contactar o servidor para gerar o programa.");
-    } finally {
-      setIsGeneratingProgram(false);
-    }
-  }
-
-  async function startWorkoutSession(workout) {
-    const response = await fetch(`${API_BASE_URL}/api/training/start-session/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        profile_id: profileId,
-        workout_id: workout.id,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
-      alert("Erro ao iniciar treino.");
-      return;
-    }
-
-    setActiveSessionByWorkout({
-      ...activeSessionByWorkout,
-      [workout.id]: data.id,
-    });
-    setOpenWorkoutId(workout.id);
-    setLatestWorkoutProgression(null);
-    setLatestAiCoach(null);
+  const {
+    restTimers,
+    setRestTimers,
+    formatTimer,
+    adjustRestTimer,
+  } = useRestTimers();
+
+  const {
+    setForms,
+    setSetForms,
+    openCompletionMenuBySet,
+    setOpenCompletionMenuBySet,
+    openRestMenuBySet,
+    setOpenRestMenuBySet,
+    openSetTypeMenuBySet,
+    setOpenSetTypeMenuBySet,
+    removedSetByKey,
+    setRemovedSetByKey,
+    updateSetForm,
+    getRestSecondsForRow,
+    toggleCompletionMenu,
+    toggleRestMenu,
+    toggleSetTypeMenu,
+    selectSetType,
+  } = useSetControls();
+
+  function resetTrainingState() {
+    setOpenWorkoutId(null);
     setRecommendations({});
     setExerciseLogsById({});
     setExerciseRowCounts({});
+    setCalibrationFormsByExerciseId({});
+    setCompletedCalibrationByExerciseId({});
     setRemovedSetByKey({});
     setOpenSetTypeMenuBySet({});
-    loadAthleteDashboard();
-
-    workout.exercises.forEach((exercise) => {
-      loadExerciseHistory(exercise, data.id);
-    });
   }
 
-  async function finishWorkoutSession(workout) {
-    const sessionId = activeSessionByWorkout[workout.id];
+  const {
+    program,
+    setProgram,
+    programError,
+    setProgramError,
+    isGeneratingProgram,
+    latestWorkoutProgression,
+    setLatestWorkoutProgression,
+    latestAiCoach,
+    setLatestAiCoach,
+    athleteDashboard,
+    setAthleteDashboard,
+    adaptivePlan,
+    setAdaptivePlan,
+    adaptiveDecisions,
+    setAdaptiveDecisions,
+    weeklyFeedback,
+    setWeeklyFeedback,
+    trainingBlock,
+    setTrainingBlock,
+    applyingAdaptiveById,
+    setApplyingAdaptiveById,
+    loadAthleteDashboard,
+    loadAdaptivePlan,
+    loadAdaptiveDecisions,
+    loadWeeklyFeedback,
+    loadTrainingBlock,
+    loadProgramPanels,
+    generateProgram,
+    recordAdaptiveDecision,
+  } = useProgramData({ profileId, setStep, resetTrainingState });
 
-    if (!sessionId) {
-      alert("Não existe sessão ativa para este treino.");
-      return;
-    }
+  function resetAllTrainingState() {
+    resetTrainingState();
+    setSetForms({});
+  }
 
-    const response = await fetch(`${API_BASE_URL}/api/training/finish-session/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: sessionId,
-        notes: sessionNotes[workout.id] || "",
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(data);
-      alert("Erro ao terminar treino.");
-      return;
-    }
-
-    setActiveSessionByWorkout({
-      ...activeSessionByWorkout,
-      [workout.id]: null,
-    });
-    setOpenWorkoutId(null);
+  function resetAllAppState() {
+    setProgram(null);
+    setSetForms({});
+    setRecommendations({});
+    setActiveSessionByWorkout({});
+    setSessionNotes({});
     setOpenExerciseById({});
+    setOpenWorkoutId(null);
+    setExerciseLogsById({});
+    setSubstitutionOptionsByExerciseId({});
+    setOpenSubstitutionByExerciseId({});
+    setIsReplacingExerciseById({});
+    setOpenWeightScaleByExerciseId({});
+    setWeightScaleFormsByExerciseId({});
+    setIsSavingWeightScaleByExerciseId({});
+    setCalibrationFormsByExerciseId({});
+    setIsSavingCalibrationByExerciseId({});
+    setCompletedCalibrationByExerciseId({});
+    setExerciseRowCounts({});
     setRestTimers({});
-    setRemovedSetByKey({});
+    setOpenCompletionMenuBySet({});
+    setOpenRestMenuBySet({});
     setOpenSetTypeMenuBySet({});
-    setLatestWorkoutProgression(data.next_workout_progression || null);
-    setLatestAiCoach(data.ai_coach_summary || null);
-    loadAthleteDashboard();
-
-    alert(`Workout finished: ${data.workout_name}`);
+    setRemovedSetByKey({});
+    setLatestWorkoutProgression(null);
+    setLatestAiCoach(null);
+    setAthleteDashboard(null);
+    setAdaptivePlan(null);
+    setAdaptiveDecisions([]);
+    setWeeklyFeedback(null);
+    setTrainingBlock(null);
+    setApplyingAdaptiveById({});
   }
 
-  function toggleCompletionMenu(setFormKey) {
-    setOpenCompletionMenuBySet({
-      ...openCompletionMenuBySet,
-      [setFormKey]: !openCompletionMenuBySet[setFormKey],
-    });
-  }
+  const {
+    form,
+    setForm,
+    levelGuidance,
+    goalLabels,
+    loginUsername,
+    setLoginUsername,
+    loginError,
+    isLoggingIn,
+    isDeletingExperimentalUsers,
+    deleteUsersMessage,
+    handleChange,
+    exportUserTrainingData,
+    loginExistingProfile,
+    createProfile,
+    deleteExperimentalUsers,
+  } = useProfileAccess({
+    profileId,
+    setProfileId,
+    userId,
+    setUserId,
+    setStep,
+    setProgram,
+    setProgramError,
+    setLatestWorkoutProgression,
+    setLatestAiCoach,
+    loadProgramPanels,
+    resetAllTrainingState,
+    resetAllAppState,
+  });
 
-  function toggleRestMenu(setFormKey) {
-    setOpenRestMenuBySet({
-      ...openRestMenuBySet,
-      [setFormKey]: !openRestMenuBySet[setFormKey],
-    });
-  }
+  const {
+    exerciseLogsById,
+    setExerciseLogsById,
+    exerciseRowCounts,
+    setExerciseRowCounts,
+    getExerciseLogs,
+    loadExerciseHistory,
+  } = useExerciseHistory({
+    profileId,
+    getActiveSessionByWorkout: () => activeSessionByWorkout,
+  });
 
-  function adjustRestTimer(exerciseId, secondsDelta) {
-    setRestTimers((currentTimers) => ({
-      ...currentTimers,
-      [exerciseId]: Math.max(0, (currentTimers[exerciseId] || 0) + secondsDelta),
-    }));
-  }
+  const {
+    calibrationFormsByExerciseId,
+    setCalibrationFormsByExerciseId,
+    isSavingCalibrationByExerciseId,
+    setIsSavingCalibrationByExerciseId,
+    completedCalibrationByExerciseId,
+    setCompletedCalibrationByExerciseId,
+    getCalibrationState,
+    getCalibrationColorMeta,
+    getCalibrationColorOptions,
+    getCalibrationForm,
+    updateCalibrationForm,
+    saveExerciseCalibration,
+  } = useExerciseCalibration({
+    profileId,
+    restTimers,
+    setRestTimers,
+    getExerciseLogs,
+    setExerciseLogsById,
+    loadExerciseHistory,
+  });
 
-  function toggleSetTypeMenu(setFormKey) {
-    setOpenSetTypeMenuBySet({
-      ...openSetTypeMenuBySet,
-      [setFormKey]: !openSetTypeMenuBySet[setFormKey],
-    });
-  }
+  const {
+    substitutionOptionsByExerciseId,
+    setSubstitutionOptionsByExerciseId,
+    openSubstitutionByExerciseId,
+    setOpenSubstitutionByExerciseId,
+    isReplacingExerciseById,
+    setIsReplacingExerciseById,
+    toggleExerciseSubstitutions,
+    replaceExercise,
+  } = useExerciseSubstitutions({
+    setProgram,
+    setRecommendations,
+    setExerciseLogsById,
+    setOpenExerciseById,
+    loadProgramPanels,
+  });
 
-  function selectSetType(setFormKey, setType) {
-    updateSetForm(setFormKey, "set_type", setType);
-    setOpenSetTypeMenuBySet({
-      ...openSetTypeMenuBySet,
-      [setFormKey]: false,
-    });
-  }
+  const {
+    activeSessionByWorkout,
+    setActiveSessionByWorkout,
+    sessionNotes,
+    setSessionNotes,
+    openWorkoutId,
+    setOpenWorkoutId,
+    workoutStatusMessage,
+    getActiveWorkoutId,
+    toggleWorkout,
+    startWorkoutSession,
+    finishWorkoutSession,
+  } = useTrainingSession({
+    profileId,
+    loadProgramPanels,
+    loadExerciseHistory,
+    resetTrainingState,
+    setLatestWorkoutProgression,
+    setLatestAiCoach,
+    setOpenExerciseById,
+    setRestTimers,
+    setSetForms,
+    setCompletedCalibrationByExerciseId,
+    setRemovedSetByKey,
+    setOpenSetTypeMenuBySet,
+  });
 
-  async function saveSet(exercise, sourceSetNumber, displaySetNumber, effortOption) {
-    const setFormKey = getSetFormKey(exercise.id, sourceSetNumber);
-    const formData = setForms[setFormKey] || {};
-    const sessionId = activeSessionByWorkout[exercise.workout];
-    const rows = getExerciseRows(exercise);
-    const previousSet = getPreviousSetForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
-    const setType = getSetTypeForExerciseRow(exercise, sourceSetNumber, displaySetNumber);
-    const plannedValues = getPlannedValuesForExerciseRow(exercise, rows, sourceSetNumber, displaySetNumber);
-    const weightUsed = formData.weight_used ?? plannedValues.weight;
-    const repsCompleted = formData.reps_completed ?? plannedValues.reps;
-    const selectedEffortOption = shouldForceFailureEffort(setType, repsCompleted)
-      ? EFFORT_OPTIONS[0]
-      : effortOption || EFFORT_OPTIONS[2];
-    const restSeconds = getRestSecondsForRow(setFormKey);
+  const {
+    openWeightScaleByExerciseId,
+    setOpenWeightScaleByExerciseId,
+    weightScaleFormsByExerciseId,
+    setWeightScaleFormsByExerciseId,
+    isSavingWeightScaleByExerciseId,
+    setIsSavingWeightScaleByExerciseId,
+    getWeightScaleForm,
+    toggleWeightScaleMenu,
+    updateWeightScaleForm,
+    updateMicroWeightScaleRow,
+    addMicroWeightScaleRow,
+    removeMicroWeightScaleRow,
+    saveWeightScale,
+  } = useWeightScales({
+    profileId,
+    activeSessionByWorkout,
+    setProgram,
+    loadExerciseHistory,
+  });
 
-    if (!sessionId) {
-      alert("Primeiro tens de iniciar o treino com Start Workout.");
-      return;
-    }
+  const {
+    getSetFormKey,
+    getSetTypeMeta,
+    getEffortMetaFromSet,
+    getCurrentSetForRow,
+    getPreviousSetForExerciseRow,
+    getExerciseRowCount,
+    getExerciseRows,
+    getSetTypeForExerciseRow,
+    getWarmupReferenceSet,
+    getVisibleSetLabel,
+    getPlannedValuesForExerciseRow,
+    shouldForceFailureEffort,
+    getEffortOptionsForSet,
+    formatPreviousSet,
+    getRepsInputValue,
+    getExerciseTargetLabel,
+  } = useExerciseSetRows({
+    exerciseRowCounts,
+    setForms,
+    removedSetByKey,
+    getExerciseLogs,
+  });
 
-    if (weightUsed === "" || repsCompleted === "") {
-      alert("Preenche o peso e as reps antes de confirmar a série.");
-      return;
-    }
+  const {
+    buildUserCoachContext,
+    buildExerciseCoachContext,
+  } = useCoachContext({ userId, form });
 
-    const response = await fetch(`${API_BASE_URL}/api/progression/set-logs/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user: userId,
-        workout_session: sessionId,
-        training_exercise: exercise.id,
-        exercise: exercise.exercise,
-        set_number: displaySetNumber,
-        set_type: setType,
-        planned_weight: previousSet?.weight_used ?? null,
-        weight_used: Number(weightUsed),
-        target_min_reps: exercise.target_min_reps || TARGET_REPS,
-        target_max_reps: exercise.target_max_reps || TARGET_REPS,
-        reps_completed: Number(repsCompleted),
-        rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
-        reached_failure: selectedEffortOption.reachedFailure,
-        notes: formData.notes || "",
-      }),
-    });
+  const {
+    getGuidanceForExercise,
+  } = useExerciseGuidance({
+    recommendations,
+    getCurrentSetForRow,
+    getSetTypeForExerciseRow,
+    getVisibleSetLabel,
+    getPlannedValuesForExerciseRow,
+    getWarmupReferenceSet,
+    getExerciseTargetLabel,
+  });
 
-    const data = await response.json();
+  const {
+    getWorkoutSessionStats,
+    toggleExercise,
+    getExerciseImageUrl,
+    addExerciseRow,
+    removeExerciseRow,
+  } = useWorkoutExerciseActions({
+    openExerciseById,
+    setOpenExerciseById,
+    exerciseRowCounts,
+    setExerciseRowCounts,
+    removedSetByKey,
+    setRemovedSetByKey,
+    openRestMenuBySet,
+    setOpenRestMenuBySet,
+    openCompletionMenuBySet,
+    setOpenCompletionMenuBySet,
+    openSetTypeMenuBySet,
+    setOpenSetTypeMenuBySet,
+    setSetForms,
+    getExerciseLogs,
+    loadExerciseHistory,
+    getExerciseRowCount,
+    getCurrentSetForRow,
+    getSetFormKey,
+  });
 
-    if (!response.ok) {
-      console.error(data);
-      alert("Erro ao guardar a série. Vê a consola.");
-      return;
-    }
+  const {
+    saveSet,
+    undoSet,
+  } = useSetLogging({
+    userId,
+    profileId,
+    setForms,
+    sessionNotes,
+    activeSessionByWorkout,
+    exerciseLogsById,
+    recommendations,
+    restTimers,
+    setExerciseLogsById,
+    setExerciseRowCounts,
+    setRecommendations,
+    setRestTimers,
+    setSetForms,
+    setOpenCompletionMenuBySet,
+    setOpenRestMenuBySet,
+    setOpenSetTypeMenuBySet,
+    getExerciseLogs,
+    getExerciseRows,
+    getExerciseRowCount,
+    getSetFormKey,
+    getPreviousSetForExerciseRow,
+    getSetTypeForExerciseRow,
+    getPlannedValuesForExerciseRow,
+    getRestSecondsForRow,
+    shouldForceFailureEffort,
+    getRepsInputValue,
+    buildUserCoachContext,
+    buildExerciseCoachContext,
+  });
 
-    setExerciseLogsById((currentLogs) => {
-      const currentExerciseLogs = currentLogs[exercise.id] || {
-        previous_sets: [],
-        current_sets: [],
-        history_sets: [],
-        previous_session: null,
-        recommended_sets: [],
-      };
-      const otherCurrentSets = currentExerciseLogs.current_sets.filter(
-        (setLog) => Number(setLog.set_number) !== displaySetNumber
-      );
-
-      return {
-        ...currentLogs,
-        [exercise.id]: {
-          ...currentExerciseLogs,
-          current_sets: [...otherCurrentSets, data].sort(
-            (firstSet, secondSet) => Number(firstSet.set_number) - Number(secondSet.set_number)
-          ),
-        },
-      };
-    });
-
-    setRestTimers({
-      ...restTimers,
-      [exercise.id]: restSeconds,
-    });
-
-    setOpenCompletionMenuBySet({
-      ...openCompletionMenuBySet,
-      [setFormKey]: false,
-    });
-
-    setOpenRestMenuBySet({
-      ...openRestMenuBySet,
-      [setFormKey]: false,
-    });
-
-    setOpenSetTypeMenuBySet({
-      ...openSetTypeMenuBySet,
-      [setFormKey]: false,
-    });
-
-    const currentExerciseLogs = getExerciseLogs(exercise.id);
-    const completedSetsForCoach = [
-      ...currentExerciseLogs.current_sets.filter(
-        (setLog) => Number(setLog.set_number) !== displaySetNumber
-      ),
-      data,
-    ].sort((firstSet, secondSet) => Number(firstSet.set_number) - Number(secondSet.set_number));
-
-    const recommendationResponse = await fetch(`${API_BASE_URL}/api/recommendations/next-set/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        weight: Number(weightUsed),
-        reps: Number(repsCompleted),
-        rir: selectedEffortOption.reachedFailure ? null : selectedEffortOption.rir,
-        is_failure: selectedEffortOption.reachedFailure,
-        notes: formData.notes || "",
-        set_type: setType,
-        set_number: displaySetNumber,
-        total_sets: exercise.sets,
-        profile_id: profileId,
-        training_exercise_id: exercise.id,
-        workout_session_id: sessionId,
-        target_min_reps: exercise.target_min_reps || TARGET_REPS,
-        target_max_reps: exercise.target_max_reps || TARGET_REPS,
-        target_rir: exercise.target_rir || 2,
-        user_context: buildUserCoachContext(),
-        exercise_context: buildExerciseCoachContext(exercise),
-        session_context: {
-          workout_id: exercise.workout,
-          session_id: sessionId,
-          current_set_number: displaySetNumber,
-          sets_completed_in_current_exercise: completedSetsForCoach.length,
-          total_sets_completed_in_session: Object.values(exerciseLogsById).reduce(
-            (totalSets, exerciseLogs) => totalSets + (exerciseLogs.current_sets?.length || 0),
-            0
-          ) + 1,
-          session_notes: sessionNotes[exercise.workout] || "",
-          current_exercise_notes: formData.notes || "",
-        },
-        current_sets: completedSetsForCoach.map(serializeSetForCoach),
-        previous_sets: currentExerciseLogs.previous_sets.map(serializeSetForCoach),
-        history_sets: currentExerciseLogs.history_sets.map(serializeSetForCoach),
-      }),
-    });
-
-    const recommendationData = await recommendationResponse.json();
-
-    if (recommendationResponse.ok) {
-      setRecommendations({
-        ...recommendations,
-        [exercise.id]: recommendationData,
-      });
-
-      if (recommendationData.exercise_status !== "complete") {
-        const nextSourceSetNumber = sourceSetNumber + 1;
-        const nextSetFormKey = getSetFormKey(exercise.id, nextSourceSetNumber);
-
-        if (recommendationData.next_set_type && recommendationData.next_set_type !== "COMPLETE") {
-          setSetForms((currentSetForms) => ({
-            ...currentSetForms,
-            [nextSetFormKey]: {
-              ...currentSetForms[nextSetFormKey],
-              set_type: recommendationData.next_set_type,
-              weight_used:
-                recommendationData.recommended_weight === ""
-                  ? currentSetForms[nextSetFormKey]?.weight_used
-                  : recommendationData.recommended_weight,
-              reps_completed:
-                recommendationData.target_reps === ""
-                  ? currentSetForms[nextSetFormKey]?.reps_completed
-                  : getRepsInputValue(
-                      recommendationData.target_reps,
-                      exercise.target_max_reps || TARGET_REPS
-                    ),
-            },
-          }));
-        }
-
-        setExerciseRowCounts((currentCounts) => ({
-          ...currentCounts,
-          [exercise.id]: Math.max(
-            currentCounts[exercise.id] || 0,
-            getExerciseRowCount(exercise),
-            nextSourceSetNumber
-          ),
-        }));
-      }
-    }
+  function exerciseNeedsCalibration(exercise) {
+    return Boolean(getCalibrationState(exercise).needs_calibration);
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "920px", margin: "0 auto" }}>
+    <div className={step === 1 ? "app-shell home-app-shell" : step === 2 ? "app-shell profile-app-shell" : "app-shell"}>
       <h1>SHAPETRONYC</h1>
 
       {step === 1 && (
-        <div>
-          <h2>Adaptive training built around you</h2>
-          <p>Create your profile and SHAPETRONYC will generate your first training program.</p>
-          <button onClick={() => setStep(2)}>Get Started</button>
-        </div>
+        <HomeScreen
+          loginUsername={loginUsername}
+          setLoginUsername={setLoginUsername}
+          loginError={loginError}
+          isLoggingIn={isLoggingIn}
+          loginExistingProfile={loginExistingProfile}
+          goToProfileSetup={() => setStep(2)}
+          deleteExperimentalUsers={deleteExperimentalUsers}
+          isDeletingExperimentalUsers={isDeletingExperimentalUsers}
+          deleteUsersMessage={deleteUsersMessage}
+        />
       )}
 
       {step === 2 && (
-        <form onSubmit={createProfile}>
-          <h2>Create Profile</h2>
-
-          <label>Username</label>
-          <input name="username" value={form.username} onChange={handleChange} required />
-
-          <label>Gender</label>
-          <select name="gender" value={form.gender} onChange={handleChange}>
-            <option value="MALE">Male</option>
-            <option value="FEMALE">Female</option>
-          </select>
-
-          <label>Age</label>
-          <input name="age" type="number" value={form.age} onChange={handleChange} />
-
-          <label>Height cm</label>
-          <input name="height_cm" type="number" value={form.height_cm} onChange={handleChange} />
-
-          <label>Weight kg</label>
-          <input name="weight_kg" type="number" value={form.weight_kg} onChange={handleChange} />
-
-          <label>Goal</label>
-          <select name="goal" value={form.goal} onChange={handleChange}>
-            <option value="HYPERTROPHY">Gain muscle</option>
-            <option value="STRENGTH">Gain strength</option>
-            <option value="FAT_LOSS">Lose fat</option>
-            <option value="RECOMPOSITION">Recomposition</option>
-            <option value="GENERAL_FITNESS">General fitness</option>
-          </select>
-
-          <label>Level</label>
-          <select name="level" value={form.level} onChange={handleChange}>
-            <option value="BEGINNER">Beginner</option>
-            <option value="INTERMEDIATE">Intermediate</option>
-            <option value="ADVANCED">Advanced</option>
-          </select>
-
-          <p><strong>Beginner:</strong> less volume, focus on technique and consistency.</p>
-          <p><strong>Intermediate:</strong> more volume, higher frequency and harder progression.</p>
-          <p><strong>Advanced:</strong> more specialization, higher fatigue and recovery demands.</p>
-
-          <label>Training Experience</label>
-          <select name="training_experience" value={form.training_experience} onChange={handleChange}>
-            <option value="LESS_THAN_1">Less than 1 year</option>
-            <option value="ONE_TO_THREE">1-3 years</option>
-            <option value="THREE_TO_FIVE">3-5 years</option>
-            <option value="MORE_THAN_FIVE">More than 5 years</option>
-          </select>
-
-          <label>Days per week</label>
-          <select name="days_per_week" value={form.days_per_week} onChange={handleChange}>
-            {[2, 3, 4, 5, 6, 7].map((day) => (
-              <option key={day} value={day}>{day}</option>
-            ))}
-          </select>
-
-          <button type="submit">Create Profile</button>
-        </form>
+        <ProfileForm
+          form={form}
+          setForm={setForm}
+          handleChange={handleChange}
+          createProfile={createProfile}
+          goalLabels={goalLabels}
+          levelGuidance={levelGuidance}
+        />
       )}
 
       {step === 3 && (
@@ -1194,944 +415,88 @@ function App() {
       )}
 
       {step === 4 && program && (
-        <div>
-          <h2>{program.name}</h2>
-
-          {athleteDashboard && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(15, 23, 42, 0.72)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: "#94a3b8",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Dashboard
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: 0 }}>Evolução do atleta</h3>
-                </div>
-                <span style={{ color: "#bae6fd", fontSize: "12px", fontWeight: "bold" }}>
-                  Último treino: {formatDashboardDate(athleteDashboard.summary?.last_workout_at)}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-                  gap: "10px",
-                  marginTop: "14px",
-                }}
-              >
-                <div>
-                  <strong>{athleteDashboard.summary?.completed_workouts || 0}</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>Treinos</p>
-                </div>
-                <div>
-                  <strong>{formatNumber(athleteDashboard.summary?.total_volume)} kg</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>Volume</p>
-                </div>
-                <div>
-                  <strong>{athleteDashboard.summary?.total_sets || 0}</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>Séries</p>
-                </div>
-                <div>
-                  <strong>{athleteDashboard.summary?.average_rir ?? "-"}</strong>
-                  <p style={{ margin: 0, color: "#94a3b8" }}>RIR médio</p>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                  gap: "14px",
-                  marginTop: "16px",
-                }}
-              >
-                <div>
-                  <strong>Volume semanal</strong>
-                  {athleteDashboard.weekly_volume?.length > 0 ? (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${athleteDashboard.weekly_volume.length}, minmax(32px, 1fr))`,
-                        gap: "8px",
-                        alignItems: "end",
-                        height: "150px",
-                        marginTop: "10px",
-                      }}
-                    >
-                      {athleteDashboard.weekly_volume.map((week) => {
-                        const maxVolume = getDashboardMaxWeeklyVolume(athleteDashboard);
-                        const height = Math.max(8, (Number(week.volume) / maxVolume) * 112);
-
-                        return (
-                          <div key={week.week} style={{ display: "grid", gap: "6px", alignItems: "end" }}>
-                            <div
-                              title={`${week.week}: ${formatNumber(week.volume)} kg`}
-                              style={{
-                                height: `${height}px`,
-                                borderRadius: "5px 5px 2px 2px",
-                                background: "#38bdf8",
-                              }}
-                            />
-                            <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "bold" }}>
-                              {week.week.split("-")[1]}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p style={{ color: "#94a3b8" }}>Sem semanas concluídas.</p>
-                  )}
-                </div>
-
-                <div>
-                  <strong>Últimos treinos</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
-                    {(athleteDashboard.recent_sessions || []).slice(0, 4).map((session) => (
-                      <div
-                        key={session.id}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr auto",
-                          gap: "10px",
-                          paddingBottom: "8px",
-                          borderBottom: "1px solid rgba(148, 163, 184, 0.22)",
-                        }}
-                      >
-                        <span>{session.workout_name}</span>
-                        <span style={{ color: "#94a3b8", fontSize: "13px" }}>
-                          {formatNumber(session.volume)} kg
-                        </span>
-                      </div>
-                    ))}
-                    {athleteDashboard.recent_sessions?.length === 0 && (
-                      <p style={{ margin: 0, color: "#94a3b8" }}>Ainda sem treinos concluídos.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: "14px",
-                  marginTop: "16px",
-                }}
-              >
-                <div>
-                  <strong>Melhor progressão</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
-                    {(athleteDashboard.top_progressing_exercises || []).map((exercise) => (
-                      <div key={exercise.exercise_id}>
-                        <span>{exercise.exercise_name}</span>
-                        <p style={{ margin: "3px 0 0", color: "#86efac", fontSize: "13px" }}>
-                          +{formatNumber(exercise.load_change)} kg em {exercise.sessions} treinos
-                        </p>
-                      </div>
-                    ))}
-                    {athleteDashboard.top_progressing_exercises?.length === 0 && (
-                      <p style={{ margin: 0, color: "#94a3b8" }}>Sem progressões suficientes.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <strong>A vigiar</strong>
-                  <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
-                    {(athleteDashboard.watchlist_exercises || []).map((exercise) => (
-                      <div key={exercise.exercise_id}>
-                        <span>{exercise.exercise_name}</span>
-                        <p style={{ margin: "3px 0 0", color: "#fbbf24", fontSize: "13px" }}>
-                          {exercise.reason}
-                        </p>
-                      </div>
-                    ))}
-                    {athleteDashboard.watchlist_exercises?.length === 0 && (
-                      <p style={{ margin: 0, color: "#94a3b8" }}>Sem alertas recentes.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {latestWorkoutProgression && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(15, 23, 42, 0.72)",
-              }}
-            >
-              <div
-                style={{
-                  color: "#94a3b8",
-                  fontSize: "12px",
-                  fontWeight: "bold",
-                  letterSpacing: "0",
-                  textTransform: "uppercase",
-                }}
-              >
-                Próximo treino
-              </div>
-              <h3 style={{ marginTop: "6px", marginBottom: "12px" }}>
-                Progressão para {latestWorkoutProgression.workout_name}
-              </h3>
-
-              <div style={{ display: "grid", gap: "10px" }}>
-                {latestWorkoutProgression.recommendations.map((recommendation) => (
-                  <div
-                    key={recommendation.training_exercise}
-                    style={{
-                      padding: "12px",
-                      border: "1px solid rgba(148, 163, 184, 0.26)",
-                      borderRadius: "8px",
-                      background: "rgba(15, 23, 42, 0.44)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <strong>{recommendation.exercise_name}</strong>
-                      <span
-                        style={{
-                          color: "#38bdf8",
-                          fontSize: "13px",
-                          fontWeight: "bold",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {getProgressionActionLabel(recommendation.action)}
-                      </span>
-                    </div>
-                    <p style={{ marginTop: "6px", color: "#e5e7eb" }}>
-                      {formatProgressionTarget(recommendation)}
-                    </p>
-                    <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
-                      {recommendation.message}
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "8px",
-                        marginTop: "10px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      <span style={{ color: "#bae6fd" }}>
-                        {getDecisionSourceLabel(recommendation.source)}
-                      </span>
-                      {recommendation.confidence && (
-                        <span style={{ color: getConfidenceColor(recommendation.confidence) }}>
-                          Confiança {recommendation.confidence}
-                        </span>
-                      )}
-                    </div>
-                    {recommendation.decision_basis?.length > 0 && (
-                      <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
-                        {recommendation.decision_basis.map((basis) => (
-                          <p key={basis} style={{ margin: 0, color: "#cbd5e1", fontSize: "12px" }}>
-                            {basis}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {latestAiCoach && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                background: "rgba(8, 47, 73, 0.42)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: "#7dd3fc",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      letterSpacing: "0",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    AI Coach
-                  </div>
-                  <h3 style={{ marginTop: "6px", marginBottom: "8px" }}>{latestAiCoach.headline}</h3>
-                </div>
-                <span
-                  style={{
-                    color: "#bae6fd",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {getAiCoachSourceLabel(latestAiCoach.status)}
-                </span>
-              </div>
-
-              <p style={{ color: "#e5e7eb" }}>{latestAiCoach.summary}</p>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                  gap: "10px",
-                  marginTop: "14px",
-                }}
-              >
-                <div>
-                  <strong>Volume</strong>
-                  <p>{Number(latestAiCoach.metrics?.total_volume || 0).toFixed(1)} kg</p>
-                </div>
-                <div>
-                  <strong>Séries</strong>
-                  <p>{latestAiCoach.metrics?.total_sets || 0}</p>
-                </div>
-                <div>
-                  <strong>Falhas</strong>
-                  <p>{latestAiCoach.metrics?.failure_count || 0}</p>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
-                {latestAiCoach.focus_points?.map((point) => (
-                  <p key={point} style={{ margin: 0, color: "#cbd5e1" }}>
-                    {point}
-                  </p>
-                ))}
-              </div>
-
-              <p style={{ marginTop: "14px", color: "#bae6fd" }}>
-                {latestAiCoach.next_session_strategy}
-              </p>
-              <p style={{ marginTop: "8px", color: "#94a3b8", fontSize: "13px" }}>
-                {latestAiCoach.recovery_note}
-              </p>
-            </section>
-          )}
-
-          {program.workouts.map((workout) => {
-            const activeWorkoutId = getActiveWorkoutId();
-            const activeSessionId = activeSessionByWorkout[workout.id];
-            const isActiveWorkout = activeWorkoutId === String(workout.id);
-            const hasActiveWorkout = Boolean(activeWorkoutId);
-            const isWorkoutOpen = isActiveWorkout || openWorkoutId === workout.id;
-            const workoutStats = getWorkoutSessionStats(workout);
-
-            if (hasActiveWorkout && !isActiveWorkout) {
-              return null;
-            }
-
-            return (
-              <div
-                key={workout.id}
-                style={{ border: "1px solid #ccc", padding: "16px", marginTop: "16px" }}
-              >
-                <button
-                  onClick={() => toggleWorkout(workout.id)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "12px",
-                    fontSize: "18px",
-                    fontWeight: "bold",
-                    cursor: hasActiveWorkout ? "default" : "pointer",
-                    background: "transparent",
-                    border: "none",
-                  }}
-                >
-                  {isWorkoutOpen ? "▼" : "▶"} Day {workout.order} - {workout.name}
-                </button>
-
-                {isWorkoutOpen && (
-                  <div style={{ marginTop: "12px" }}>
-                    {!activeSessionId ? (
-                      <button onClick={() => startWorkoutSession(workout)}>
-                        Start Workout
-                      </button>
-                    ) : (
-                      <div style={{ marginBottom: "16px" }}>
-                        <p style={{ color: "green" }}>Workout session active. Session ID: {activeSessionId}</p>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                            gap: "12px",
-                            marginTop: "12px",
-                          }}
-                        >
-                          <div>
-                            <strong>Volume</strong>
-                            <p>{workoutStats.volume.toFixed(1)} kg</p>
-                          </div>
-                          <div>
-                            <strong>Séries concluídas</strong>
-                            <p>{workoutStats.sets}</p>
-                          </div>
-                        </div>
-
-                        <textarea
-                          placeholder="Final workout notes"
-                          value={sessionNotes[workout.id] || ""}
-                          onChange={(e) =>
-                            setSessionNotes({
-                              ...sessionNotes,
-                              [workout.id]: e.target.value,
-                            })
-                          }
-                          style={{ display: "block", width: "100%", marginTop: "8px" }}
-                        />
-
-                        <button onClick={() => finishWorkoutSession(workout)} style={{ marginTop: "8px" }}>
-                          Finish Workout
-                        </button>
-                      </div>
-                    )}
-
-                    {activeSessionId && workout.exercises.map((item) => {
-                      const exerciseLogs = getExerciseLogs(item.id);
-                      const isOpen = Boolean(openExerciseById[item.id]);
-                      const restSeconds = restTimers[item.id] || 0;
-                      const rows = getExerciseRows(item);
-                      const guidance = getGuidanceForExercise(item, rows, restSeconds);
-
-                      return (
-                        <div
-                          key={item.id}
-                          style={{
-                            borderBottom: "1px solid #ddd",
-                            padding: "14px 0",
-                          }}
-                        >
-                          <button
-                            onClick={() => toggleExercise(item)}
-                            style={{
-                              width: "100%",
-                              textAlign: "left",
-                              padding: "12px",
-                              fontSize: "16px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {isOpen ? "▼" : "▶"} {item.exercise_name}
-                          </button>
-
-                          {isOpen && (
-                            <div style={{ marginTop: "12px" }}>
-                              <p>
-                                Target: {item.sets} sets | {TARGET_REPS} reps | RIR {item.target_rir}
-                              </p>
-
-                              {exerciseLogs.previous_session && (
-                                <p style={{ marginTop: "8px", color: "#777" }}>
-                                  Anterior: {exerciseLogs.previous_session.workout_name}
-                                </p>
-                              )}
-
-                              <div
-                                style={{
-                                  marginTop: "12px",
-                                  padding: "16px",
-                                  border: "1px solid #334155",
-                                  borderRadius: "8px",
-                                  background: "rgba(15, 23, 42, 0.78)",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    color: guidance.isResting ? "#0ea5e9" : "#94a3b8",
-                                    fontSize: "12px",
-                                    fontWeight: "bold",
-                                    letterSpacing: "0",
-                                    textTransform: "uppercase",
-                                  }}
-                                >
-                                  {guidance.eyebrow}
-                                </div>
-                                <strong
-                                  style={{
-                                    display: "block",
-                                    marginTop: "6px",
-                                    color: "#f8fafc",
-                                    fontSize: "18px",
-                                  }}
-                                >
-                                  {guidance.title}
-                                </strong>
-                                <p style={{ marginTop: "6px", color: "#cbd5e1" }}>{guidance.message}</p>
-
-                                {guidance.reason && !guidance.isResting && (
-                                  <p style={{ marginTop: "6px", color: "#94a3b8", fontSize: "13px" }}>
-                                    {guidance.reason}
-                                  </p>
-                                )}
-
-                                {guidance.source && !guidance.isResting && (
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexWrap: "wrap",
-                                      gap: "8px",
-                                      marginTop: "10px",
-                                      fontSize: "12px",
-                                      fontWeight: "bold",
-                                    }}
-                                  >
-                                    <span style={{ color: "#bae6fd" }}>
-                                      {getDecisionSourceLabel(guidance.source)}
-                                    </span>
-                                    {guidance.llmStatus && (
-                                      <span style={{ color: guidance.llmStatus === "llm_enabled" ? "#86efac" : "#fbbf24" }}>
-                                        {getLlmStatusLabel(guidance.llmStatus)}
-                                      </span>
-                                    )}
-                                    {guidance.confidence && (
-                                      <span style={{ color: getConfidenceColor(guidance.confidence) }}>
-                                        Confiança {guidance.confidence}
-                                      </span>
-                                    )}
-                                    {guidance.guardrailApplied && (
-                                      <span title={guidance.guardrailReason} style={{ color: "#fbbf24" }}>
-                                        Guardrail aplicado
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {guidance.decisionBasis?.length > 0 && !guidance.isResting && (
-                                  <div style={{ display: "grid", gap: "4px", marginTop: "8px" }}>
-                                    {guidance.decisionBasis.map((basis) => (
-                                      <p key={basis} style={{ margin: 0, color: "#cbd5e1", fontSize: "12px" }}>
-                                        {basis}
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {guidance.isResting && (
-                                  <div style={{ marginTop: "14px" }}>
-                                    <div
-                                      style={{
-                                        color: "#0ea5e9",
-                                        fontSize: "42px",
-                                        fontWeight: "bold",
-                                        lineHeight: "1",
-                                      }}
-                                    >
-                                      {formatTimer(restSeconds)}
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                        gap: "8px",
-                                        marginTop: "12px",
-                                      }}
-                                    >
-                                      <button type="button" onClick={() => adjustRestTimer(item.id, -15)}>
-                                        -15s
-                                      </button>
-                                      <button type="button" onClick={() => adjustRestTimer(item.id, 15)}>
-                                        +15s
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div style={{ overflowX: "auto", marginTop: "12px" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
-                                  <thead>
-                                    <tr style={{ color: "#777", textTransform: "uppercase", fontSize: "13px" }}>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Série</th>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Anterior</th>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Kg</th>
-                                      <th style={{ textAlign: "left", padding: "8px" }}>Reps</th>
-                                      <th style={{ textAlign: "center", padding: "8px" }}>Feita</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {rows.map(({ sourceSetNumber, displaySetNumber }) => {
-                                      const setFormKey = getSetFormKey(item.id, sourceSetNumber);
-                                      const currentSet = getCurrentSetForRow(item.id, displaySetNumber);
-                                      const rowForm = setForms[setFormKey] || {};
-                                      const rowSetType = getSetTypeForExerciseRow(
-                                        item,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const previousSet = getPreviousSetForExerciseRow(
-                                        item,
-                                        rows,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const setTypeMeta = getSetTypeMeta(rowSetType);
-                                      const visibleSetLabel = getVisibleSetLabel(
-                                        item,
-                                        rows,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const isCompleted = Boolean(currentSet);
-                                      const effortMeta = getEffortMetaFromSet(currentSet);
-                                      const restSecondsForRow = getRestSecondsForRow(setFormKey);
-                                      const plannedValues = getPlannedValuesForExerciseRow(
-                                        item,
-                                        rows,
-                                        sourceSetNumber,
-                                        displaySetNumber
-                                      );
-                                      const weightValue =
-                                        currentSet?.weight_used ?? rowForm.weight_used ?? plannedValues.weight;
-                                      const repsValue =
-                                        currentSet?.reps_completed ??
-                                        rowForm.reps_completed ??
-                                        plannedValues.reps;
-                                      const availableEffortOptions = getEffortOptionsForSet(rowSetType, repsValue);
-
-                                      return (
-                                        <tr
-                                          key={sourceSetNumber}
-                                          style={{
-                                            background: displaySetNumber % 2 === 0 ? "rgba(148, 163, 184, 0.12)" : "transparent",
-                                          }}
-                                        >
-                                          <td style={{ padding: "8px" }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                              <div style={{ position: "relative" }}>
-                                                <button
-                                                  type="button"
-                                                  disabled={isCompleted}
-                                                  onClick={() => toggleRestMenu(setFormKey)}
-                                                  title="Configurar descanso"
-                                                  style={{
-                                                    width: "30px",
-                                                    height: "30px",
-                                                    borderRadius: "6px",
-                                                    border: "1px solid #555",
-                                                    background: "transparent",
-                                                    color: "#999",
-                                                    cursor: isCompleted ? "default" : "pointer",
-                                                  }}
-                                                >
-                                                  ⋯
-                                                </button>
-
-                                                {openRestMenuBySet[setFormKey] && !isCompleted && (
-                                                  <div
-                                                    style={{
-                                                      position: "absolute",
-                                                      top: "36px",
-                                                      left: "0",
-                                                      zIndex: 10,
-                                                      minWidth: "180px",
-                                                      padding: "10px",
-                                                      border: "1px solid #555",
-                                                      borderRadius: "8px",
-                                                      background: "#111827",
-                                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-                                                    }}
-                                                  >
-                                                    <label style={{ display: "block", fontSize: "13px", color: "#cbd5e1" }}>
-                                                      Descanso após série
-                                                    </label>
-                                                    <input
-                                                      type="number"
-                                                      min="15"
-                                                      step="15"
-                                                      value={restSecondsForRow}
-                                                      onChange={(e) =>
-                                                        updateSetForm(setFormKey, "rest_seconds", e.target.value)
-                                                      }
-                                                      style={{ width: "100%", marginTop: "6px" }}
-                                                    />
-                                                    <div
-                                                      style={{
-                                                        display: "grid",
-                                                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                                        gap: "6px",
-                                                        marginTop: "8px",
-                                                      }}
-                                                    >
-                                                      {[60, 90, 120, 180].map((seconds) => (
-                                                        <button
-                                                          key={seconds}
-                                                          type="button"
-                                                          onClick={() => updateSetForm(setFormKey, "rest_seconds", seconds)}
-                                                          style={{ padding: "6px" }}
-                                                        >
-                                                          {formatTimer(seconds)}
-                                                        </button>
-                                                      ))}
-                                                    </div>
-
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => removeExerciseRow(item, sourceSetNumber, displaySetNumber)}
-                                                      style={{
-                                                        width: "100%",
-                                                        marginTop: "10px",
-                                                        padding: "8px",
-                                                        border: "1px solid #7f1d1d",
-                                                        borderRadius: "6px",
-                                                        background: "rgba(127, 29, 29, 0.18)",
-                                                        color: "#fca5a5",
-                                                        fontWeight: "bold",
-                                                        cursor: "pointer",
-                                                      }}
-                                                    >
-                                                      Remover série
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </div>
-
-                                              <div style={{ position: "relative" }}>
-                                                <button
-                                                  type="button"
-                                                  disabled={isCompleted}
-                                                  onClick={() => toggleSetTypeMenu(setFormKey)}
-                                                  title="Alterar tipo de série"
-                                                  style={{
-                                                    minWidth: "42px",
-                                                    height: "32px",
-                                                    borderRadius: "8px",
-                                                    border: "1px solid #334155",
-                                                    background: "rgba(15, 23, 42, 0.7)",
-                                                    color: setTypeMeta.color,
-                                                    fontWeight: "bold",
-                                                    cursor: isCompleted ? "default" : "pointer",
-                                                  }}
-                                                >
-                                                  {visibleSetLabel}
-                                                </button>
-
-                                                {openSetTypeMenuBySet[setFormKey] && !isCompleted && (
-                                                  <div
-                                                    style={{
-                                                      position: "absolute",
-                                                      top: "38px",
-                                                      left: "0",
-                                                      zIndex: 10,
-                                                      minWidth: "150px",
-                                                      padding: "8px",
-                                                      border: "1px solid #555",
-                                                      borderRadius: "8px",
-                                                      background: "#111827",
-                                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-                                                    }}
-                                                  >
-                                                    {SET_TYPES.map((setType) => (
-                                                      <button
-                                                        key={setType.value}
-                                                        type="button"
-                                                        onClick={() => selectSetType(setFormKey, setType.value)}
-                                                        style={{
-                                                          display: "flex",
-                                                          alignItems: "center",
-                                                          gap: "8px",
-                                                          width: "100%",
-                                                          padding: "9px 10px",
-                                                          border: "none",
-                                                          borderRadius: "6px",
-                                                          background:
-                                                            rowSetType === setType.value
-                                                              ? "rgba(148, 163, 184, 0.18)"
-                                                              : "transparent",
-                                                          color: "#e5e7eb",
-                                                          fontWeight: "bold",
-                                                          textAlign: "left",
-                                                          cursor: "pointer",
-                                                        }}
-                                                      >
-                                                        <span style={{ color: setType.color, minWidth: "22px" }}>
-                                                          {setType.shortLabel}
-                                                        </span>
-                                                        {setType.label}
-                                                      </button>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </td>
-                                          <td style={{ padding: "8px", color: "#777" }}>
-                                            {formatPreviousSet(previousSet)}
-                                          </td>
-                                          <td style={{ padding: "8px" }}>
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={weightValue}
-                                              disabled={isCompleted}
-                                              onChange={(e) => updateSetForm(setFormKey, "weight_used", e.target.value)}
-                                              style={{ width: "90px" }}
-                                            />
-                                          </td>
-                                          <td style={{ padding: "8px" }}>
-                                            <input
-                                              type="number"
-                                              value={repsValue}
-                                              disabled={isCompleted}
-                                              onChange={(e) => updateSetForm(setFormKey, "reps_completed", e.target.value)}
-                                              style={{ width: "78px" }}
-                                            />
-                                          </td>
-                                          <td style={{ padding: "8px", textAlign: "center" }}>
-                                            <div
-                                              style={{
-                                                position: "relative",
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: "8px",
-                                              }}
-                                            >
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (!isCompleted) {
-                                                    toggleCompletionMenu(setFormKey);
-                                                  }
-                                                }}
-                                                style={{
-                                                  minWidth: "42px",
-                                                  height: "34px",
-                                                  borderRadius: "8px",
-                                                  border: "1px solid #4b5563",
-                                                  background: isCompleted ? "#16a34a" : "transparent",
-                                                  color: isCompleted ? "#fff" : "#cbd5e1",
-                                                  fontWeight: "bold",
-                                                  cursor: isCompleted ? "default" : "pointer",
-                                                }}
-                                              >
-                                                ✓
-                                              </button>
-
-                                              {effortMeta && (
-                                                <span
-                                                  style={{
-                                                    color: effortMeta.color,
-                                                    fontWeight: "bold",
-                                                    whiteSpace: "nowrap",
-                                                  }}
-                                                >
-                                                  {effortMeta.label}
-                                                </span>
-                                              )}
-
-                                              {openCompletionMenuBySet[setFormKey] && !isCompleted && (
-                                                <div
-                                                  style={{
-                                                    position: "absolute",
-                                                    top: "40px",
-                                                    right: "0",
-                                                    zIndex: 10,
-                                                    minWidth: "150px",
-                                                    padding: "8px",
-                                                    border: "1px solid #555",
-                                                    borderRadius: "8px",
-                                                    background: "#111827",
-                                                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-                                                  }}
-                                                >
-                                                  {availableEffortOptions.map((option) => (
-                                                    <button
-                                                      key={option.value}
-                                                      type="button"
-                                                      onClick={() => saveSet(item, sourceSetNumber, displaySetNumber, option)}
-                                                      style={{
-                                                        display: "block",
-                                                        width: "100%",
-                                                        padding: "9px 10px",
-                                                        border: "none",
-                                                        borderRadius: "6px",
-                                                        background: "transparent",
-                                                        color: option.color,
-                                                        fontWeight: "bold",
-                                                        textAlign: "left",
-                                                        cursor: "pointer",
-                                                      }}
-                                                    >
-                                                      {option.label}
-                                                    </button>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-
-                              <button onClick={() => addExerciseRow(item)} style={{ marginTop: "12px", width: "100%" }}>
-                                + Adicionar Série
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <ProgramScreen
+          program={program}
+          athleteDashboard={athleteDashboard}
+          trainingBlock={trainingBlock}
+          weeklyFeedback={weeklyFeedback}
+          adaptivePlan={adaptivePlan}
+          adaptiveDecisions={adaptiveDecisions}
+          applyingAdaptiveById={applyingAdaptiveById}
+          latestWorkoutProgression={latestWorkoutProgression}
+          latestAiCoach={latestAiCoach}
+          activeSessionByWorkout={activeSessionByWorkout}
+          sessionNotes={sessionNotes}
+          openWorkoutId={openWorkoutId}
+          workoutStatusMessage={workoutStatusMessage}
+          setSessionNotes={setSessionNotes}
+          setForms={setForms}
+          openExerciseById={openExerciseById}
+          openSubstitutionByExerciseId={openSubstitutionByExerciseId}
+          openWeightScaleByExerciseId={openWeightScaleByExerciseId}
+          substitutionOptionsByExerciseId={substitutionOptionsByExerciseId}
+          completedCalibrationByExerciseId={completedCalibrationByExerciseId}
+          isReplacingExerciseById={isReplacingExerciseById}
+          isSavingWeightScaleByExerciseId={isSavingWeightScaleByExerciseId}
+          isSavingCalibrationByExerciseId={isSavingCalibrationByExerciseId}
+          restTimers={restTimers}
+          openRestMenuBySet={openRestMenuBySet}
+          openSetTypeMenuBySet={openSetTypeMenuBySet}
+          openCompletionMenuBySet={openCompletionMenuBySet}
+          exportUserTrainingData={exportUserTrainingData}
+          recordAdaptiveDecision={recordAdaptiveDecision}
+          getActiveWorkoutId={getActiveWorkoutId}
+          getWorkoutSessionStats={getWorkoutSessionStats}
+          getExerciseLogs={getExerciseLogs}
+          getWeightScaleForm={getWeightScaleForm}
+          getCalibrationState={getCalibrationState}
+          getCalibrationForm={getCalibrationForm}
+          exerciseNeedsCalibration={exerciseNeedsCalibration}
+          getExerciseRows={getExerciseRows}
+          getGuidanceForExercise={getGuidanceForExercise}
+          getExerciseImageUrl={getExerciseImageUrl}
+          getCalibrationColorOptions={getCalibrationColorOptions}
+          getCalibrationColorMeta={getCalibrationColorMeta}
+          formatTimer={formatTimer}
+          toggleWorkout={toggleWorkout}
+          startWorkoutSession={startWorkoutSession}
+          finishWorkoutSession={finishWorkoutSession}
+          toggleExercise={toggleExercise}
+          toggleExerciseSubstitutions={toggleExerciseSubstitutions}
+          toggleWeightScaleMenu={toggleWeightScaleMenu}
+          replaceExercise={replaceExercise}
+          updateWeightScaleForm={updateWeightScaleForm}
+          updateMicroWeightScaleRow={updateMicroWeightScaleRow}
+          addMicroWeightScaleRow={addMicroWeightScaleRow}
+          removeMicroWeightScaleRow={removeMicroWeightScaleRow}
+          saveWeightScale={saveWeightScale}
+          updateCalibrationForm={updateCalibrationForm}
+          saveExerciseCalibration={saveExerciseCalibration}
+          adjustRestTimer={adjustRestTimer}
+          addExerciseRow={addExerciseRow}
+          setTableHandlers={{
+            getSetFormKey,
+            getCurrentSetForRow,
+            getSetTypeForExerciseRow,
+            getPreviousSetForExerciseRow,
+            getSetTypeMeta,
+            getVisibleSetLabel,
+            getEffortMetaFromSet,
+            getRestSecondsForRow,
+            getPlannedValuesForExerciseRow,
+            getEffortOptionsForSet,
+            formatPreviousSet,
+            formatTimer,
+            updateSetForm,
+            toggleRestMenu,
+            toggleSetTypeMenu,
+            toggleCompletionMenu,
+            selectSetType,
+            removeExerciseRow,
+            saveSet,
+            undoSet,
+          }}
+        />
       )}
     </div>
   );

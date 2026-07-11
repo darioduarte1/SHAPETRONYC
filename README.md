@@ -74,10 +74,9 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 32 testes a passar
-- Frontend: lint a passar
+- Backend: 77 testes a passar
 - Frontend: build a passar
-- Teste manual no browser integrado concluído com sucesso, incluindo dashboard do Sprint 13, histórico por exercício e ramp-up progressivo de aquecimento
+- Motor de recomendações: 34 testes a passar
 
 ## Estado Atual
 
@@ -95,20 +94,45 @@ Implementado:
 - Aquecimento calculado a partir da primeira série normal prevista
 - Ramp-up progressivo com múltiplos aquecimentos quando a carga e o exercício justificam
 - AI Coach série a série com ações fechadas e guardrails
-- Scores de fadiga, recuperação e prontidão
+- Scores de fadiga local, fadiga global, estímulo, custo de fadiga, recuperação e prontidão
+- Estados estruturados por exercício: continuar, ajustar carga, backoff, série final, adicionar volume, terminar, safety stop e deload requerido
+- Classificação de exercício por prioridade: principal, secundário, acessório e finisher
+- Regra transversal das 3 séries de trabalho válidas antes de terminar um exercício, salvo risco de segurança
+- Classificação de séries como produtivas, fracas, inválidas por segurança ou aquecimento
+- Classificação contextual da falha: produtiva, aceitável, má ou perigosa
+- Ajuste de carga sempre adaptado à escala real da máquina do exercício
 - Interpretação de feedback do utilizador durante o treino
 - Timer de descanso
 - Dropdowns por dia e por exercício
 - Bloqueio dos restantes dias durante treino ativo
 - Resumo simples da sessão em tempo real
+- Memória persistente por atleta/exercício
+- Painel de memória do atleta no dashboard
+- Plano adaptativo com recomendações por exercício
+- Ações adaptativas fechadas: proteger recuperação, aumentar margem, progredir carga e manter plano
+- Endpoint de plano adaptativo baseado na memória do atleta, dashboard e programa ativo
+- Aplicação controlada de recomendações adaptativas ao plano
+- Histórico auditável de decisões adaptativas aplicadas, adiadas e ignoradas
+- Feedback semanal com leitura de fadiga, watchlist, RIR recente e tendência de volume
+- Sugestão de deload quando há sinais persistentes de recuperação
+- Protocolo de deload com volume reduzido, RIR alvo e motivos visíveis
+- Blocos de treino com fase atual, volume semanal, RIR médio e recomendação de periodização
+- Histórico persistente de blocos de treino por atleta
+- Demo visual da Beatriz com 45 treinos completos em `frontend/public/beatriz-evolution-demo.html`
 - Recomendações para o próximo treino após terminar uma sessão
 - AI Coach pós-treino com fallback local quando não há chave OpenAI
 - IA externa opcional para decisões durante o treino com OpenAI ou Ollama
 - Demo visual do Sprint 12 em `frontend/public/sprint12-ai-demo.html`
+- Treino experimental obrigatório por exercício quando o atleta ainda não tem dados fiáveis
+- Escala de pesos por atleta e exercício, com placas principais e múltiplas bolachas/extras
+- Bloqueio do treino normal até existir escala da máquina e calibração inicial
+- Botão de check reversível: desfazer uma série apaga o registo e limpa decisões dependentes
+- Botão experimental no menu principal para apagar atletas de teste e todos os dados associados
+- Remoção de código legado não utilizado: app antiga `workouts`, assets iniciais do template Vite/React e wrapper antigo de recomendação híbrida
 
 Em preparação:
-- Dashboard completo
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
+- Aplicação controlada do deload ao plano
 - Polimento da experiência visual do dashboard e análise semanal
 
 ## Fluxo Principal
@@ -126,13 +150,29 @@ Em preparação:
 
 ### Accounts
 - `POST /api/accounts/create-user/`
+- `DELETE /api/accounts/experimental/delete-users/`
 - `GET /api/accounts/profiles/`
 - `POST /api/accounts/profiles/`
+- `GET /api/accounts/profiles/<profile_id>/export/`
+
+### Exercises
+- `GET /api/exercises/`
+- `GET /api/exercises/<id>/`
+- `PATCH /api/exercises/<id>/`
 
 ### Training
 - `POST /api/training/generate-program/`
 - `GET /api/training/program/<profile_id>/`
 - `GET /api/training/dashboard/<profile_id>/`
+- `GET /api/training/adaptive-plan/<profile_id>/`
+- `GET /api/training/adaptive-plan/decisions/<profile_id>/`
+- `POST /api/training/adaptive-plan/apply/`
+- `GET /api/training/weekly-feedback/<profile_id>/`
+- `GET /api/training/training-blocks/<profile_id>/`
+- `GET /api/training/exercise-calibration/<profile_id>/<training_exercise_id>/`
+- `POST /api/training/exercise-calibration/`
+- `GET /api/training/exercise-weight-scale/<profile_id>/<training_exercise_id>/`
+- `PATCH /api/training/exercise-weight-scale/<profile_id>/<training_exercise_id>/`
 - `POST /api/training/start-session/`
 - `POST /api/training/finish-session/`
 - `GET /api/training/sessions/<profile_id>/`
@@ -140,6 +180,7 @@ Em preparação:
 ### Progression
 - `GET /api/progression/set-logs/`
 - `POST /api/progression/set-logs/`
+- `DELETE /api/progression/set-logs/<id>/`
 - `GET /api/progression/exercise-history/`
 
 ### Recommendations
@@ -473,31 +514,259 @@ Entregue:
   - reps descem à medida que a carga se aproxima da primeira série normal
 - Testes da regra de ramp-up e validação visual no browser integrado
 
-## Roadmap
-
 ### Sprint 14 - Memória de Treino
 
 Objetivo:
-Criar contexto acumulado ao longo do tempo.
+Criar contexto acumulado ao longo do tempo para que a app reconheça padrões por atleta e por exercício, em vez de depender apenas da sessão atual.
 
-Ideias:
-- Preferências do atleta
-- Exercícios problemáticos
-- Histórico de fadiga
-- Tendências por grupo muscular
-- Recomendações com base em múltiplas semanas
+Entregue:
+- Modelo `AthleteTrainingMemory`
+- Migration `training/migrations/0003_athletetrainingmemory.py`
+- Serviço `training/services/training_memory.py`
+- Memórias persistentes por utilizador, exercício e tipo:
+  - progressão
+  - watchlist
+  - padrão de esforço
+- Atualização automática da memória ao consultar o dashboard
+- Atualização automática da memória ao terminar uma sessão
+- Inclusão de `training_memories` na resposta do dashboard
+- Painel "Memória do atleta" no frontend
+- Evidências por memória para explicar o motivo do sinal
+- Confiança por memória com base no número de sessões analisadas
+- Testes de criação, persistência e exposição das memórias no dashboard
 
 ### Sprint 15 - Sistema Adaptativo Completo
 
 Objetivo:
-Permitir que o plano se ajuste automaticamente com base no histórico, recuperação e performance.
+Criar a primeira camada de adaptação do plano com base no programa ativo, dashboard do atleta e memória persistente por exercício.
+
+Entregue:
+- Serviço `training/services/adaptive_plan.py`
+- Endpoint `GET /api/training/adaptive-plan/<profile_id>/`
+- Recomendações adaptativas por exercício do programa ativo
+- Leitura direta da memória de treino:
+  - `PROGRESSION` gera sugestão de progressão controlada de carga
+  - `WATCHLIST` gera proteção de recuperação, mais margem e possível redução de volume
+  - `EFFORT_PATTERN` gera aumento de margem antes de nova progressão
+- Resumo por plano com contagem de ações e prioridades altas
+- Painel "Plano adaptativo" no frontend
+- Evidência visível por recomendação para explicar o motivo da decisão
+- Primeira fase sem mutação automática do plano: a app recomenda, mostra o motivo e mantém o controlo explícito
+- Modelo `AdaptivePlanDecision`
+- Migration `training/migrations/0004_adaptiveplandecision.py`
+- Endpoint `POST /api/training/adaptive-plan/apply/`
+- Endpoint `GET /api/training/adaptive-plan/decisions/<profile_id>/`
+- Botões no frontend para aplicar, adiar ou ignorar recomendações
+- Aplicação controlada de séries e RIR alvo ao exercício selecionado
+- Registo auditável do ajuste de carga sugerido para o próximo treino
+- Histórico "Últimas decisões" no painel do plano adaptativo
+- Testes do serviço adaptativo, endpoints e decisões aplicadas/adiadas
+- Demo visual da Beatriz com 15 Upper, 15 Lower e 15 Full Body
+
+### Sprint 16 - Deload e Feedback Semanal
+
+Objetivo:
+Transformar sinais persistentes de fadiga, watchlist e consistência em deloads sugeridos e feedback semanal.
+
+Entregue:
+- Serviço `training/services/weekly_feedback.py`
+- Endpoint `GET /api/training/weekly-feedback/<profile_id>/`
+- Feedback semanal calculado a partir do dashboard, memória e sessões recentes
+- Estados semanais:
+  - progressão saudável
+  - monitorizar recuperação
+  - deload recomendado
+- Detecção de sinais de deload:
+  - falhas recentes acumuladas
+  - exercício em watchlist com risco elevado
+  - várias memórias persistentes de atenção
+  - padrão de esforço perto da falha
+- Protocolo sugerido de deload:
+  - 1 semana
+  - volume total a cerca de 70%
+  - RIR alvo 3+
+  - evitar falha muscular
+- Painel "Feedback semanal" no frontend
+- Testes do serviço e endpoint
+
+Próximos passos:
+- Aplicar deload sugerido ao plano com confirmação explícita
+- Guardar histórico de semanas de deload
+- Melhorar a visualização semanal no dashboard
+
+### Sprint 17 - Blocos de Treino e Periodização
+
+Objetivo:
+Organizar a evolução do atleta em blocos, com revisão de semanas de carga, deload e retorno à progressão.
+
+Entregue:
+- Modelo `TrainingBlock`
+- Migration `training/migrations/0005_trainingblock.py`
+- Serviço `training/services/training_blocks.py`
+- Endpoint `GET /api/training/training-blocks/<profile_id>/`
+- Criação/atualização automática do bloco ativo a partir dos treinos recentes
+- Janela inicial de bloco com 4 semanas
+- Fases de bloco:
+  - `BUILD`
+  - `DELOAD`
+  - `RETURN`
+- Resumo do bloco:
+  - treinos concluídos
+  - volume total
+  - séries totais
+  - falhas
+  - RIR médio
+  - volume semanal
+- Recomendação de periodização por fase
+- Integração com o feedback semanal para mudar fase quando há deload recomendado
+- Painel "Bloco de treino" no frontend
+- Testes do serviço e endpoint
+
+Adicional entregue no Sprint 17:
+- Catálogo expandido de exercícios com nome localizado em português e imagem associada
+- Migrations `exercises/migrations/0003_exercise_image_localized_name.py` e `exercises/migrations/0004_exercise_crop_image_urls.py`
+- Campos `localized_name` e `image_url` no modelo `Exercise`
+- Imagens dos exercícios guardadas em `frontend/public/exercise-screens/` e recortes em `frontend/public/exercise-crops/`
+- Endpoint `GET /api/training/exercise-substitutions/<training_exercise_id>/`
+- Endpoint `POST /api/training/replace-exercise/`
+- Serviço `training/services/exercise_substitution.py`
+- Substituição de exercício limitada ao mesmo grupo muscular
+- Bloqueio de trocas depois de existirem séries registadas nesse exercício durante a sessão
+- Foto do exercício apresentada na linha do treino
+
+### Sprint 18 - Calibração Inicial e Motor de Decisão por Exercício
+
+Objetivo:
+Evitar recomendações aleatórias quando o atleta ainda não tem histórico e transformar o primeiro contacto com cada máquina num treino experimental controlado.
+
+Entregue:
+- Modelo `ExerciseCalibration`
+- Modelo `UserExerciseWeightScale`
+- Migrations `training/migrations/0006_exercisecalibration.py` e `training/migrations/0007_userexerciseweightscale.py`
+- Serviço `training/services/exercise_calibration.py`
+- Serviço `training/services/user_exercise_weight_scale.py`
+- Escala de pesos guardada por atleta e exercício, não globalmente no atleta
+- Escala com placas principais e múltiplas bolachas/extras com quantidade e peso decimal
+- Bloqueio do treino normal quando o exercício ainda precisa de calibração
+- Bloqueio do treino experimental até a escala da máquina estar preenchida
+- Protocolo experimental de 3 séries com seleção por cor:
+  - vermelho: falha antes das 8 reps
+  - laranja: entre 9 e 12 reps
+  - amarelo: entre 13 e 14 reps
+  - verde: acima de 15 reps
+- Timer fixo de 2 minutos entre séries experimentais
+- Conclusão da máquina após calibração no dia atual, sem passar automaticamente para treino normal
+- Primeira sessão normal após calibração pré-preenche apenas aquecimento e primeira série de trabalho
+- Séries seguintes são calculadas apenas após o desempenho real da série anterior
+- Botão de check reversível para corrigir séries registadas
+- Endpoint de remoção de `SetLog` para desfazer séries confirmadas
+- Regra especial: desfazer aquecimento não apaga a primeira série normal, porque ela vem do histórico/calibração
+- Botão experimental no menu principal para apagar utilizadores normais e dados dependentes, preservando contas administrativas e a biblioteca de exercícios
+- Limpeza de código legado não utilizado:
+  - remoção da app antiga `workouts`
+  - remoção de assets iniciais do Vite/React não importados
+  - remoção do wrapper antigo `hybrid_recommendation_engine.py`
+
+Motor de decisão atualizado:
+- Regra central: antes de 3 séries de trabalho válidas, adaptar carga em vez de terminar, salvo segurança
+- Classificação de falha:
+  - `productive_failure`
+  - `acceptable_failure`
+  - `bad_failure`
+  - `danger_failure`
+- Classificação de série:
+  - `valid_productive_set`
+  - `valid_weak_set`
+  - `invalid_safety_set`
+  - `warmup_set`
+- Ajustes de carga por zona relativa à faixa alvo:
+  - muito abaixo: reduzir 25-35%
+  - abaixo: reduzir 10-25%
+  - ligeiramente abaixo: manter ou reduzir 5-10%
+  - dentro da faixa: manter ou pequeno backoff se necessário
+  - acima da faixa: subir progressivamente
+- Todos os pesos recomendados são ajustados à escala real da máquina
+- Estados estruturados do exercício:
+  - `CONTINUE`
+  - `ADJUST_LOAD`
+  - `BACKOFF`
+  - `FINAL_SET`
+  - `ADD_VOLUME`
+  - `END_EXERCISE`
+  - `SAFETY_STOP`
+  - `DELOAD_REQUIRED`
+- Classificação de prioridade do exercício:
+  - `PRIMARY`
+  - `SECONDARY`
+  - `ACCESSORY`
+  - `FINISHER`
+- Limites de séries por prioridade, tipo de exercício e nível do atleta
+- Scores adicionais:
+  - fadiga local
+  - fadiga global
+  - estímulo estimado
+  - custo de fadiga
+  - confiança numérica
+- Guardrails da IA atualizados para impedir que falha no topo da faixa termine o exercício cedo demais
+- Quarta, quinta e sexta séries dependem de prioridade, histórico, fadiga e rácio estímulo/fadiga
+- Testes cobrindo calibração, escala, desfazer séries, falha contextual, limites de volume e estados estruturados
+- Painel de alternativas no frontend com imagem, nome, equipamento e padrão de movimento
+- Testes para alternativas por grupo muscular, troca válida e rejeição de troca inválida
+- Ecrã inicial atualizado com entrada em perfil existente por username
+- Ecrã de criação de perfil redesenhado com seleção visual de género, nível e dias por semana
+- Preservação da estrutura de aquecimento entre treinos repetidos
+- Correção para impedir que W2/W3 sejam convertidas em séries normais no treino seguinte
+- Separação entre tipo de série escolhido manualmente e tipo sugerido automaticamente pelo coach, evitando que sugestões automáticas substituam W2/W3 preservadas
+- Séries de aquecimento sem RIR e sem falha registada
+- API limpa automaticamente RIR/falha em séries `WARMUP`
+- IA local e contexto enviado ao modelo tratam aquecimento sem RIR, usando carga, técnica, histórico e distância até à primeira série normal
+- Check direto em séries de aquecimento no frontend, sem menu de esforço
+- Testes para estrutura de aquecimento preservada e remoção de RIR em `WARMUP`
+- Configuração de escala de pesos por exercício, com placas principais e bolachas/extras
+- Recomendações de carga, aquecimento, backoff e progressão ajustadas aos pesos realmente disponíveis na máquina
+- Contexto da IA atualizado com escala de carga do exercício
+- Endpoint de detalhe de exercício para atualizar escala de pesos
+- Regras de progressão da IA revistas:
+  - objetivo central passa a ser 12 reps consistentes com RIR controlado
+  - subir carga exige 12 reps, RIR >= 3, sem falha, sem dor, técnica boa e próximo peso disponível na escala registada
+  - saltos de máquina acima de 10% só são aceites com RIR >= 4
+  - sem escala de pesos registada para o exercício, a IA não inventa incrementos e mantém a carga
+  - 12 reps com RIR 1-2 mantêm a carga para consolidar
+  - menos de 10 reps, falha, RIR 0 ou queda grande de reps baixam carga ou terminam o exercício
+  - falhas recentes no próximo peso bloqueiam nova subida
+  - quando a performance permitiria avaliar subida mas a escala está vazia, a app mantém a carga e pede ao atleta para preencher a escala
+  - séries extra só são sugeridas quando o plano foi cumprido com margem clara e histórico sem excesso de fadiga
+- Guardrails da IA impedem que OpenAI/Ollama subam carga quando o motor local não autorizou progressão
+- Modelo `ExerciseCalibration` para guardar baseline por atleta e exercício
+- Migration `training/migrations/0006_exercisecalibration.py`
+- Serviço `training/services/exercise_calibration.py`
+- Bloqueio do treino normal quando o atleta ainda não tem peso de trabalho fiável no exercício
+- Modo experimental de calibração com registo de peso, reps, RIR e notas
+- Calibração só fica válida quando existe escala de pesos preenchida
+- Recomendações iniciais pós-calibração usam o peso de trabalho estimado em vez de valores genéricos
+- Export JSON inclui calibrações de exercício do atleta
+- Botão temporário "Exportar histórico" no programa do atleta
+- Export JSON do atleta com perfil, programas, treinos, exercícios, sessões, séries, memórias, decisões adaptativas e blocos de treino
+
+Próximos passos do Sprint 17:
+- Guardar blocos concluídos quando um novo bloco começa
+- Comparar bloco atual com bloco anterior
+- Aplicar semana de deload ao plano e medir retorno pós-deload
+- Criar recomendações de novo bloco com base na resposta do atleta
+- Rever/substituir imagens dos exercícios quando forem enviadas versões finais
+
+## Roadmap
+
+### Sprint 18 - Periodização Aplicada
+
+Objetivo:
+Transformar blocos e feedback semanal em alterações aplicáveis ao plano ao longo de ciclos completos.
 
 Ideias:
-- Ajuste automático de volume
-- Ajuste automático de carga
-- Alteração de exercícios
-- Deloads sugeridos
-- Feedback semanal
+- Encerrar bloco e abrir novo bloco
+- Comparação pré e pós-deload
+- Ajustes por bloco para volume, carga e RIR
+- Revisão de resposta individual por exercício
 
 ## Estrutura do Projeto
 
@@ -515,7 +784,7 @@ SHAPETRONYC/
 │   ├── public/
 │   ├── src/
 │   │   ├── App.jsx
-│   │   ├── App.css
+│   │   ├── index.css
 │   │   └── main.jsx
 │   └── package.json
 └── README.md
@@ -525,8 +794,16 @@ SHAPETRONYC/
 
 Decisões atuais:
 - O alvo principal de progressão é 12 reps.
-- O incremento padrão de carga é 2.5kg.
-- Séries abaixo de 12 reps em série normal são tratadas como sinal de falha ou fadiga.
+- Exercícios sem histórico fiável ficam bloqueados para treino normal até existir calibração inicial.
+- A calibração inicial pede escala da máquina e uma ou mais séries experimentais controladas.
+- O peso de trabalho inicial vem da calibração do atleta naquele exercício, não de valores genéricos.
+- A subida de carga exige 12 reps com RIR >= 3, sem falha, sem dor, boa técnica e próximo peso disponível na escala registada do exercício.
+- Sem escala de pesos registada, a IA não cria incrementos de carga ao acaso.
+- Se a performance sugerir possível subida mas a escala estiver vazia, a app pede ao atleta para preencher placas e bolachas antes de decidir.
+- Saltos de carga acima de 10% exigem RIR >= 4.
+- 12 reps com RIR 1-2 mantêm a carga.
+- Menos de 10 reps, falha muscular, RIR 0 ou queda de reps >= 25% são sinal para baixar carga ou terminar o exercício.
+- Séries de 10-11 reps sem falha consolidam antes de progredir.
 - Séries de aquecimento não devem gerar progressão direta de carga.
 - Drop sets são registadas, mas não são usadas como base principal para progressão do próximo treino.
 

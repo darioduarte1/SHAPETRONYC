@@ -1,3 +1,10 @@
+# =============================================================================
+# settings.py
+# -----------------------------------------------------------------------------
+# Configuração central do backend Django.
+# Define apps instaladas, base de dados, permissões, CORS, Django REST Framework e opções globais usadas por todo o servidor.
+# É lido automaticamente por manage.py, ASGI, WSGI, testes e qualquer processo que arranque o backend.
+# =============================================================================
 """
 Django settings for config project.
 
@@ -43,7 +50,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'exercises',
-    'workouts',
     'progression',
     'recommendations',
     'programs',

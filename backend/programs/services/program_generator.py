@@ -1,3 +1,10 @@
+# =============================================================================
+# program_generator.py
+# -----------------------------------------------------------------------------
+# Serviço que cria programas de treino a partir do perfil do atleta.
+# É usado quando um novo perfil precisa de receber uma estrutura inicial de workouts e exercícios.
+# Traduz objetivo, nível, frequência semanal e catálogo de exercícios num plano treinável.
+# =============================================================================
 def generate_program_structure(goal, level, days_per_week):
     if goal == "HYPERTROPHY":
         return generate_hypertrophy_program(level, days_per_week)

@@ -1,3 +1,10 @@
+# =============================================================================
+# training_generator.py
+# -----------------------------------------------------------------------------
+# Serviço que gera estruturas de treino dentro da app training.
+# É usado para preparar sessões e dados derivados do plano do atleta.
+# Complementa a geração de programas com informação operacional para treino real.
+# =============================================================================
 from programs.services.program_generator import generate_program_structure
 from training.models import (
     TrainingProgram,

@@ -1,3 +1,10 @@
+# =============================================================================
+# asgi.py
+# -----------------------------------------------------------------------------
+# Expõe a aplicação Django em modo ASGI.
+# É usado por servidores compatíveis com ASGI quando o backend precisa de suportar execução assíncrona ou deploy moderno.
+# Carrega config.settings e entrega o objeto application ao servidor.
+# =============================================================================
 """
 ASGI config for config project.
 

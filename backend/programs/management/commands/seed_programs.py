@@ -1,3 +1,10 @@
+# =============================================================================
+# seed_programs.py
+# -----------------------------------------------------------------------------
+# Comando de gestão para criar programas base no sistema.
+# É executado manualmente através do manage.py quando é necessário preparar templates ou exemplos de treino.
+# Ajuda a iniciar a app com estruturas de programa reutilizáveis.
+# =============================================================================
 from django.core.management.base import BaseCommand
 
 from exercises.models import Exercise

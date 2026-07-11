@@ -1,3 +1,10 @@
+# =============================================================================
+# serializers.py
+# -----------------------------------------------------------------------------
+# Transforma programas, workouts e exercícios planeados em JSON para a API.
+# É usado pelas views para devolver ao frontend a estrutura completa do plano de treino.
+# Também organiza dados relacionados para a interface poder renderizar treinos e exercícios.
+# =============================================================================
 from rest_framework import serializers
 
 from .models import ProgramTemplate, WorkoutTemplate, WorkoutExerciseTemplate
