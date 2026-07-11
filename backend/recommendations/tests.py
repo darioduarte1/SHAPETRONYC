@@ -567,6 +567,43 @@ class TrainingCoachEngineTests(SimpleTestCase):
         self.assertEqual(decision["action"], "maintain_weight")
         self.assertEqual(decision["recommended_weight"], 46)
 
+    @override_settings(AI_TRAINING_DECISION_PROVIDER="local")
+    def test_local_training_decision_includes_decision_envelope(self):
+        local_decision = {
+            "recommended_weight": 50,
+            "target_reps": 12,
+            "recommended_rest_seconds": 90,
+            "next_set_type": "WORKING",
+            "exercise_status": "continue",
+            "action": "maintain_weight",
+            "reason": "Local",
+            "guidance_title": "Mantém carga",
+            "guidance_message": "Repete a carga com qualidade.",
+            "confidence": "média",
+            "decision_basis": [],
+            "guardrails": {"block_increase": True, "must_stop": False},
+            "context": {"working_set_count": 1, "planned_sets": 3},
+        }
+
+        decision = generate_ai_training_decision(
+            local_decision,
+            {
+                "total_sets": 3,
+                "exercise_context": {
+                    "main_weight_options": [45, 50, 55],
+                    "micro_weight_options": [],
+                },
+            },
+        )
+
+        envelope = decision["decision_envelope"]
+        self.assertEqual(envelope["strategy"], "rules_decide_ai_adjusts_inside_rules")
+        self.assertEqual(envelope["validation"]["status"], "local_only")
+        self.assertTrue(envelope["ai_permissions"]["can_change_message"])
+        self.assertFalse(envelope["ai_permissions"]["can_increase_weight"])
+        self.assertEqual(envelope["safety_constraints"]["local_recommended_weight"], 50)
+        self.assertEqual(envelope["final_decision"]["recommended_weight"], 50)
+
 
     @override_settings(
         OPENAI_API_KEY="test-key",
@@ -608,6 +645,8 @@ class TrainingCoachEngineTests(SimpleTestCase):
         self.assertEqual(decision["llm_status"], "llm_enabled")
         self.assertEqual(decision["next_set_type"], "WARMUP")
         self.assertEqual(decision["recommended_weight"], 42.5)
+        self.assertEqual(decision["decision_envelope"]["validation"]["status"], "ai_adjustment_accepted")
+        self.assertEqual(decision["decision_envelope"]["ai_decision"]["recommended_weight"], 42.5)
 
     @override_settings(
         AI_TRAINING_DECISION_PROVIDER="ollama",
@@ -650,6 +689,8 @@ class TrainingCoachEngineTests(SimpleTestCase):
         self.assertEqual(decision["recommended_weight"], 37.5)
         self.assertTrue(decision["guardrail_applied"])
         self.assertIn("12 reps", decision["guardrail_reason"])
+        self.assertEqual(decision["decision_envelope"]["validation"]["status"], "guardrail_adjusted")
+        self.assertTrue(decision["decision_envelope"]["validation"]["guardrail_applied"])
 
     @override_settings(
         AI_TRAINING_DECISION_PROVIDER="ollama",
@@ -742,6 +783,8 @@ class TrainingCoachEngineTests(SimpleTestCase):
         generate_ai_training_decision(local_decision, {"history_sets": history_sets})
 
         context = mock_request.call_args.args[0]
+        self.assertIn("ai_permissions", context)
+        self.assertIn("safety_constraints", context)
         self.assertEqual(len(context["recent_history_sets"]), 25)
         self.assertEqual(context["recent_history_sets"][0]["weight"], 50)
         self.assertIn("notes", context["recent_history_sets"][0])

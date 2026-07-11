@@ -179,9 +179,178 @@ def _compact_decision(local_decision):
     }
 
 
+def _available_weights_from_context(exercise_context):
+    scale = get_exercise_weight_scale(exercise_context)
+
+    return {
+        "configured": scale["configured"],
+        "main_weight_options": scale["main_weight_options"],
+        "micro_weight_options": scale["micro_weight_options"],
+        "available_weights": scale["available_weights"],
+    }
+
+
+def _build_ai_permissions(local_decision, request_context):
+    guardrails = local_decision.get("guardrails", {})
+    context = local_decision.get("context", {})
+    local_action = local_decision.get("action")
+    exercise_status = local_decision.get("exercise_status")
+    next_set_type = local_decision.get("next_set_type")
+    failure_class = context.get("failure_class")
+    working_set_count = context.get("working_set_count", 0)
+    planned_sets = context.get("planned_sets", request_context.get("total_sets") or 3)
+    may_increase = (
+        local_action in {"increase_weight", "increase_volume"}
+        and not guardrails.get("block_increase")
+        and not guardrails.get("must_stop")
+        and exercise_status != "complete"
+    )
+    may_stop = (
+        exercise_status == "complete"
+        or guardrails.get("must_stop")
+        or not (
+            failure_class in {"productive_failure", "acceptable_failure"}
+            and working_set_count < planned_sets
+        )
+    )
+
+    return {
+        "can_change_message": True,
+        "can_change_reason": True,
+        "can_change_confidence": True,
+        "can_change_rest_seconds": exercise_status != "complete",
+        "can_change_weight": local_action in {
+            "increase_weight",
+            "decrease_weight",
+            "maintain_or_small_backoff",
+            "small_backoff",
+            "do_backoff_set",
+        } and not guardrails.get("must_stop"),
+        "can_increase_weight": may_increase,
+        "can_decrease_weight": not guardrails.get("must_stop") and exercise_status != "complete",
+        "can_change_reps": exercise_status != "complete",
+        "can_add_set": bool(local_decision.get("add_set")) and exercise_status != "complete",
+        "can_stop_exercise": bool(may_stop),
+        "can_change_next_set_type": not (
+            next_set_type == "WARMUP"
+            or exercise_status == "complete"
+            or guardrails.get("must_stop")
+        ),
+        "must_preserve_local_stop": bool(exercise_status == "complete" or guardrails.get("must_stop")),
+        "must_preserve_warmup": next_set_type == "WARMUP",
+        "must_not_increase": bool(guardrails.get("block_increase") or not may_increase),
+        "must_not_stop": bool(not may_stop),
+    }
+
+
+def _build_safety_constraints(local_decision, request_context):
+    local_weight = _number_or_none(local_decision.get("recommended_weight"))
+    exercise_context = request_context.get("exercise_context", {})
+    weight_scale = _available_weights_from_context(exercise_context)
+    permissions = _build_ai_permissions(local_decision, request_context)
+
+    min_weight = local_weight
+    max_weight = local_weight
+
+    if local_weight is not None and permissions["can_decrease_weight"]:
+        min_weight = 0
+
+    if local_weight is not None and permissions["can_increase_weight"]:
+        max_weight = max(weight_scale["available_weights"] or [local_weight])
+
+    return {
+        "weight_scale": weight_scale,
+        "local_recommended_weight": local_decision.get("recommended_weight"),
+        "min_weight": min_weight,
+        "max_weight": max_weight,
+        "target_reps": local_decision.get("target_reps"),
+        "target_rir": local_decision.get("target_rir"),
+        "next_set_type": local_decision.get("next_set_type"),
+        "exercise_status": local_decision.get("exercise_status"),
+        "allowed_actions": sorted(ALLOWED_ACTIONS),
+        "allowed_next_set_types": sorted(ALLOWED_NEXT_SET_TYPES),
+        "allowed_exercise_status": sorted(ALLOWED_EXERCISE_STATUS),
+        "guardrails": local_decision.get("guardrails", {}),
+    }
+
+
+def _compact_ai_attempt(ai_decision):
+    if not isinstance(ai_decision, dict):
+        return None
+
+    return {
+        "recommended_weight": ai_decision.get("recommended_weight"),
+        "target_reps": ai_decision.get("target_reps"),
+        "target_rir": ai_decision.get("target_rir"),
+        "recommended_rest_seconds": ai_decision.get("recommended_rest_seconds"),
+        "next_set_type": ai_decision.get("next_set_type"),
+        "exercise_status": ai_decision.get("exercise_status"),
+        "exercise_state": ai_decision.get("exercise_state"),
+        "action": ai_decision.get("action"),
+        "add_set": ai_decision.get("add_set"),
+        "stop_exercise": ai_decision.get("stop_exercise"),
+        "do_backoff_set": ai_decision.get("do_backoff_set"),
+        "reason": ai_decision.get("reason"),
+        "guidance_title": ai_decision.get("guidance_title"),
+        "guidance_message": ai_decision.get("guidance_message"),
+        "confidence": ai_decision.get("confidence"),
+        "decision_basis": ai_decision.get("decision_basis", []),
+    }
+
+
+def _build_decision_envelope(
+    local_decision,
+    request_context,
+    final_decision,
+    ai_decision=None,
+    validation_status="local_only",
+    validation_reasons=None,
+):
+    return {
+        "strategy": "rules_decide_ai_adjusts_inside_rules",
+        "local_decision": _compact_decision(local_decision),
+        "ai_permissions": _build_ai_permissions(local_decision, request_context),
+        "safety_constraints": _build_safety_constraints(local_decision, request_context),
+        "ai_decision": _compact_ai_attempt(ai_decision),
+        "final_decision": _compact_decision(final_decision),
+        "validation": {
+            "status": validation_status,
+            "reasons": validation_reasons or [],
+            "guardrail_applied": bool(final_decision.get("guardrail_applied")),
+            "guardrail_reason": final_decision.get("guardrail_reason", ""),
+        },
+    }
+
+
+def _with_decision_envelope(
+    final_decision,
+    local_decision,
+    request_context,
+    ai_decision=None,
+    validation_status="local_only",
+    validation_reasons=None,
+):
+    return {
+        **final_decision,
+        "decision_envelope": _build_decision_envelope(
+            local_decision,
+            request_context,
+            final_decision,
+            ai_decision,
+            validation_status,
+            validation_reasons,
+        ),
+    }
+
+
 def _build_llm_context(local_decision, request_context):
+    ai_permissions = _build_ai_permissions(local_decision, request_context)
+    safety_constraints = _build_safety_constraints(local_decision, request_context)
+
     return {
         "local_safety_decision": _compact_decision(local_decision),
+        "ai_permissions": ai_permissions,
+        "safety_constraints": safety_constraints,
         "current_set_result": {
             "weight": request_context.get("weight"),
             "reps": request_context.get("reps"),
@@ -269,6 +438,8 @@ def _build_llm_context(local_decision, request_context):
             ),
             "block_increase": local_decision.get("guardrails", {}).get("block_increase", False),
             "must_stop": local_decision.get("guardrails", {}).get("must_stop", False),
+            "ai_must_stay_within_permissions": ai_permissions,
+            "safety_constraints": safety_constraints,
         },
     }
 
@@ -399,7 +570,14 @@ def _request_ollama_training_decision(context, base_url, model):
 
 def _normalize_ai_decision(ai_decision, local_decision, request_context, model, source):
     if not isinstance(ai_decision, dict):
-        return local_decision
+        return _with_decision_envelope(
+            local_decision,
+            local_decision,
+            request_context,
+            ai_decision=None,
+            validation_status="ai_invalid_fallback_to_local",
+            validation_reasons=["A resposta da IA não tinha formato de objeto."],
+        )
 
     next_set_type = ai_decision.get("next_set_type") or local_decision.get("next_set_type")
     exercise_status = ai_decision.get("exercise_status") or local_decision.get("exercise_status", "continue")
@@ -433,6 +611,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
     target_reps = ai_decision.get("target_reps", local_decision.get("target_reps"))
     guardrail_applied = False
     guardrail_reason = ""
+    validation_reasons = []
     local_weight = _number_or_none(local_decision.get("recommended_weight"))
     ai_weight = _number_or_none(recommended_weight)
     local_context = local_decision.get("context", {})
@@ -452,6 +631,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         target_reps = local_decision.get("target_reps")
         guardrail_applied = True
         guardrail_reason = "A IA tentou transformar uma carga de aquecimento em série de trabalho."
+        validation_reasons.append(guardrail_reason)
 
     if guardrails.get("block_increase") and (action == "increase_weight" or (ai_weight is not None and local_weight is not None and ai_weight > local_weight)):
         next_set_type = local_decision.get("next_set_type", "WORKING")
@@ -462,6 +642,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         action = local_decision.get("action", "maintain_weight")
         guardrail_applied = True
         guardrail_reason = "A IA tentou subir carga apesar de um bloqueio de segurança, fadiga ou feedback do utilizador."
+        validation_reasons.append(guardrail_reason)
 
     local_action_allows_load_increase = local_decision.get("action") in {"increase_weight", "increase_volume"}
     ai_attempted_load_increase = action in {"increase_weight", "increase_volume"} or (
@@ -479,6 +660,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         action = local_decision.get("action", "maintain_weight")
         guardrail_applied = True
         guardrail_reason = "A IA tentou subir carga sem cumprir as regras de 12 reps, RIR e escala disponível."
+        validation_reasons.append(guardrail_reason)
 
     if (
         exercise_status == "complete"
@@ -493,6 +675,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         action = local_decision.get("action", "maintain_or_small_backoff")
         guardrail_applied = True
         guardrail_reason = "A IA tentou terminar o exercício apesar de a falha ter sido produtiva ou aceitável."
+        validation_reasons.append(guardrail_reason)
 
     if next_set_type == "COMPLETE" or exercise_status == "complete":
         recommended_weight = ""
@@ -520,7 +703,7 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         guidance_title = local_decision.get("guidance_title")
         guidance_message = local_decision.get("guidance_message")
 
-    return {
+    final_decision = {
         **local_decision,
         "exercise_state": exercise_state,
         "recommended_weight": recommended_weight,
@@ -564,6 +747,15 @@ def _normalize_ai_decision(ai_decision, local_decision, request_context, model, 
         "guardrail_reason": guardrail_reason,
     }
 
+    return _with_decision_envelope(
+        final_decision,
+        local_decision,
+        request_context,
+        ai_decision=ai_decision,
+        validation_status="guardrail_adjusted" if guardrail_applied else "ai_adjustment_accepted",
+        validation_reasons=validation_reasons,
+    )
+
 
 def generate_ai_training_decision(local_decision, request_context):
     provider = getattr(settings, "AI_TRAINING_DECISION_PROVIDER", "local")
@@ -572,12 +764,20 @@ def generate_ai_training_decision(local_decision, request_context):
     model = getattr(settings, "AI_TRAINING_DECISION_MODEL", getattr(settings, "AI_COACH_MODEL", "gpt-5.5"))
 
     if provider == "local":
-        return {
+        final_decision = {
             **local_decision,
             "llm_status": "llm_disabled",
             "llm_provider": "local",
             "model": None,
         }
+
+        return _with_decision_envelope(
+            final_decision,
+            local_decision,
+            request_context,
+            validation_status="local_only",
+            validation_reasons=["Provider configurado como local."],
+        )
 
     context = _build_llm_context(local_decision, request_context)
 
@@ -588,7 +788,7 @@ def generate_ai_training_decision(local_decision, request_context):
         try:
             ai_decision = _request_ollama_training_decision(context, base_url, ollama_model)
         except urllib.error.HTTPError as error:
-            return {
+            final_decision = {
                 **local_decision,
                 "llm_status": "llm_error",
                 "llm_provider": "ollama",
@@ -596,8 +796,15 @@ def generate_ai_training_decision(local_decision, request_context):
                 "llm_error_detail": f"Ollama HTTP {error.code}",
                 "model": ollama_model,
             }
+            return _with_decision_envelope(
+                final_decision,
+                local_decision,
+                request_context,
+                validation_status="ai_error_fallback_to_local",
+                validation_reasons=[final_decision["llm_error_detail"]],
+            )
         except json.JSONDecodeError:
-            return {
+            final_decision = {
                 **local_decision,
                 "llm_status": "llm_error",
                 "llm_provider": "ollama",
@@ -605,8 +812,15 @@ def generate_ai_training_decision(local_decision, request_context):
                 "llm_error_detail": "Ollama response was not valid JSON",
                 "model": ollama_model,
             }
+            return _with_decision_envelope(
+                final_decision,
+                local_decision,
+                request_context,
+                validation_status="ai_error_fallback_to_local",
+                validation_reasons=[final_decision["llm_error_detail"]],
+            )
         except (TimeoutError, socket.timeout, urllib.error.URLError):
-            return {
+            final_decision = {
                 **local_decision,
                 "llm_status": "llm_error",
                 "llm_provider": "ollama",
@@ -614,21 +828,35 @@ def generate_ai_training_decision(local_decision, request_context):
                 "llm_error_detail": "Ollama request failed",
                 "model": ollama_model,
             }
+            return _with_decision_envelope(
+                final_decision,
+                local_decision,
+                request_context,
+                validation_status="ai_error_fallback_to_local",
+                validation_reasons=[final_decision["llm_error_detail"]],
+            )
 
         return _normalize_ai_decision(ai_decision, local_decision, request_context, ollama_model, "ollama_training_decision")
 
     if not api_key:
-        return {
+        final_decision = {
             **local_decision,
             "llm_status": "llm_disabled",
             "llm_provider": "openai",
             "model": None,
         }
+        return _with_decision_envelope(
+            final_decision,
+            local_decision,
+            request_context,
+            validation_status="local_only",
+            validation_reasons=["OPENAI_API_KEY não configurada."],
+        )
 
     try:
         ai_decision = _request_openai_training_decision(context, api_key, model)
     except urllib.error.HTTPError as error:
-        return {
+        final_decision = {
             **local_decision,
             "llm_status": "llm_error",
             "llm_provider": "openai",
@@ -636,8 +864,15 @@ def generate_ai_training_decision(local_decision, request_context):
             "llm_error_detail": f"OpenAI HTTP {error.code}",
             "model": model,
         }
+        return _with_decision_envelope(
+            final_decision,
+            local_decision,
+            request_context,
+            validation_status="ai_error_fallback_to_local",
+            validation_reasons=[final_decision["llm_error_detail"]],
+        )
     except json.JSONDecodeError:
-        return {
+        final_decision = {
             **local_decision,
             "llm_status": "llm_error",
             "llm_provider": "openai",
@@ -645,8 +880,15 @@ def generate_ai_training_decision(local_decision, request_context):
             "llm_error_detail": "OpenAI response was not valid JSON",
             "model": model,
         }
+        return _with_decision_envelope(
+            final_decision,
+            local_decision,
+            request_context,
+            validation_status="ai_error_fallback_to_local",
+            validation_reasons=[final_decision["llm_error_detail"]],
+        )
     except (TimeoutError, socket.timeout, urllib.error.URLError):
-        return {
+        final_decision = {
             **local_decision,
             "llm_status": "llm_error",
             "llm_provider": "openai",
@@ -654,5 +896,12 @@ def generate_ai_training_decision(local_decision, request_context):
             "llm_error_detail": "OpenAI request failed",
             "model": model,
         }
+        return _with_decision_envelope(
+            final_decision,
+            local_decision,
+            request_context,
+            validation_status="ai_error_fallback_to_local",
+            validation_reasons=[final_decision["llm_error_detail"]],
+        )
 
     return _normalize_ai_decision(ai_decision, local_decision, request_context, model, "openai_training_decision")
