@@ -17,6 +17,23 @@ O objetivo do projeto é evoluir de um sistema baseado em regras para um coach i
 
 ## Como correr localmente
 
+### Preparação inicial
+
+Backend:
+
+```bash
+cd backend
+python -m venv venv
+./venv/bin/python -m pip install -r requirements.txt
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+```
+
 ### Backend
 
 ```bash
@@ -56,13 +73,48 @@ http://localhost:5173/
 
 Nota: no browser integrado do Codex, `localhost:5173` funcionou melhor do que `127.0.0.1:5173`.
 
+## Configuração útil
+
+### Backend
+
+Variáveis opcionais:
+
+```bash
+OPENAI_API_KEY=...
+AI_TRAINING_DECISION_PROVIDER=local|openai|ollama
+AI_COACH_MODEL=gpt-5.5
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_TRAINING_DECISION_MODEL=qwen3:8b
+```
+
+Sem `OPENAI_API_KEY`, o motor usa fallback local por defeito.
+
+### Frontend
+
+Variáveis opcionais:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_EXPERIMENTAL_MODE=true
+```
+
+`VITE_EXPERIMENTAL_MODE=false` esconde ferramentas temporárias de desenvolvimento, como limpeza de atletas experimentais e painéis técnicos de decisão.
+
 ## Validação
+
+Para validar tudo de uma vez:
+
+```bash
+./scripts/check.sh
+```
+
+Este comando corre lint e build do frontend, mais os testes principais do backend.
 
 ### Backend
 
 ```bash
 cd backend
-./venv/bin/python manage.py test
+./venv/bin/python manage.py test exercises training progression accounts recommendations programs
 ```
 
 ### Frontend
@@ -74,9 +126,9 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 77 testes a passar
+- Backend: 78 testes a passar
+- Frontend: lint a passar
 - Frontend: build a passar
-- Motor de recomendações: 34 testes a passar
 
 ## Estado Atual
 
@@ -128,12 +180,17 @@ Implementado:
 - Bloqueio do treino normal até existir escala da máquina e calibração inicial
 - Botão de check reversível: desfazer uma série apaga o registo e limpa decisões dependentes
 - Botão experimental no menu principal para apagar atletas de teste e todos os dados associados
+- Mensagens internas da app para erros/sucessos, substituindo alertas nativos do browser
+- Modo experimental configurável por `VITE_EXPERIMENTAL_MODE`
+- Script único de validação do projeto em `scripts/check.sh`
+- Dependências do backend registadas em `backend/requirements.txt`
 - Remoção de código legado não utilizado: app antiga `workouts`, assets iniciais do template Vite/React e wrapper antigo de recomendação híbrida
 
 Em preparação:
 - Memória longitudinal do atleta para além da janela recente de 15 treinos
 - Aplicação controlada do deload ao plano
 - Polimento da experiência visual do dashboard e análise semanal
+- Pipeline GitHub Actions quando o token/repositório tiver permissão para criar workflows
 
 ## Fluxo Principal
 
