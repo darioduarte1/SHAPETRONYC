@@ -20,6 +20,11 @@ import TrainingBlockPanel from "./components/TrainingBlockPanel";
 import WeeklyFeedbackPanel from "./components/WeeklyFeedbackPanel";
 import WorkoutCard from "./components/WorkoutCard";
 import WorkoutProgressionPanel from "./components/WorkoutProgressionPanel";
+import useExerciseCalibration from "./hooks/useExerciseCalibration";
+import useExerciseHistory from "./hooks/useExerciseHistory";
+import useProgramData from "./hooks/useProgramData";
+import useTrainingSession from "./hooks/useTrainingSession";
+import useWeightScales from "./hooks/useWeightScales";
 import {
   formatDashboardDate,
   formatNumber,
@@ -60,39 +65,17 @@ function App() {
   const [step, setStep] = useState(1);
   const [profileId, setProfileId] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [program, setProgram] = useState(null);
-  const [programError, setProgramError] = useState("");
-  const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
   const [setForms, setSetForms] = useState({});
   const [recommendations, setRecommendations] = useState({});
-  const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
-  const [sessionNotes, setSessionNotes] = useState({});
   const [openExerciseById, setOpenExerciseById] = useState({});
-  const [openWorkoutId, setOpenWorkoutId] = useState(null);
-  const [exerciseLogsById, setExerciseLogsById] = useState({});
   const [substitutionOptionsByExerciseId, setSubstitutionOptionsByExerciseId] = useState({});
   const [openSubstitutionByExerciseId, setOpenSubstitutionByExerciseId] = useState({});
   const [isReplacingExerciseById, setIsReplacingExerciseById] = useState({});
-  const [openWeightScaleByExerciseId, setOpenWeightScaleByExerciseId] = useState({});
-  const [weightScaleFormsByExerciseId, setWeightScaleFormsByExerciseId] = useState({});
-  const [isSavingWeightScaleByExerciseId, setIsSavingWeightScaleByExerciseId] = useState({});
-  const [calibrationFormsByExerciseId, setCalibrationFormsByExerciseId] = useState({});
-  const [isSavingCalibrationByExerciseId, setIsSavingCalibrationByExerciseId] = useState({});
-  const [completedCalibrationByExerciseId, setCompletedCalibrationByExerciseId] = useState({});
-  const [exerciseRowCounts, setExerciseRowCounts] = useState({});
   const [restTimers, setRestTimers] = useState({});
   const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
   const [openRestMenuBySet, setOpenRestMenuBySet] = useState({});
   const [openSetTypeMenuBySet, setOpenSetTypeMenuBySet] = useState({});
   const [removedSetByKey, setRemovedSetByKey] = useState({});
-  const [latestWorkoutProgression, setLatestWorkoutProgression] = useState(null);
-  const [latestAiCoach, setLatestAiCoach] = useState(null);
-  const [athleteDashboard, setAthleteDashboard] = useState(null);
-  const [adaptivePlan, setAdaptivePlan] = useState(null);
-  const [adaptiveDecisions, setAdaptiveDecisions] = useState([]);
-  const [weeklyFeedback, setWeeklyFeedback] = useState(null);
-  const [trainingBlock, setTrainingBlock] = useState(null);
-  const [applyingAdaptiveById, setApplyingAdaptiveById] = useState({});
   const [loginUsername, setLoginUsername] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -132,6 +115,130 @@ function App() {
     GENERAL_FITNESS: "General fitness",
   };
 
+  function resetTrainingState() {
+    setOpenWorkoutId(null);
+    setRecommendations({});
+    setExerciseLogsById({});
+    setExerciseRowCounts({});
+    setCalibrationFormsByExerciseId({});
+    setCompletedCalibrationByExerciseId({});
+    setRemovedSetByKey({});
+    setOpenSetTypeMenuBySet({});
+  }
+
+  const {
+    program,
+    setProgram,
+    programError,
+    setProgramError,
+    isGeneratingProgram,
+    latestWorkoutProgression,
+    setLatestWorkoutProgression,
+    latestAiCoach,
+    setLatestAiCoach,
+    athleteDashboard,
+    setAthleteDashboard,
+    adaptivePlan,
+    setAdaptivePlan,
+    adaptiveDecisions,
+    setAdaptiveDecisions,
+    weeklyFeedback,
+    setWeeklyFeedback,
+    trainingBlock,
+    setTrainingBlock,
+    applyingAdaptiveById,
+    setApplyingAdaptiveById,
+    loadAthleteDashboard,
+    loadAdaptivePlan,
+    loadAdaptiveDecisions,
+    loadWeeklyFeedback,
+    loadTrainingBlock,
+    loadProgramPanels,
+    generateProgram,
+    recordAdaptiveDecision,
+  } = useProgramData({ profileId, setStep, resetTrainingState });
+
+  const {
+    exerciseLogsById,
+    setExerciseLogsById,
+    exerciseRowCounts,
+    setExerciseRowCounts,
+    getExerciseLogs,
+    loadExerciseHistory,
+  } = useExerciseHistory({
+    profileId,
+    getActiveSessionByWorkout: () => activeSessionByWorkout,
+  });
+
+  const {
+    calibrationFormsByExerciseId,
+    setCalibrationFormsByExerciseId,
+    isSavingCalibrationByExerciseId,
+    setIsSavingCalibrationByExerciseId,
+    completedCalibrationByExerciseId,
+    setCompletedCalibrationByExerciseId,
+    getCalibrationState,
+    getCalibrationColorMeta,
+    getCalibrationColorOptions,
+    getCalibrationForm,
+    updateCalibrationForm,
+    saveExerciseCalibration,
+  } = useExerciseCalibration({
+    profileId,
+    restTimers,
+    setRestTimers,
+    getExerciseLogs,
+    setExerciseLogsById,
+    loadExerciseHistory,
+  });
+
+  const {
+    activeSessionByWorkout,
+    setActiveSessionByWorkout,
+    sessionNotes,
+    setSessionNotes,
+    openWorkoutId,
+    setOpenWorkoutId,
+    getActiveWorkoutId,
+    toggleWorkout,
+    startWorkoutSession,
+    finishWorkoutSession,
+  } = useTrainingSession({
+    profileId,
+    loadProgramPanels,
+    loadExerciseHistory,
+    resetTrainingState,
+    setLatestWorkoutProgression,
+    setLatestAiCoach,
+    setOpenExerciseById,
+    setRestTimers,
+    setSetForms,
+    setCompletedCalibrationByExerciseId,
+    setRemovedSetByKey,
+    setOpenSetTypeMenuBySet,
+  });
+
+  const {
+    openWeightScaleByExerciseId,
+    setOpenWeightScaleByExerciseId,
+    weightScaleFormsByExerciseId,
+    setWeightScaleFormsByExerciseId,
+    isSavingWeightScaleByExerciseId,
+    setIsSavingWeightScaleByExerciseId,
+    getWeightScaleForm,
+    toggleWeightScaleMenu,
+    updateWeightScaleForm,
+    updateMicroWeightScaleRow,
+    addMicroWeightScaleRow,
+    removeMicroWeightScaleRow,
+    saveWeightScale,
+  } = useWeightScales({
+    profileId,
+    activeSessionByWorkout,
+    setProgram,
+    loadExerciseHistory,
+  });
+
   useEffect(() => {
     const hasRunningTimer = Object.values(restTimers).some((seconds) => seconds > 0);
 
@@ -152,12 +259,6 @@ function App() {
 
     return () => window.clearInterval(timerId);
   }, [restTimers]);
-
-  function getActiveWorkoutId() {
-    return Object.keys(activeSessionByWorkout).find((workoutId) =>
-      Boolean(activeSessionByWorkout[workoutId])
-    );
-  }
 
   function getSetFormKey(trainingExerciseId, setNumber) {
     return `${trainingExerciseId}-${setNumber}`;
@@ -193,101 +294,6 @@ function App() {
     }
 
     return EFFORT_OPTIONS[3];
-  }
-
-  function getExerciseLogs(trainingExerciseId) {
-    return exerciseLogsById[trainingExerciseId] || {
-      previous_sets: [],
-      current_sets: [],
-      history_sets: [],
-      previous_session: null,
-      recommended_sets: [],
-      calibration: null,
-    };
-  }
-
-  function getCalibrationState(exercise) {
-    return getExerciseLogs(exercise.id).calibration || {
-      needs_calibration: true,
-      scale_configured: Boolean((exercise.exercise_main_weight_options || []).length),
-      estimated_working_weight: null,
-      confidence: "baixa",
-      calibration_sets: [],
-      next_step: null,
-      reason: "baseline_required",
-      message: "Este exercício ainda precisa de calibração.",
-    };
-  }
-
-  function getCalibrationColorMeta(colorOrReps) {
-    const value = String(colorOrReps || "").toLowerCase();
-    const reps = Number(colorOrReps);
-
-    if (value === "red" || (Number.isFinite(reps) && reps > 0 && reps <= 8)) {
-      return {
-        key: "red",
-        label: "Vermelho",
-        text: "falha antes das 8 reps",
-        color: "#fecaca",
-        background: "rgba(127, 29, 29, 0.28)",
-        border: "rgba(248, 113, 113, 0.45)",
-      };
-    }
-
-    if (value === "orange" || (Number.isFinite(reps) && reps >= 9 && reps <= 12)) {
-      return {
-        key: "orange",
-        label: "Laranja",
-        text: "entre 9 e 12 reps",
-        color: "#fed7aa",
-        background: "rgba(154, 52, 18, 0.26)",
-        border: "rgba(251, 146, 60, 0.45)",
-      };
-    }
-
-    if (value === "yellow" || (Number.isFinite(reps) && reps >= 13 && reps <= 14)) {
-      return {
-        key: "yellow",
-        label: "Amarelo",
-        text: "entre 13 e 14 reps",
-        color: "#fef08a",
-        background: "rgba(113, 63, 18, 0.24)",
-        border: "rgba(250, 204, 21, 0.45)",
-      };
-    }
-
-    if (value === "green" || (Number.isFinite(reps) && reps >= 15)) {
-      return {
-        key: "green",
-        label: "Verde",
-        text: "acima de 15 reps",
-        color: "#bbf7d0",
-        background: "rgba(20, 83, 45, 0.25)",
-        border: "rgba(74, 222, 128, 0.45)",
-      };
-    }
-
-    return null;
-  }
-
-  function getCalibrationColorOptions() {
-    return [
-      getCalibrationColorMeta("red"),
-      getCalibrationColorMeta("orange"),
-      getCalibrationColorMeta("yellow"),
-      getCalibrationColorMeta("green"),
-    ];
-  }
-
-  function getCalibrationColorReps(color) {
-    const repsByColor = {
-      red: 7,
-      orange: 11,
-      yellow: 14,
-      green: 16,
-    };
-
-    return repsByColor[color] || "";
   }
 
   function exerciseNeedsCalibration(exercise) {
@@ -692,299 +698,6 @@ function App() {
     });
   }
 
-  function formatWeightOptions(options) {
-    return (options || []).join(", ");
-  }
-
-  function parseWeightOptions(value) {
-    return String(value || "")
-      .split(/[,;\n]/)
-      .map((item) => item.trim().replace(",", "."))
-      .filter(Boolean)
-      .map(Number)
-      .filter((number) => Number.isFinite(number) && number >= 0);
-  }
-
-  function parseDecimalInput(value) {
-    return Number(String(value || "").replace(",", "."));
-  }
-
-  function buildMicroWeightRows(options) {
-    const groupedWeights = new Map();
-
-    (options || []).forEach((option) => {
-      const weight = typeof option === "object" ? parseDecimalInput(option.weight) : parseDecimalInput(option);
-      const count = typeof option === "object" ? parseDecimalInput(option.count || 1) : 1;
-
-      if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(count) || count <= 0) {
-        return;
-      }
-
-      groupedWeights.set(weight, (groupedWeights.get(weight) || 0) + count);
-    });
-
-    const rows = Array.from(groupedWeights.entries()).map(([weight, count]) => ({
-      weight,
-      count,
-    }));
-
-    return rows.length ? rows : [{ count: "", weight: "" }];
-  }
-
-  function serializeMicroWeightRows(rows) {
-    return (rows || [])
-      .map((row) => ({
-        count: parseDecimalInput(row.count),
-        weight: parseDecimalInput(row.weight),
-      }))
-      .filter((row) =>
-        Number.isFinite(row.count) &&
-        Number.isFinite(row.weight) &&
-        row.count > 0 &&
-        row.weight > 0
-      );
-  }
-
-  function buildWeightScaleForm(exercise) {
-    return {
-      main_weight_options: formatWeightOptions(exercise.exercise_main_weight_options),
-      micro_weight_options: buildMicroWeightRows(exercise.exercise_micro_weight_options),
-    };
-  }
-
-  function getCalibrationForm(exercise) {
-    const calibrationState = getCalibrationState(exercise);
-
-    return calibrationFormsByExerciseId[exercise.id] || {
-      weight_used: calibrationState.next_step?.recommended_weight || calibrationState.estimated_working_weight || "",
-      result_color: "",
-      rir: 0,
-      notes: "",
-    };
-  }
-
-  function updateCalibrationForm(exercise, field, value) {
-    setCalibrationFormsByExerciseId((currentForms) => ({
-      ...currentForms,
-      [exercise.id]: {
-        ...getCalibrationForm(exercise),
-        [field]: value,
-      },
-    }));
-  }
-
-  function getWeightScaleForm(exercise) {
-    return weightScaleFormsByExerciseId[exercise.id] || buildWeightScaleForm(exercise);
-  }
-
-  function toggleWeightScaleMenu(exercise) {
-    const shouldOpen = !openWeightScaleByExerciseId[exercise.id];
-
-    setOpenWeightScaleByExerciseId((currentState) => ({
-      ...currentState,
-      [exercise.id]: shouldOpen,
-    }));
-
-    if (shouldOpen && !weightScaleFormsByExerciseId[exercise.id]) {
-      setWeightScaleFormsByExerciseId((currentForms) => ({
-        ...currentForms,
-        [exercise.id]: buildWeightScaleForm(exercise),
-      }));
-    }
-  }
-
-  function updateWeightScaleForm(exercise, field, value) {
-    setWeightScaleFormsByExerciseId((currentForms) => ({
-      ...currentForms,
-      [exercise.id]: {
-        ...getWeightScaleForm(exercise),
-        [field]: value,
-      },
-    }));
-  }
-
-  function updateMicroWeightScaleRow(exercise, rowIndex, field, value) {
-    const currentRows = getWeightScaleForm(exercise).micro_weight_options || [];
-
-    setWeightScaleFormsByExerciseId((currentForms) => ({
-      ...currentForms,
-      [exercise.id]: {
-        ...getWeightScaleForm(exercise),
-        micro_weight_options: currentRows.map((row, index) => (
-          index === rowIndex ? { ...row, [field]: value } : row
-        )),
-      },
-    }));
-  }
-
-  function addMicroWeightScaleRow(exercise) {
-    setWeightScaleFormsByExerciseId((currentForms) => ({
-      ...currentForms,
-      [exercise.id]: {
-        ...getWeightScaleForm(exercise),
-        micro_weight_options: [
-          ...(getWeightScaleForm(exercise).micro_weight_options || []),
-          { count: "", weight: "" },
-        ],
-      },
-    }));
-  }
-
-  function removeMicroWeightScaleRow(exercise, rowIndex) {
-    const currentRows = getWeightScaleForm(exercise).micro_weight_options || [];
-    const nextRows = currentRows.filter((_, index) => index !== rowIndex);
-
-    setWeightScaleFormsByExerciseId((currentForms) => ({
-      ...currentForms,
-      [exercise.id]: {
-        ...getWeightScaleForm(exercise),
-        micro_weight_options: nextRows.length ? nextRows : [{ count: "", weight: "" }],
-      },
-    }));
-  }
-
-  function updateProgramExerciseScale(trainingExerciseId, data) {
-    setProgram((currentProgram) => {
-      if (!currentProgram) {
-        return currentProgram;
-      }
-
-      return {
-        ...currentProgram,
-        workouts: currentProgram.workouts.map((workout) => ({
-          ...workout,
-          exercises: workout.exercises.map((exercise) => (
-            exercise.id === trainingExerciseId
-              ? {
-                  ...exercise,
-                  exercise_main_weight_options: data.main_weight_options,
-                  exercise_micro_weight_options: data.micro_weight_options,
-                }
-              : exercise
-          )),
-        })),
-      };
-    });
-  }
-
-  async function saveWeightScale(exercise) {
-    const formData = getWeightScaleForm(exercise);
-    const payload = {
-      main_weight_options: parseWeightOptions(formData.main_weight_options),
-      micro_weight_options: serializeMicroWeightRows(formData.micro_weight_options),
-    };
-
-    setIsSavingWeightScaleByExerciseId((currentState) => ({
-      ...currentState,
-      [exercise.id]: true,
-    }));
-
-    try {
-      const data = await trainingApi.saveExerciseWeightScale(profileId, exercise.id, payload);
-
-      updateProgramExerciseScale(exercise.id, data);
-      setWeightScaleFormsByExerciseId((currentForms) => ({
-        ...currentForms,
-        [exercise.id]: {
-          main_weight_options: formatWeightOptions(data.main_weight_options),
-          micro_weight_options: buildMicroWeightRows(data.micro_weight_options),
-        },
-      }));
-      setOpenWeightScaleByExerciseId((currentState) => ({
-        ...currentState,
-        [exercise.id]: false,
-      }));
-
-      if (activeSessionByWorkout[exercise.workout]) {
-        await loadExerciseHistory(exercise);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Não consegui contactar o servidor para guardar a escala de pesos.");
-    } finally {
-      setIsSavingWeightScaleByExerciseId((currentState) => ({
-        ...currentState,
-        [exercise.id]: false,
-      }));
-    }
-  }
-
-  async function saveExerciseCalibration(exercise) {
-    const formData = getCalibrationForm(exercise);
-    const calibrationState = getCalibrationState(exercise);
-    const calibrationRestSeconds = restTimers[exercise.id] || 0;
-
-    if (!calibrationState.scale_configured) {
-      alert("Preenche primeiro a escala da máquina antes de guardar séries experimentais.");
-      return;
-    }
-
-    if (calibrationRestSeconds > 0) {
-      return;
-    }
-
-    if (!formData.weight_used || !formData.result_color) {
-      alert("Preenche o peso e escolhe a cor da série experimental.");
-      return;
-    }
-
-    setIsSavingCalibrationByExerciseId((currentState) => ({
-      ...currentState,
-      [exercise.id]: true,
-    }));
-
-    try {
-      const data = await trainingApi.saveExerciseCalibration({
-        profile_id: profileId,
-        training_exercise_id: exercise.id,
-        weight_used: Number(formData.weight_used),
-        result_color: formData.result_color,
-        reps_completed: getCalibrationColorReps(formData.result_color),
-        rir: 0,
-        reached_failure: true,
-        notes: formData.notes || "",
-      });
-
-      setExerciseLogsById((currentLogs) => ({
-        ...currentLogs,
-        [exercise.id]: {
-          ...getExerciseLogs(exercise.id),
-          calibration: data,
-        },
-      }));
-      setCalibrationFormsByExerciseId((currentForms) => ({
-        ...currentForms,
-        [exercise.id]: {
-          weight_used: data.next_step?.recommended_weight || data.estimated_working_weight || formData.weight_used,
-          result_color: "",
-          rir: 0,
-          notes: "",
-        },
-      }));
-      setRestTimers((currentTimers) => ({
-        ...currentTimers,
-        [exercise.id]: data.next_step?.action === "calibration_complete" ? 0 : DEFAULT_REST_SECONDS,
-      }));
-
-      if (data.next_step?.action === "calibration_complete" || !data.needs_calibration) {
-        setCompletedCalibrationByExerciseId((currentState) => ({
-          ...currentState,
-          [exercise.id]: true,
-        }));
-      }
-
-      await loadExerciseHistory(exercise);
-    } catch (error) {
-      console.error(error);
-      alert("Não consegui contactar o servidor para guardar a calibração.");
-    } finally {
-      setIsSavingCalibrationByExerciseId((currentState) => ({
-        ...currentState,
-        [exercise.id]: false,
-      }));
-    }
-  }
-
   async function exportUserTrainingData() {
     if (!profileId) {
       alert("Não encontrei o perfil ativo para exportar.");
@@ -1006,91 +719,6 @@ function App() {
     } catch (error) {
       console.error(error);
       alert("Não consegui contactar o servidor para exportar o histórico.");
-    }
-  }
-
-  async function loadAthleteDashboard(profileIdOverride = null) {
-    const dashboardProfileId = profileIdOverride || profileId;
-
-    if (!dashboardProfileId) {
-      return null;
-    }
-
-    try {
-      const data = await trainingApi.getDashboard(dashboardProfileId);
-      setAthleteDashboard(data);
-      return data;
-    } catch (error) {
-      console.error(error.data || error);
-      return null;
-    }
-  }
-
-  async function loadAdaptivePlan(profileIdOverride = null) {
-    const adaptiveProfileId = profileIdOverride || profileId;
-
-    if (!adaptiveProfileId) {
-      return null;
-    }
-
-    try {
-      const data = await trainingApi.getAdaptivePlan(adaptiveProfileId);
-      setAdaptivePlan(data);
-      return data;
-    } catch (error) {
-      console.error(error.data || error);
-      return null;
-    }
-  }
-
-  async function loadAdaptiveDecisions(profileIdOverride = null) {
-    const decisionsProfileId = profileIdOverride || profileId;
-
-    if (!decisionsProfileId) {
-      return [];
-    }
-
-    try {
-      const data = await trainingApi.getAdaptiveDecisions(decisionsProfileId);
-      setAdaptiveDecisions(data.decisions || []);
-      return data.decisions || [];
-    } catch (error) {
-      console.error(error.data || error);
-      return [];
-    }
-  }
-
-  async function loadWeeklyFeedback(profileIdOverride = null) {
-    const feedbackProfileId = profileIdOverride || profileId;
-
-    if (!feedbackProfileId) {
-      return null;
-    }
-
-    try {
-      const data = await trainingApi.getWeeklyFeedback(feedbackProfileId);
-      setWeeklyFeedback(data);
-      return data;
-    } catch (error) {
-      console.error(error.data || error);
-      return null;
-    }
-  }
-
-  async function loadTrainingBlock(profileIdOverride = null) {
-    const blockProfileId = profileIdOverride || profileId;
-
-    if (!blockProfileId) {
-      return null;
-    }
-
-    try {
-      const data = await trainingApi.getTrainingBlock(blockProfileId);
-      setTrainingBlock(data);
-      return data;
-    } catch (error) {
-      console.error(error.data || error);
-      return null;
     }
   }
 
@@ -1166,88 +794,6 @@ function App() {
     } finally {
       setIsLoggingIn(false);
     }
-  }
-
-  async function recordAdaptiveDecision(recommendation, decisionStatus) {
-    if (!profileId) {
-      alert("Não encontrei o perfil ativo.");
-      return;
-    }
-
-    if (decisionStatus === "APPLIED") {
-      const shouldApply = window.confirm(
-        `Aplicar ajuste em ${recommendation.exercise_name}?\n\nSéries: ${recommendation.current_sets} → ${recommendation.recommended_sets}\nRIR: ${recommendation.current_target_rir} → ${recommendation.recommended_target_rir}\nCarga sugerida: ${recommendation.load_adjustment > 0 ? "+" : ""}${recommendation.load_adjustment}kg`
-      );
-
-      if (!shouldApply) {
-        return;
-      }
-    }
-
-    setApplyingAdaptiveById({
-      ...applyingAdaptiveById,
-      [recommendation.training_exercise]: true,
-    });
-
-    let data;
-
-    try {
-      data = await trainingApi.applyAdaptivePlanDecision({
-        profile_id: profileId,
-        training_exercise_id: recommendation.training_exercise,
-        status: decisionStatus,
-      });
-    } catch (error) {
-      console.error(error.data || error);
-      alert("Não consegui gravar a decisão adaptativa.");
-      data = null;
-    }
-
-    setApplyingAdaptiveById((currentState) => ({
-      ...currentState,
-      [recommendation.training_exercise]: false,
-    }));
-
-    if (!data) {
-      return;
-    }
-
-    if (decisionStatus === "APPLIED") {
-      setProgram((currentProgram) => {
-        if (!currentProgram) {
-          return currentProgram;
-        }
-
-        return {
-          ...currentProgram,
-          workouts: currentProgram.workouts.map((workout) => ({
-            ...workout,
-            exercises: workout.exercises.map((exercise) => (
-              exercise.id === data.updated_exercise.id
-                ? {
-                    ...exercise,
-                    sets: data.updated_exercise.sets,
-                    target_rir: data.updated_exercise.target_rir,
-                  }
-                : exercise
-            )),
-          })),
-        };
-      });
-    }
-
-    await loadAdaptivePlan();
-    await loadAdaptiveDecisions();
-    await loadWeeklyFeedback();
-    await loadTrainingBlock();
-  }
-
-  function toggleWorkout(workoutId) {
-    if (getActiveWorkoutId()) {
-      return;
-    }
-
-    setOpenWorkoutId(openWorkoutId === workoutId ? null : workoutId);
   }
 
   async function toggleExercise(exercise) {
@@ -1393,47 +939,6 @@ function App() {
     });
   }
 
-  async function loadExerciseHistory(exercise, sessionIdOverride = null) {
-    const sessionId = sessionIdOverride || activeSessionByWorkout[exercise.workout];
-
-    if (!profileId || !sessionId) {
-      return null;
-    }
-
-    const params = new URLSearchParams({
-      profile_id: profileId,
-      exercise_id: exercise.exercise,
-      training_exercise_id: exercise.id,
-      session_id: sessionId,
-    });
-
-    try {
-      const data = await progressionApi.getExerciseHistory(params);
-
-      setExerciseLogsById((currentLogs) => ({
-        ...currentLogs,
-        [exercise.id]: data,
-      }));
-
-      setExerciseRowCounts((currentCounts) => ({
-        ...currentCounts,
-        [exercise.id]: Math.max(
-          currentCounts[exercise.id] || 0,
-          exercise.sets + 1,
-          data.previous_sets.length,
-          data.current_sets.length,
-          data.recommended_sets.length,
-          1
-        ),
-      }));
-
-      return data;
-    } catch (error) {
-      console.error(error.data || error);
-      return null;
-    }
-  }
-
   async function createProfile(e) {
     e.preventDefault();
     setProgramError("");
@@ -1469,132 +974,6 @@ function App() {
       console.error(error.data || error);
       alert("Erro ao criar perfil. Confirma os dados e tenta novamente.");
     }
-  }
-
-  async function generateProgram() {
-    if (!profileId) {
-      setProgramError("Não encontrei o perfil activo. Volta a criar o perfil antes de gerar o programa.");
-      return;
-    }
-
-    setProgramError("");
-    setIsGeneratingProgram(true);
-
-    try {
-      const data = await trainingApi.generateProgram({ profile_id: profileId });
-
-      if (!Array.isArray(data.workouts)) {
-        console.error(data);
-        setProgramError("A resposta do programa veio incompleta. Tenta novamente.");
-        return;
-      }
-
-      setProgram(data);
-      setOpenWorkoutId(null);
-      setLatestWorkoutProgression(null);
-      setLatestAiCoach(null);
-      setRecommendations({});
-      setExerciseLogsById({});
-      setExerciseRowCounts({});
-      setCalibrationFormsByExerciseId({});
-      setCompletedCalibrationByExerciseId({});
-      setRemovedSetByKey({});
-      setOpenSetTypeMenuBySet({});
-      loadAthleteDashboard(profileId);
-      loadAdaptivePlan(profileId);
-      loadAdaptiveDecisions(profileId);
-      loadWeeklyFeedback(profileId);
-      loadTrainingBlock(profileId);
-      setStep(4);
-    } catch (error) {
-      console.error(error);
-      setProgramError("Não consegui contactar o servidor para gerar o programa.");
-    } finally {
-      setIsGeneratingProgram(false);
-    }
-  }
-
-  async function startWorkoutSession(workout) {
-    let data;
-
-    try {
-      data = await trainingApi.startWorkoutSession({
-        profile_id: profileId,
-        workout_id: workout.id,
-      });
-    } catch (error) {
-      console.error(error.data || error);
-      alert("Erro ao iniciar treino.");
-      return;
-    }
-
-    setActiveSessionByWorkout({
-      ...activeSessionByWorkout,
-      [workout.id]: data.id,
-    });
-    setOpenWorkoutId(workout.id);
-    setLatestWorkoutProgression(null);
-    setLatestAiCoach(null);
-    setRecommendations({});
-    setExerciseLogsById({});
-    setExerciseRowCounts({});
-    setCalibrationFormsByExerciseId({});
-    setCompletedCalibrationByExerciseId({});
-    setSetForms({});
-    setRemovedSetByKey({});
-    setOpenSetTypeMenuBySet({});
-    loadAthleteDashboard();
-    loadAdaptivePlan();
-    loadAdaptiveDecisions();
-    loadWeeklyFeedback();
-    loadTrainingBlock();
-
-    workout.exercises.forEach((exercise) => {
-      loadExerciseHistory(exercise, data.id);
-    });
-  }
-
-  async function finishWorkoutSession(workout) {
-    const sessionId = activeSessionByWorkout[workout.id];
-
-    if (!sessionId) {
-      alert("Não existe sessão ativa para este treino.");
-      return;
-    }
-
-    let data;
-
-    try {
-      data = await trainingApi.finishWorkoutSession({
-        session_id: sessionId,
-        notes: sessionNotes[workout.id] || "",
-      });
-    } catch (error) {
-      console.error(error.data || error);
-      alert("Erro ao terminar treino.");
-      return;
-    }
-
-    setActiveSessionByWorkout({
-      ...activeSessionByWorkout,
-      [workout.id]: null,
-    });
-    setOpenWorkoutId(null);
-    setOpenExerciseById({});
-    setRestTimers({});
-    setSetForms({});
-    setCompletedCalibrationByExerciseId({});
-    setRemovedSetByKey({});
-    setOpenSetTypeMenuBySet({});
-    setLatestWorkoutProgression(data.next_workout_progression || null);
-    setLatestAiCoach(data.ai_coach_summary || null);
-    loadAthleteDashboard();
-    loadAdaptivePlan();
-    loadAdaptiveDecisions();
-    loadWeeklyFeedback();
-    loadTrainingBlock();
-
-    alert(`Workout finished: ${data.workout_name}`);
   }
 
   function toggleCompletionMenu(setFormKey) {
