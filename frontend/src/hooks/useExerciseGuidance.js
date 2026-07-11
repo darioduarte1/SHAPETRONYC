@@ -45,6 +45,7 @@ export default function useExerciseGuidance({
         guardrailApplied: latestRecommendation.guardrail_applied,
         guardrailReason: latestRecommendation.guardrail_reason,
         decisionBasis: latestRecommendation.decision_basis || [],
+        decisionEnvelope: latestRecommendation.decision_envelope,
       };
     }
 
@@ -95,6 +96,7 @@ export default function useExerciseGuidance({
       guardrailApplied: latestRecommendation?.guardrail_applied,
       guardrailReason: latestRecommendation?.guardrail_reason,
       decisionBasis: latestRecommendation?.decision_basis || plannedValues.decisionBasis || [],
+      decisionEnvelope: latestRecommendation?.decision_envelope,
     };
 
     if (rowSetType === "WARMUP") {

@@ -6,6 +6,7 @@
 // metadados da IA/coach, base da decisão e timer de descanso quando aplicável.
 // Mantém a apresentação do coach separada do painel de calibração e da tabela.
 // =============================================================================
+import CoachDecisionDebugPanel from "./CoachDecisionDebugPanel";
 
 export default function ExerciseGuidanceCard({
   exercise,
@@ -73,6 +74,10 @@ export default function ExerciseGuidanceCard({
             </button>
           </div>
         </div>
+      )}
+
+      {!guidance.isResting && (
+        <CoachDecisionDebugPanel envelope={guidance.decisionEnvelope} />
       )}
     </div>
   );

@@ -1812,6 +1812,143 @@ code {
   font-size: 12px;
 }
 
+.coach-decision-debug-panel {
+  margin-top: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.34);
+  text-align: left;
+}
+
+.coach-decision-debug-panel summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.coach-decision-debug-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.coach-decision-debug-panel summary::before {
+  content: "▸";
+  color: #38bdf8;
+}
+
+.coach-decision-debug-panel[open] summary::before {
+  content: "▾";
+}
+
+.coach-decision-debug-panel summary span {
+  margin-right: auto;
+}
+
+.coach-decision-debug-panel summary strong {
+  color: #86efac;
+  font-size: 11px;
+}
+
+.coach-decision-debug-panel summary strong.warning {
+  color: #fbbf24;
+}
+
+.coach-decision-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.coach-decision-mini-card,
+.coach-decision-debug-section {
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.coach-decision-mini-card strong,
+.coach-decision-debug-section strong {
+  display: block;
+  color: #e2e8f0;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.coach-decision-mini-card dl,
+.coach-decision-constraints {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.coach-decision-mini-card dl div,
+.coach-decision-constraints div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-decision-mini-card dt,
+.coach-decision-constraints dt {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.coach-decision-mini-card dd,
+.coach-decision-constraints dd {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 11px;
+  text-align: right;
+}
+
+.coach-decision-mini-card p,
+.coach-decision-debug-section p {
+  margin-top: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.coach-decision-debug-section {
+  margin: 0 12px 12px;
+}
+
+.coach-decision-pill-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.coach-decision-pill-grid span {
+  padding: 4px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.coach-decision-pill-grid span.enabled {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+  background: rgba(22, 101, 52, 0.2);
+}
+
+@media (max-width: 760px) {
+  .coach-decision-debug-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .exercise-rest-card {
   margin-top: 14px;
 }
