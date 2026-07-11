@@ -5,11 +5,9 @@
 // Controla o fluxo da app: criação/login do atleta, geração do programa, dashboard, treino ativo, calibração, escalas e comunicação com a API.
 // Mantém grande parte do estado global do frontend e passa dados/funções para os componentes especializados.
 // =============================================================================
-import { useEffect, useState } from "react";
-import * as accountsApi from "./api/accountsApi";
+import { useState } from "react";
 import * as progressionApi from "./api/progressionApi";
 import * as recommendationsApi from "./api/recommendationsApi";
-import * as trainingApi from "./api/trainingApi";
 import AdaptivePlanPanel from "./components/AdaptivePlanPanel";
 import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
 import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
@@ -22,7 +20,11 @@ import WorkoutCard from "./components/WorkoutCard";
 import WorkoutProgressionPanel from "./components/WorkoutProgressionPanel";
 import useExerciseCalibration from "./hooks/useExerciseCalibration";
 import useExerciseHistory from "./hooks/useExerciseHistory";
+import useExerciseSubstitutions from "./hooks/useExerciseSubstitutions";
+import useProfileAccess from "./hooks/useProfileAccess";
 import useProgramData from "./hooks/useProgramData";
+import useRestTimers from "./hooks/useRestTimers";
+import useSetControls from "./hooks/useSetControls";
 import useTrainingSession from "./hooks/useTrainingSession";
 import useWeightScales from "./hooks/useWeightScales";
 import {
@@ -43,77 +45,45 @@ import {
   getWeeklyFeedbackStatusColor,
   getWeeklyFeedbackStatusLabel,
 } from "./utils/trainingFormatters";
-
-const DEFAULT_REST_SECONDS = 120;
-const TARGET_REPS = 12;
-
-const SET_TYPES = [
-  { value: "WARMUP", label: "Aquecimento", shortLabel: "W", color: "#eab308" },
-  { value: "WORKING", label: "Normal", shortLabel: "N", color: "#f8fafc" },
-  { value: "DROP", label: "Drop", shortLabel: "D", color: "#ef4444" },
-];
-
-const EFFORT_OPTIONS = [
-  { value: "FAILURE", label: "FALHA", color: "#ef4444", reachedFailure: true, rir: null },
-  { value: "RIR_0_1", label: "RIR 0/1", color: "#f97316", reachedFailure: false, rir: 1 },
-  { value: "RIR_2_3", label: "RIR 2/3", color: "#eab308", reachedFailure: false, rir: 2 },
-  { value: "RIR_4_PLUS", label: "RIR 4+", color: "#22c55e", reachedFailure: false, rir: 4 },
-];
-const WARMUP_EFFORT = { value: "WARMUP_DONE", label: "Feita", reachedFailure: false, rir: null };
+import {
+  EFFORT_OPTIONS,
+  SET_TYPES,
+  TARGET_REPS,
+  WARMUP_EFFORT,
+} from "./utils/trainingConstants";
 
 function App() {
   const [step, setStep] = useState(1);
   const [profileId, setProfileId] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [setForms, setSetForms] = useState({});
   const [recommendations, setRecommendations] = useState({});
   const [openExerciseById, setOpenExerciseById] = useState({});
-  const [substitutionOptionsByExerciseId, setSubstitutionOptionsByExerciseId] = useState({});
-  const [openSubstitutionByExerciseId, setOpenSubstitutionByExerciseId] = useState({});
-  const [isReplacingExerciseById, setIsReplacingExerciseById] = useState({});
-  const [restTimers, setRestTimers] = useState({});
-  const [openCompletionMenuBySet, setOpenCompletionMenuBySet] = useState({});
-  const [openRestMenuBySet, setOpenRestMenuBySet] = useState({});
-  const [openSetTypeMenuBySet, setOpenSetTypeMenuBySet] = useState({});
-  const [removedSetByKey, setRemovedSetByKey] = useState({});
-  const [loginUsername, setLoginUsername] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isDeletingExperimentalUsers, setIsDeletingExperimentalUsers] = useState(false);
-  const [deleteUsersMessage, setDeleteUsersMessage] = useState("");
 
-  const [form, setForm] = useState({
-    username: "",
-    gender: "MALE",
-    age: 34,
-    height_cm: 172,
-    weight_kg: 72,
-    goal: "HYPERTROPHY",
-    level: "INTERMEDIATE",
-    training_experience: "ONE_TO_THREE",
-    days_per_week: 5,
-  });
-  const levelGuidance = {
-    BEGINNER: {
-      label: "Beginner",
-      text: "Menos volume, foco em técnica e consistência.",
-    },
-    INTERMEDIATE: {
-      label: "Intermediate",
-      text: "Mais volume, maior frequência e progressão mais desafiante.",
-    },
-    ADVANCED: {
-      label: "Advanced",
-      text: "Mais especialização, maior fadiga e mais atenção à recuperação.",
-    },
-  };
-  const goalLabels = {
-    HYPERTROPHY: "Gain muscle",
-    STRENGTH: "Gain strength",
-    FAT_LOSS: "Lose fat",
-    RECOMPOSITION: "Recomposition",
-    GENERAL_FITNESS: "General fitness",
-  };
+  const {
+    restTimers,
+    setRestTimers,
+    formatTimer,
+    adjustRestTimer,
+  } = useRestTimers();
+
+  const {
+    setForms,
+    setSetForms,
+    openCompletionMenuBySet,
+    setOpenCompletionMenuBySet,
+    openRestMenuBySet,
+    setOpenRestMenuBySet,
+    openSetTypeMenuBySet,
+    setOpenSetTypeMenuBySet,
+    removedSetByKey,
+    setRemovedSetByKey,
+    updateSetForm,
+    getRestSecondsForRow,
+    toggleCompletionMenu,
+    toggleRestMenu,
+    toggleSetTypeMenu,
+    selectSetType,
+  } = useSetControls();
 
   function resetTrainingState() {
     setOpenWorkoutId(null);
@@ -158,6 +128,76 @@ function App() {
     recordAdaptiveDecision,
   } = useProgramData({ profileId, setStep, resetTrainingState });
 
+  function resetAllTrainingState() {
+    resetTrainingState();
+    setSetForms({});
+  }
+
+  function resetAllAppState() {
+    setProgram(null);
+    setSetForms({});
+    setRecommendations({});
+    setActiveSessionByWorkout({});
+    setSessionNotes({});
+    setOpenExerciseById({});
+    setOpenWorkoutId(null);
+    setExerciseLogsById({});
+    setSubstitutionOptionsByExerciseId({});
+    setOpenSubstitutionByExerciseId({});
+    setIsReplacingExerciseById({});
+    setOpenWeightScaleByExerciseId({});
+    setWeightScaleFormsByExerciseId({});
+    setIsSavingWeightScaleByExerciseId({});
+    setCalibrationFormsByExerciseId({});
+    setIsSavingCalibrationByExerciseId({});
+    setCompletedCalibrationByExerciseId({});
+    setExerciseRowCounts({});
+    setRestTimers({});
+    setOpenCompletionMenuBySet({});
+    setOpenRestMenuBySet({});
+    setOpenSetTypeMenuBySet({});
+    setRemovedSetByKey({});
+    setLatestWorkoutProgression(null);
+    setLatestAiCoach(null);
+    setAthleteDashboard(null);
+    setAdaptivePlan(null);
+    setAdaptiveDecisions([]);
+    setWeeklyFeedback(null);
+    setTrainingBlock(null);
+    setApplyingAdaptiveById({});
+  }
+
+  const {
+    form,
+    setForm,
+    levelGuidance,
+    goalLabels,
+    loginUsername,
+    setLoginUsername,
+    loginError,
+    isLoggingIn,
+    isDeletingExperimentalUsers,
+    deleteUsersMessage,
+    handleChange,
+    exportUserTrainingData,
+    loginExistingProfile,
+    createProfile,
+    deleteExperimentalUsers,
+  } = useProfileAccess({
+    profileId,
+    setProfileId,
+    userId,
+    setUserId,
+    setStep,
+    setProgram,
+    setProgramError,
+    setLatestWorkoutProgression,
+    setLatestAiCoach,
+    loadProgramPanels,
+    resetAllTrainingState,
+    resetAllAppState,
+  });
+
   const {
     exerciseLogsById,
     setExerciseLogsById,
@@ -190,6 +230,23 @@ function App() {
     getExerciseLogs,
     setExerciseLogsById,
     loadExerciseHistory,
+  });
+
+  const {
+    substitutionOptionsByExerciseId,
+    setSubstitutionOptionsByExerciseId,
+    openSubstitutionByExerciseId,
+    setOpenSubstitutionByExerciseId,
+    isReplacingExerciseById,
+    setIsReplacingExerciseById,
+    toggleExerciseSubstitutions,
+    replaceExercise,
+  } = useExerciseSubstitutions({
+    setProgram,
+    setRecommendations,
+    setExerciseLogsById,
+    setOpenExerciseById,
+    loadProgramPanels,
   });
 
   const {
@@ -238,27 +295,6 @@ function App() {
     setProgram,
     loadExerciseHistory,
   });
-
-  useEffect(() => {
-    const hasRunningTimer = Object.values(restTimers).some((seconds) => seconds > 0);
-
-    if (!hasRunningTimer) {
-      return;
-    }
-
-    const timerId = window.setInterval(() => {
-      setRestTimers((currentTimers) =>
-        Object.fromEntries(
-          Object.entries(currentTimers).map(([exerciseId, seconds]) => [
-            exerciseId,
-            Math.max(0, seconds - 1),
-          ])
-        )
-      );
-    }, 1000);
-
-    return () => window.clearInterval(timerId);
-  }, [restTimers]);
 
   function getSetFormKey(trainingExerciseId, setNumber) {
     return `${trainingExerciseId}-${setNumber}`;
@@ -468,17 +504,6 @@ function App() {
     return shouldForceFailureEffort(setType, repsCompleted) ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS;
   }
 
-  function formatTimer(totalSeconds) {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${minutes}min ${String(seconds).padStart(2, "0")}s`;
-  }
-
-  function getRestSecondsForRow(setFormKey) {
-    return Number(setForms[setFormKey]?.rest_seconds || DEFAULT_REST_SECONDS);
-  }
-
   function formatPreviousSet(setLog) {
     if (!setLog) {
       return "-";
@@ -684,118 +709,6 @@ function App() {
     };
   }
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  }
-
-  function updateSetForm(setFormKey, field, value) {
-    setSetForms({
-      ...setForms,
-      [setFormKey]: {
-        ...setForms[setFormKey],
-        [field]: value,
-      },
-    });
-  }
-
-  async function exportUserTrainingData() {
-    if (!profileId) {
-      alert("Não encontrei o perfil ativo para exportar.");
-      return;
-    }
-
-    try {
-      const blob = await accountsApi.exportProfileHistory(profileId);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-
-      link.href = url;
-      link.download = `shapetronyc-${form.username || "athlete"}-${timestamp}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
-      alert("Não consegui contactar o servidor para exportar o histórico.");
-    }
-  }
-
-  async function loginExistingProfile(e) {
-    e.preventDefault();
-
-    const normalizedUsername = loginUsername.trim().toLowerCase();
-
-    if (!normalizedUsername) {
-      setLoginError("Escreve o username do atleta.");
-      return;
-    }
-
-    setLoginError("");
-    setProgramError("");
-    setIsLoggingIn(true);
-
-    try {
-      const profilesData = await accountsApi.listProfiles();
-
-      const profile = profilesData.find(
-        (item) => item.username?.toLowerCase() === normalizedUsername
-      );
-
-      if (!profile) {
-        setLoginError("Não encontrei nenhum atleta com esse username.");
-        return;
-      }
-
-      setUserId(profile.user);
-      setProfileId(profile.id);
-      setForm({
-        username: profile.username,
-        gender: profile.gender,
-        age: profile.age,
-        height_cm: profile.height_cm,
-        weight_kg: profile.weight_kg,
-        goal: profile.goal,
-        level: profile.level,
-        training_experience: profile.training_experience,
-        days_per_week: profile.days_per_week,
-      });
-      setLatestWorkoutProgression(null);
-      setLatestAiCoach(null);
-      setRecommendations({});
-      setExerciseLogsById({});
-      setExerciseRowCounts({});
-      setSetForms({});
-      setCompletedCalibrationByExerciseId({});
-      setRemovedSetByKey({});
-      setOpenSetTypeMenuBySet({});
-
-      try {
-        const programData = await trainingApi.getProgram(profile.id);
-        setProgram(programData);
-      } catch (error) {
-        setProgram(null);
-        setProgramError("Perfil encontrado. Ainda não existe programa ativo para este atleta.");
-        setStep(3);
-        return;
-      }
-
-      setOpenWorkoutId(null);
-      loadAthleteDashboard(profile.id);
-      loadAdaptivePlan(profile.id);
-      loadAdaptiveDecisions(profile.id);
-      loadWeeklyFeedback(profile.id);
-      loadTrainingBlock(profile.id);
-      setStep(4);
-    } catch (error) {
-      console.error(error);
-      setLoginError("Não consegui contactar o servidor para entrar no perfil.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  }
-
   async function toggleExercise(exercise) {
     const isOpening = !openExerciseById[exercise.id];
 
@@ -811,91 +724,6 @@ function App() {
 
   function getExerciseImageUrl(exercise) {
     return exercise.exercise_image_url || "/exercise-screens/IMG_3620.PNG";
-  }
-
-  async function loadExerciseSubstitutions(exercise) {
-    if (substitutionOptionsByExerciseId[exercise.id]) {
-      return substitutionOptionsByExerciseId[exercise.id];
-    }
-
-    try {
-      const data = await trainingApi.getExerciseSubstitutions(exercise.id);
-
-      setSubstitutionOptionsByExerciseId((currentOptions) => ({
-        ...currentOptions,
-        [exercise.id]: data,
-      }));
-
-      return data;
-    } catch (error) {
-      console.error(error.data || error);
-      alert("Não consegui carregar alternativas para este exercício.");
-      return null;
-    }
-  }
-
-  async function toggleExerciseSubstitutions(exercise) {
-    const shouldOpen = !openSubstitutionByExerciseId[exercise.id];
-
-    setOpenSubstitutionByExerciseId((currentState) => ({
-      ...currentState,
-      [exercise.id]: shouldOpen,
-    }));
-
-    if (shouldOpen) {
-      await loadExerciseSubstitutions(exercise);
-    }
-  }
-
-  async function replaceExercise(exercise, replacementExerciseId) {
-    setIsReplacingExerciseById((currentState) => ({
-      ...currentState,
-      [exercise.id]: true,
-    }));
-
-    try {
-      const data = await trainingApi.replaceTrainingExercise({
-        training_exercise_id: exercise.id,
-        replacement_exercise_id: replacementExerciseId,
-      });
-
-      setProgram(data);
-      setRecommendations((currentRecommendations) => {
-        const nextRecommendations = { ...currentRecommendations };
-        delete nextRecommendations[exercise.id];
-        return nextRecommendations;
-      });
-      setExerciseLogsById((currentLogs) => {
-        const nextLogs = { ...currentLogs };
-        delete nextLogs[exercise.id];
-        return nextLogs;
-      });
-      setSubstitutionOptionsByExerciseId((currentOptions) => {
-        const nextOptions = { ...currentOptions };
-        delete nextOptions[exercise.id];
-        return nextOptions;
-      });
-      setOpenSubstitutionByExerciseId((currentState) => ({
-        ...currentState,
-        [exercise.id]: false,
-      }));
-      setOpenExerciseById((currentState) => ({
-        ...currentState,
-        [exercise.id]: false,
-      }));
-      await loadAdaptivePlan();
-      await loadAdaptiveDecisions();
-      await loadWeeklyFeedback();
-      await loadTrainingBlock();
-    } catch (error) {
-      console.error(error);
-      alert("Não consegui contactar o servidor para trocar o exercício.");
-    } finally {
-      setIsReplacingExerciseById((currentState) => ({
-        ...currentState,
-        [exercise.id]: false,
-      }));
-    }
   }
 
   function addExerciseRow(exercise) {
@@ -933,86 +761,6 @@ function App() {
       [setFormKey]: false,
     });
 
-    setOpenSetTypeMenuBySet({
-      ...openSetTypeMenuBySet,
-      [setFormKey]: false,
-    });
-  }
-
-  async function createProfile(e) {
-    e.preventDefault();
-    setProgramError("");
-
-    let userData;
-
-    try {
-      userData = await accountsApi.createUser({ username: form.username });
-    } catch (error) {
-      console.error(error.data || error);
-      alert("Erro ao criar utilizador. Confirma os dados e tenta novamente.");
-      return;
-    }
-
-    setUserId(userData.id);
-
-    try {
-      const profileData = await accountsApi.createProfile({
-        user: userData.id,
-        gender: form.gender,
-        age: Number(form.age),
-        height_cm: Number(form.height_cm),
-        weight_kg: Number(form.weight_kg),
-        goal: form.goal,
-        level: form.level,
-        training_experience: form.training_experience,
-        days_per_week: Number(form.days_per_week),
-      });
-
-      setProfileId(profileData.id);
-      setStep(3);
-    } catch (error) {
-      console.error(error.data || error);
-      alert("Erro ao criar perfil. Confirma os dados e tenta novamente.");
-    }
-  }
-
-  function toggleCompletionMenu(setFormKey) {
-    setOpenCompletionMenuBySet({
-      ...openCompletionMenuBySet,
-      [setFormKey]: !openCompletionMenuBySet[setFormKey],
-    });
-  }
-
-  function toggleRestMenu(setFormKey) {
-    setOpenRestMenuBySet({
-      ...openRestMenuBySet,
-      [setFormKey]: !openRestMenuBySet[setFormKey],
-    });
-  }
-
-  function adjustRestTimer(exerciseId, secondsDelta) {
-    setRestTimers((currentTimers) => ({
-      ...currentTimers,
-      [exerciseId]: Math.max(0, (currentTimers[exerciseId] || 0) + secondsDelta),
-    }));
-  }
-
-  function toggleSetTypeMenu(setFormKey) {
-    setOpenSetTypeMenuBySet({
-      ...openSetTypeMenuBySet,
-      [setFormKey]: !openSetTypeMenuBySet[setFormKey],
-    });
-  }
-
-  function selectSetType(setFormKey, setType) {
-    setSetForms((currentSetForms) => ({
-      ...currentSetForms,
-      [setFormKey]: {
-        ...currentSetForms[setFormKey],
-        set_type: setType,
-        set_type_source: "manual",
-      },
-    }));
     setOpenSetTypeMenuBySet({
       ...openSetTypeMenuBySet,
       [setFormKey]: false,
@@ -1355,67 +1103,6 @@ function App() {
 
       return nextMenus;
     });
-  }
-
-  async function deleteExperimentalUsers() {
-    const confirmed = window.confirm(
-      "Isto vai apagar todos os atletas experimentais e os dados associados. A biblioteca de exercícios fica preservada. Queres continuar?"
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setDeleteUsersMessage("");
-    setLoginError("");
-    setProgramError("");
-    setIsDeletingExperimentalUsers(true);
-
-    try {
-      const data = await accountsApi.deleteExperimentalUsers();
-
-      setProfileId(null);
-      setUserId(null);
-      setProgram(null);
-      setSetForms({});
-      setRecommendations({});
-      setActiveSessionByWorkout({});
-      setSessionNotes({});
-      setOpenExerciseById({});
-      setOpenWorkoutId(null);
-      setExerciseLogsById({});
-      setSubstitutionOptionsByExerciseId({});
-      setOpenSubstitutionByExerciseId({});
-      setIsReplacingExerciseById({});
-      setOpenWeightScaleByExerciseId({});
-      setWeightScaleFormsByExerciseId({});
-      setIsSavingWeightScaleByExerciseId({});
-      setCalibrationFormsByExerciseId({});
-      setIsSavingCalibrationByExerciseId({});
-      setCompletedCalibrationByExerciseId({});
-      setExerciseRowCounts({});
-      setRestTimers({});
-      setOpenCompletionMenuBySet({});
-      setOpenRestMenuBySet({});
-      setOpenSetTypeMenuBySet({});
-      setRemovedSetByKey({});
-      setLatestWorkoutProgression(null);
-      setLatestAiCoach(null);
-      setAthleteDashboard(null);
-      setAdaptivePlan(null);
-      setAdaptiveDecisions([]);
-      setWeeklyFeedback(null);
-      setTrainingBlock(null);
-      setApplyingAdaptiveById({});
-      setLoginUsername("");
-      setStep(1);
-      setDeleteUsersMessage(`${data.deleted_users} atleta(s) experimental(is) apagado(s).`);
-    } catch (error) {
-      console.error(error);
-      setDeleteUsersMessage("Erro de ligação ao apagar atletas experimentais.");
-    } finally {
-      setIsDeletingExperimentalUsers(false);
-    }
   }
 
   return (

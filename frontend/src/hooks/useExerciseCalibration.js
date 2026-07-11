@@ -8,8 +8,7 @@
 // =============================================================================
 import { useState } from "react";
 import * as trainingApi from "../api/trainingApi";
-
-const DEFAULT_REST_SECONDS = 120;
+import { DEFAULT_REST_SECONDS } from "../utils/trainingConstants";
 
 export default function useExerciseCalibration({
   profileId,
