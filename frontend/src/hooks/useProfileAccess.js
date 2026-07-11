@@ -139,7 +139,7 @@ export default function useProfileAccess({
       try {
         const programData = await trainingApi.getProgram(profile.id);
         setProgram(programData);
-      } catch (error) {
+      } catch {
         setProgram(null);
         setProgramError("Perfil encontrado. Ainda não existe programa ativo para este atleta.");
         setStep(3);

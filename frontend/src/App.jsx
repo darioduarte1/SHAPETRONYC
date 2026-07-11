@@ -99,11 +99,6 @@ function App() {
     setTrainingBlock,
     applyingAdaptiveById,
     setApplyingAdaptiveById,
-    loadAthleteDashboard,
-    loadAdaptivePlan,
-    loadAdaptiveDecisions,
-    loadWeeklyFeedback,
-    loadTrainingBlock,
     loadProgramPanels,
     generateProgram,
     recordAdaptiveDecision,
@@ -194,7 +189,6 @@ function App() {
   });
 
   const {
-    calibrationFormsByExerciseId,
     setCalibrationFormsByExerciseId,
     isSavingCalibrationByExerciseId,
     setIsSavingCalibrationByExerciseId,
@@ -266,7 +260,6 @@ function App() {
   const {
     openWeightScaleByExerciseId,
     setOpenWeightScaleByExerciseId,
-    weightScaleFormsByExerciseId,
     setWeightScaleFormsByExerciseId,
     isSavingWeightScaleByExerciseId,
     setIsSavingWeightScaleByExerciseId,
