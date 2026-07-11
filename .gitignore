@@ -1,4 +1,3 @@
-cat > .gitignore <<'EOF'
 # Python
 __pycache__/
 *.pyc
@@ -12,7 +11,11 @@ staticfiles/
 # Node
 node_modules/
 dist/
+frontend/dist/
+
+# Local notes and generated duplicate copies
+regras.md
+* 2.*
 
 # macOS
 .DS_Store
-EOF
