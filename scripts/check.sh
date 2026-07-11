@@ -16,6 +16,8 @@ else
   PYTHON_BIN="python"
 fi
 
+"$PYTHON_BIN" manage.py check
+"$PYTHON_BIN" manage.py makemigrations --check --dry-run
 "$PYTHON_BIN" manage.py test exercises training progression accounts recommendations programs
 
 echo "All checks passed."

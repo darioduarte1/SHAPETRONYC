@@ -126,7 +126,7 @@ Para validar tudo de uma vez:
 ./scripts/check.sh
 ```
 
-Este comando corre lint e build do frontend, mais os testes principais do backend.
+Este comando corre lint e build do frontend, valida a configuração Django, verifica se há migrations em falta e executa os testes principais do backend.
 
 ### Backend
 
