@@ -51,6 +51,7 @@ export default function ProgramScreen({
   activeSessionByWorkout,
   sessionNotes,
   openWorkoutId,
+  workoutStatusMessage,
   setSessionNotes,
   setForms,
   openExerciseById,
@@ -104,6 +105,12 @@ export default function ProgramScreen({
         programName={program.name}
         exportUserTrainingData={exportUserTrainingData}
       />
+
+      {workoutStatusMessage && (
+        <div className="workout-status-message">
+          {workoutStatusMessage}
+        </div>
+      )}
 
       <AthleteDashboardPanel
         dashboard={athleteDashboard}

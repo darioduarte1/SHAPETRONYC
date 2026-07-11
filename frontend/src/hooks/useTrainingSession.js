@@ -26,6 +26,7 @@ export default function useTrainingSession({
   const [activeSessionByWorkout, setActiveSessionByWorkout] = useState({});
   const [sessionNotes, setSessionNotes] = useState({});
   const [openWorkoutId, setOpenWorkoutId] = useState(null);
+  const [workoutStatusMessage, setWorkoutStatusMessage] = useState("");
 
   function getActiveWorkoutId() {
     return Object.keys(activeSessionByWorkout).find((workoutId) =>
@@ -62,6 +63,7 @@ export default function useTrainingSession({
     setOpenWorkoutId(workout.id);
     setLatestWorkoutProgression(null);
     setLatestAiCoach(null);
+    setWorkoutStatusMessage("");
     resetTrainingState();
     setSetForms({});
     setOpenSetTypeMenuBySet({});
@@ -106,9 +108,8 @@ export default function useTrainingSession({
     setOpenSetTypeMenuBySet({});
     setLatestWorkoutProgression(data.next_workout_progression || null);
     setLatestAiCoach(data.ai_coach_summary || null);
+    setWorkoutStatusMessage(`Treino terminado: ${data.workout_name}`);
     loadProgramPanels();
-
-    alert(`Workout finished: ${data.workout_name}`);
   }
 
   return {
@@ -118,6 +119,8 @@ export default function useTrainingSession({
     setSessionNotes,
     openWorkoutId,
     setOpenWorkoutId,
+    workoutStatusMessage,
+    setWorkoutStatusMessage,
     getActiveWorkoutId,
     toggleWorkout,
     startWorkoutSession,

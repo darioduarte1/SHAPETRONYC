@@ -228,6 +228,7 @@ function App() {
     setSessionNotes,
     openWorkoutId,
     setOpenWorkoutId,
+    workoutStatusMessage,
     getActiveWorkoutId,
     toggleWorkout,
     startWorkoutSession,
@@ -427,6 +428,7 @@ function App() {
           activeSessionByWorkout={activeSessionByWorkout}
           sessionNotes={sessionNotes}
           openWorkoutId={openWorkoutId}
+          workoutStatusMessage={workoutStatusMessage}
           setSessionNotes={setSessionNotes}
           setForms={setForms}
           openExerciseById={openExerciseById}
