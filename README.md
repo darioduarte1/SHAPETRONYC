@@ -80,6 +80,15 @@ Existem exemplos de configuração em:
 - `backend/.env.example`
 - `frontend/.env.example`
 
+Para usar ficheiros locais, copia os exemplos:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+O backend carrega automaticamente `backend/.env` quando o ficheiro existe. O frontend é carregado pelo Vite.
+
 ### Backend
 
 Variáveis opcionais:
