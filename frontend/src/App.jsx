@@ -6,16 +6,9 @@
 // Mantém grande parte do estado global do frontend e passa dados/funções para os componentes especializados.
 // =============================================================================
 import { useState } from "react";
-import AdaptivePlanPanel from "./components/AdaptivePlanPanel";
-import AiCoachSummaryPanel from "./components/AiCoachSummaryPanel";
-import AthleteDashboardPanel from "./components/AthleteDashboardPanel";
 import HomeScreen from "./components/HomeScreen";
-import ProgramHeader from "./components/ProgramHeader";
+import ProgramScreen from "./components/ProgramScreen";
 import ProfileForm from "./components/ProfileForm";
-import TrainingBlockPanel from "./components/TrainingBlockPanel";
-import WeeklyFeedbackPanel from "./components/WeeklyFeedbackPanel";
-import WorkoutCard from "./components/WorkoutCard";
-import WorkoutProgressionPanel from "./components/WorkoutProgressionPanel";
 import useCoachContext from "./hooks/useCoachContext";
 import useExerciseCalibration from "./hooks/useExerciseCalibration";
 import useExerciseGuidance from "./hooks/useExerciseGuidance";
@@ -30,29 +23,6 @@ import useSetLogging from "./hooks/useSetLogging";
 import useTrainingSession from "./hooks/useTrainingSession";
 import useWeightScales from "./hooks/useWeightScales";
 import useWorkoutExerciseActions from "./hooks/useWorkoutExerciseActions";
-import {
-  formatDashboardDate,
-  formatNumber,
-  formatProgressionTarget,
-  getAdaptiveActionColor,
-  getAdaptiveActionLabel,
-  getAdaptiveDecisionStatusLabel,
-  getAiCoachSourceLabel,
-  getConfidenceColor,
-  getDashboardMaxWeeklyVolume,
-  getDecisionSourceLabel,
-  getLlmStatusLabel,
-  getProgressionActionLabel,
-  getTrainingBlockPhaseColor,
-  getTrainingBlockPhaseLabel,
-  getWeeklyFeedbackStatusColor,
-  getWeeklyFeedbackStatusLabel,
-} from "./utils/trainingFormatters";
-import {
-  SET_TYPES,
-  TARGET_REPS,
-  WARMUP_EFFORT,
-} from "./utils/trainingConstants";
 
 function App() {
   const [step, setStep] = useState(1);
@@ -444,153 +414,87 @@ function App() {
       )}
 
       {step === 4 && program && (
-        <div>
-          <ProgramHeader
-            programName={program.name}
-            exportUserTrainingData={exportUserTrainingData}
-          />
-
-          <AthleteDashboardPanel
-            dashboard={athleteDashboard}
-            formatDate={formatDashboardDate}
-            formatNumber={formatNumber}
-            getConfidenceColor={getConfidenceColor}
-            getMaxWeeklyVolume={getDashboardMaxWeeklyVolume}
-          />
-
-          <TrainingBlockPanel
-            trainingBlock={trainingBlock}
-            formatNumber={formatNumber}
-            getPhaseLabel={getTrainingBlockPhaseLabel}
-            getPhaseColor={getTrainingBlockPhaseColor}
-          />
-
-          <WeeklyFeedbackPanel
-            feedback={weeklyFeedback}
-            getStatusLabel={getWeeklyFeedbackStatusLabel}
-            getStatusColor={getWeeklyFeedbackStatusColor}
-          />
-
-          <AdaptivePlanPanel
-            adaptivePlan={adaptivePlan}
-            adaptiveDecisions={adaptiveDecisions}
-            applyingAdaptiveById={applyingAdaptiveById}
-            getActionLabel={getAdaptiveActionLabel}
-            getActionColor={getAdaptiveActionColor}
-            getDecisionStatusLabel={getAdaptiveDecisionStatusLabel}
-            recordAdaptiveDecision={recordAdaptiveDecision}
-          />
-
-          <WorkoutProgressionPanel
-            progression={latestWorkoutProgression}
-            getActionLabel={getProgressionActionLabel}
-            getSourceLabel={getDecisionSourceLabel}
-            getConfidenceColor={getConfidenceColor}
-            formatTarget={formatProgressionTarget}
-          />
-
-          <AiCoachSummaryPanel
-            summary={latestAiCoach}
-            getSourceLabel={getAiCoachSourceLabel}
-          />
-
-          {program.workouts.map((workout) => {
-            const activeWorkoutId = getActiveWorkoutId();
-            const activeSessionId = activeSessionByWorkout[workout.id];
-            const hasActiveWorkout = Boolean(activeWorkoutId);
-
-            return (
-              <WorkoutCard
-                key={workout.id}
-                workout={workout}
-                activeWorkoutId={activeWorkoutId}
-                activeSessionId={activeSessionId}
-                hasActiveWorkout={hasActiveWorkout}
-                isWorkoutOpen={activeWorkoutId === String(workout.id) || openWorkoutId === workout.id}
-                workoutStats={getWorkoutSessionStats(workout)}
-                sessionNote={sessionNotes[workout.id]}
-                setSessionNote={(workoutId, value) =>
-                  setSessionNotes({
-                    ...sessionNotes,
-                    [workoutId]: value,
-                  })
-                }
-                constants={{ targetReps: TARGET_REPS, setTypes: SET_TYPES, warmupEffort: WARMUP_EFFORT }}
-                state={{
-                  setForms,
-                  openExerciseById,
-                  openSubstitutionByExerciseId,
-                  openWeightScaleByExerciseId,
-                  substitutionOptionsByExerciseId,
-                  completedCalibrationByExerciseId,
-                  isReplacingExerciseById,
-                  isSavingWeightScaleByExerciseId,
-                  isSavingCalibrationByExerciseId,
-                  restTimers,
-                  openRestMenuBySet,
-                  openSetTypeMenuBySet,
-                  openCompletionMenuBySet,
-                }}
-                helpers={{
-                  getExerciseLogs,
-                  getWeightScaleForm,
-                  getCalibrationState,
-                  getCalibrationForm,
-                  exerciseNeedsCalibration,
-                  getExerciseRows,
-                  getGuidanceForExercise,
-                  getExerciseImageUrl,
-                  getCalibrationColorOptions,
-                  getCalibrationColorMeta,
-                  formatTimer,
-                  getDecisionSourceLabel,
-                  getLlmStatusLabel,
-                  getConfidenceColor,
-                }}
-                actions={{
-                  toggleWorkout,
-                  startWorkoutSession,
-                  finishWorkoutSession,
-                  toggleExercise,
-                  toggleExerciseSubstitutions,
-                  toggleWeightScaleMenu,
-                  replaceExercise,
-                  updateWeightScaleForm,
-                  updateMicroWeightScaleRow,
-                  addMicroWeightScaleRow,
-                  removeMicroWeightScaleRow,
-                  saveWeightScale,
-                  updateCalibrationForm,
-                  saveExerciseCalibration,
-                  adjustRestTimer,
-                  addExerciseRow,
-                  setTableHandlers: {
-                    getSetFormKey,
-                    getCurrentSetForRow,
-                    getSetTypeForExerciseRow,
-                    getPreviousSetForExerciseRow,
-                    getSetTypeMeta,
-                    getVisibleSetLabel,
-                    getEffortMetaFromSet,
-                    getRestSecondsForRow,
-                    getPlannedValuesForExerciseRow,
-                    getEffortOptionsForSet,
-                    formatPreviousSet,
-                    formatTimer,
-                    updateSetForm,
-                    toggleRestMenu,
-                    toggleSetTypeMenu,
-                    toggleCompletionMenu,
-                    selectSetType,
-                    removeExerciseRow,
-                    saveSet,
-                    undoSet,
-                  },
-                }}
-              />
-            );
-          })}
-        </div>
+        <ProgramScreen
+          program={program}
+          athleteDashboard={athleteDashboard}
+          trainingBlock={trainingBlock}
+          weeklyFeedback={weeklyFeedback}
+          adaptivePlan={adaptivePlan}
+          adaptiveDecisions={adaptiveDecisions}
+          applyingAdaptiveById={applyingAdaptiveById}
+          latestWorkoutProgression={latestWorkoutProgression}
+          latestAiCoach={latestAiCoach}
+          activeSessionByWorkout={activeSessionByWorkout}
+          sessionNotes={sessionNotes}
+          openWorkoutId={openWorkoutId}
+          setSessionNotes={setSessionNotes}
+          setForms={setForms}
+          openExerciseById={openExerciseById}
+          openSubstitutionByExerciseId={openSubstitutionByExerciseId}
+          openWeightScaleByExerciseId={openWeightScaleByExerciseId}
+          substitutionOptionsByExerciseId={substitutionOptionsByExerciseId}
+          completedCalibrationByExerciseId={completedCalibrationByExerciseId}
+          isReplacingExerciseById={isReplacingExerciseById}
+          isSavingWeightScaleByExerciseId={isSavingWeightScaleByExerciseId}
+          isSavingCalibrationByExerciseId={isSavingCalibrationByExerciseId}
+          restTimers={restTimers}
+          openRestMenuBySet={openRestMenuBySet}
+          openSetTypeMenuBySet={openSetTypeMenuBySet}
+          openCompletionMenuBySet={openCompletionMenuBySet}
+          exportUserTrainingData={exportUserTrainingData}
+          recordAdaptiveDecision={recordAdaptiveDecision}
+          getActiveWorkoutId={getActiveWorkoutId}
+          getWorkoutSessionStats={getWorkoutSessionStats}
+          getExerciseLogs={getExerciseLogs}
+          getWeightScaleForm={getWeightScaleForm}
+          getCalibrationState={getCalibrationState}
+          getCalibrationForm={getCalibrationForm}
+          exerciseNeedsCalibration={exerciseNeedsCalibration}
+          getExerciseRows={getExerciseRows}
+          getGuidanceForExercise={getGuidanceForExercise}
+          getExerciseImageUrl={getExerciseImageUrl}
+          getCalibrationColorOptions={getCalibrationColorOptions}
+          getCalibrationColorMeta={getCalibrationColorMeta}
+          formatTimer={formatTimer}
+          toggleWorkout={toggleWorkout}
+          startWorkoutSession={startWorkoutSession}
+          finishWorkoutSession={finishWorkoutSession}
+          toggleExercise={toggleExercise}
+          toggleExerciseSubstitutions={toggleExerciseSubstitutions}
+          toggleWeightScaleMenu={toggleWeightScaleMenu}
+          replaceExercise={replaceExercise}
+          updateWeightScaleForm={updateWeightScaleForm}
+          updateMicroWeightScaleRow={updateMicroWeightScaleRow}
+          addMicroWeightScaleRow={addMicroWeightScaleRow}
+          removeMicroWeightScaleRow={removeMicroWeightScaleRow}
+          saveWeightScale={saveWeightScale}
+          updateCalibrationForm={updateCalibrationForm}
+          saveExerciseCalibration={saveExerciseCalibration}
+          adjustRestTimer={adjustRestTimer}
+          addExerciseRow={addExerciseRow}
+          setTableHandlers={{
+            getSetFormKey,
+            getCurrentSetForRow,
+            getSetTypeForExerciseRow,
+            getPreviousSetForExerciseRow,
+            getSetTypeMeta,
+            getVisibleSetLabel,
+            getEffortMetaFromSet,
+            getRestSecondsForRow,
+            getPlannedValuesForExerciseRow,
+            getEffortOptionsForSet,
+            formatPreviousSet,
+            formatTimer,
+            updateSetForm,
+            toggleRestMenu,
+            toggleSetTypeMenu,
+            toggleCompletionMenu,
+            selectSetType,
+            removeExerciseRow,
+            saveSet,
+            undoSet,
+          }}
+        />
       )}
     </div>
   );
