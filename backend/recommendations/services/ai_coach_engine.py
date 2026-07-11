@@ -89,6 +89,7 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
                 "calibration": None,
             },
         )
+        exercise_summary["training_exercise"] = set_log["training_exercise"]
 
         exercise_summary["completed_sets"] += 1
         exercise_summary["volume"] += _number_or_zero(set_log["weight_used"]) * _number_or_zero(
@@ -124,6 +125,7 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
                 "calibration": None,
             },
         )
+        exercise_summary["exercise"] = calibration["exercise"]
         exercise_summary["completed_sets"] += calibration["set_count"]
         exercise_summary["volume"] += calibration["volume"]
         exercise_summary["calibration"] = {
@@ -173,13 +175,17 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
             "summary": workout_progression.get("summary", {}),
             "recommendations": [
                 {
+                    "training_exercise": recommendation.get("training_exercise"),
+                    "exercise": recommendation.get("exercise"),
                     "exercise_name": recommendation.get("exercise_name"),
                     "action": recommendation.get("action"),
+                    "title": recommendation.get("title"),
                     "recommended_weight": recommendation.get("recommended_weight"),
                     "recommended_sets": recommendation.get("recommended_sets"),
                     "target_reps": recommendation.get("target_reps"),
                     "target_rir": recommendation.get("target_rir"),
                     "reason": recommendation.get("reason"),
+                    "confidence": recommendation.get("confidence"),
                 }
                 for recommendation in workout_progression.get("recommendations", [])
             ],
@@ -187,23 +193,134 @@ def build_session_coach_context(workout, set_logs, workout_progression, notes=""
     }
 
 
+def _format_weight(weight):
+    if weight in ("", None):
+        return None
+
+    rounded_weight = _round_metric(weight)
+    formatted_weight = int(rounded_weight) if rounded_weight.is_integer() else rounded_weight
+
+    return f"{formatted_weight}kg"
+
+
+def _get_progression_for_exercise(context, exercise):
+    recommendations = context.get("progression", {}).get("recommendations", [])
+
+    for recommendation in recommendations:
+        if recommendation.get("training_exercise") and recommendation.get("training_exercise") == exercise.get("training_exercise"):
+            return recommendation
+
+    for recommendation in recommendations:
+        if recommendation.get("exercise") and recommendation.get("exercise") == exercise.get("exercise"):
+            return recommendation
+
+    for recommendation in recommendations:
+        if recommendation.get("exercise_name") == exercise.get("exercise_name"):
+            return recommendation
+
+    return None
+
+
+def _status_from_exercise(exercise, recommendation=None):
+    calibration = exercise.get("calibration")
+
+    if calibration:
+        return {
+            "key": "calibrated",
+            "label": "Calibrado",
+            "tone": "success",
+        }
+
+    if (
+        exercise.get("failures", 0) >= 2
+        or recommendation
+        and recommendation.get("action") == "reduce_volume"
+    ):
+        return {
+            "key": "recovery",
+            "label": "Recuperação",
+            "tone": "warning",
+        }
+
+    if recommendation and recommendation.get("action") == "increase_load":
+        return {
+            "key": "progress",
+            "label": "Progredir",
+            "tone": "success",
+        }
+
+    if exercise.get("working_sets"):
+        return {
+            "key": "stable",
+            "label": "Consolidar",
+            "tone": "info",
+        }
+
+    return {
+        "key": "insufficient_data",
+        "label": "Poucos dados",
+        "tone": "muted",
+    }
+
+
+def _next_step_from_recommendation(recommendation):
+    if not recommendation:
+        return "Continua a registar séries para melhorar a leitura do coach."
+
+    weight = _format_weight(recommendation.get("recommended_weight"))
+    target_reps = recommendation.get("target_reps")
+    target_rir = recommendation.get("target_rir")
+    parts = []
+
+    if weight:
+        parts.append(weight)
+
+    if recommendation.get("recommended_sets"):
+        parts.append(f"{recommendation['recommended_sets']} série(s)")
+
+    if target_reps:
+        parts.append(f"{target_reps} reps")
+
+    if target_rir is not None:
+        parts.append(f"RIR {target_rir}")
+
+    if parts:
+        return f"Próximo treino: {' · '.join(parts)}."
+
+    return recommendation.get("reason") or "Mantém o plano e volta a avaliar no próximo treino."
+
+
 def build_exercise_feedback(context):
     feedback = []
 
     for exercise in context.get("exercises", []):
         calibration = exercise.get("calibration")
+        recommendation = _get_progression_for_exercise(context, exercise)
+        status = _status_from_exercise(exercise, recommendation)
+        metrics = {
+            "working_sets": exercise.get("working_sets", 0),
+            "warmup_sets": exercise.get("warmup_sets", 0),
+            "calibration_sets": calibration.get("set_count", 0) if calibration else 0,
+            "volume": exercise.get("volume", 0),
+            "average_rir": exercise.get("average_rir"),
+            "failures": exercise.get("failures", 0),
+        }
 
         if calibration:
             weight = calibration.get("estimated_working_weight")
             confidence = calibration.get("confidence") or "baixa"
             feedback.append({
                 "exercise_name": exercise["exercise_name"],
+                "status": status,
                 "title": f"{exercise['exercise_name']}: base criada",
                 "message": (
                     f"Foram registadas {calibration['set_count']} série(s) experimentais e o peso de trabalho "
                     f"ficou estimado em {weight}kg com confiança {confidence}. No próximo treino já há uma "
                     "primeira carga real para começar, sem adivinhar."
                 ),
+                "metrics": metrics,
+                "next_step": _next_step_from_recommendation(recommendation),
+                "reason": recommendation.get("reason") if recommendation else "A calibração inicial criou a primeira referência real.",
             })
             continue
 
@@ -220,11 +337,15 @@ def build_exercise_feedback(context):
             )
             feedback.append({
                 "exercise_name": exercise["exercise_name"],
+                "status": status,
                 "title": f"{exercise['exercise_name']}: trabalho registado",
                 "message": (
                     f"Completaste {exercise['working_sets']} série(s) normal(is), "
                     f"{exercise['volume']}kg de volume e {rir_text}.{failure_text}"
                 ),
+                "metrics": metrics,
+                "next_step": _next_step_from_recommendation(recommendation),
+                "reason": recommendation.get("reason") if recommendation else "O próximo treino será ajustado quando houver mais histórico útil.",
             })
 
     return feedback[:6]
@@ -303,6 +424,39 @@ def _extract_response_text(response_data):
     return "\n".join(text_parts).strip()
 
 
+def _fallback_feedback_by_exercise(fallback_summary):
+    return {
+        item.get("exercise_name"): item
+        for item in fallback_summary.get("exercise_feedback", [])
+        if item.get("exercise_name")
+    }
+
+
+def _normalize_ai_exercise_feedback(summary, fallback_summary):
+    fallback_by_exercise = _fallback_feedback_by_exercise(fallback_summary)
+    feedback = []
+
+    for item in summary.get("exercise_feedback", fallback_summary.get("exercise_feedback", [])):
+        if not isinstance(item, dict) or not (item.get("message") or item.get("title")):
+            continue
+
+        exercise_name = str(item.get("exercise_name") or "")
+        fallback_item = fallback_by_exercise.get(exercise_name, {})
+        item_status = item.get("status") if isinstance(item.get("status"), dict) else {}
+        item_metrics = item.get("metrics") if isinstance(item.get("metrics"), dict) else {}
+        feedback.append({
+            "exercise_name": exercise_name,
+            "status": fallback_item.get("status") or item_status,
+            "title": str(item.get("title") or item.get("exercise_name") or fallback_item.get("title") or ""),
+            "message": str(item.get("message") or fallback_item.get("message") or ""),
+            "metrics": fallback_item.get("metrics") or item_metrics,
+            "next_step": str(item.get("next_step") or fallback_item.get("next_step") or ""),
+            "reason": str(item.get("reason") or fallback_item.get("reason") or ""),
+        })
+
+    return feedback[:6]
+
+
 def _normalize_ai_summary(summary, fallback_summary, model):
     if not isinstance(summary, dict):
         return fallback_summary
@@ -315,15 +469,7 @@ def _normalize_ai_summary(summary, fallback_summary, model):
             for point in summary.get("focus_points", fallback_summary["focus_points"])
             if point
         ][:4],
-        "exercise_feedback": [
-            {
-                "exercise_name": str(item.get("exercise_name") or ""),
-                "title": str(item.get("title") or item.get("exercise_name") or ""),
-                "message": str(item.get("message") or ""),
-            }
-            for item in summary.get("exercise_feedback", fallback_summary.get("exercise_feedback", []))
-            if isinstance(item, dict) and (item.get("message") or item.get("title"))
-        ][:6],
+        "exercise_feedback": _normalize_ai_exercise_feedback(summary, fallback_summary),
         "next_session_strategy": str(
             summary.get("next_session_strategy") or fallback_summary["next_session_strategy"]
         ),
@@ -343,7 +489,8 @@ def _request_openai_coach_summary(context, api_key, model):
             "Não dês aconselhamento médico. Se houver dor ou fadiga forte, recomenda prudência, técnica e recuperação. "
             "Fala de forma dinâmica sobre cada exercício usando exercise_feedback. "
             "Devolve apenas JSON válido com estas chaves: headline, summary, focus_points, exercise_feedback, next_session_strategy, recovery_note. "
-            "exercise_feedback deve ser uma lista de objetos com exercise_name, title e message."
+            "exercise_feedback deve ser uma lista de objetos com exercise_name, title, message, next_step e reason. "
+            "Não alteres metrics nem status quando já existirem no contexto; usa-os apenas para explicar melhor."
         ),
         "input": json.dumps(context, ensure_ascii=False),
     }

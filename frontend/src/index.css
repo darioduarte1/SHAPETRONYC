@@ -1350,10 +1350,73 @@ code {
   background: rgba(15, 23, 42, 0.36);
 }
 
+.ai-coach-exercise-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-coach-status {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.ai-coach-status.success {
+  border-color: rgba(74, 222, 128, 0.34);
+  color: #86efac;
+  background: rgba(22, 101, 52, 0.22);
+}
+
+.ai-coach-status.warning {
+  border-color: rgba(251, 191, 36, 0.34);
+  color: #fde68a;
+  background: rgba(113, 63, 18, 0.22);
+}
+
+.ai-coach-status.info {
+  border-color: rgba(125, 211, 252, 0.34);
+  color: #bae6fd;
+  background: rgba(8, 47, 73, 0.26);
+}
+
+.ai-coach-status.muted {
+  color: #94a3b8;
+}
+
+.ai-coach-exercise-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ai-coach-exercise-metrics span {
+  padding: 6px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.48);
+  font-size: 12px;
+}
+
 .ai-coach-exercise-card p {
   margin-top: 6px;
   color: #cbd5e1;
   font-size: 13px;
+}
+
+.ai-coach-exercise-card .ai-coach-exercise-next {
+  color: #bae6fd;
+}
+
+.ai-coach-exercise-card .ai-coach-exercise-reason {
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .ai-coach-next {

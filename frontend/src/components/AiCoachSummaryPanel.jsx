@@ -5,6 +5,18 @@
 // É usado no ecrã principal do programa para apresentar feedback geral gerado a partir dos dados recentes do atleta.
 // Recebe a origem da decisão e o conteúdo já calculado, sem executar regras de treino.
 // =============================================================================
+function formatMetricValue(value, suffix = "") {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  if (typeof value === "number") {
+    return `${Number(value).toFixed(Number.isInteger(value) ? 0 : 1)}${suffix}`;
+  }
+
+  return `${value}${suffix}`;
+}
+
 export default function AiCoachSummaryPanel({
   summary,
   getSourceLabel,
@@ -50,8 +62,27 @@ export default function AiCoachSummaryPanel({
         <div className="ai-coach-exercise-list">
           {summary.exercise_feedback.map((item) => (
             <div key={`${item.exercise_name}-${item.title}`} className="ai-coach-exercise-card">
-              <strong>{item.title}</strong>
+              <div className="ai-coach-exercise-heading">
+                <strong>{item.title}</strong>
+                {item.status?.label && (
+                  <span className={`ai-coach-status ${item.status.tone || "muted"}`}>
+                    {item.status.label}
+                  </span>
+                )}
+              </div>
               <p>{item.message}</p>
+              <div className="ai-coach-exercise-metrics">
+                <span>{formatMetricValue(item.metrics?.volume, "kg")} volume</span>
+                <span>{formatMetricValue(item.metrics?.working_sets)} série(s)</span>
+                <span>{formatMetricValue(item.metrics?.average_rir)} RIR médio</span>
+                <span>{formatMetricValue(item.metrics?.failures)} falha(s)</span>
+              </div>
+              {item.next_step && (
+                <p className="ai-coach-exercise-next">{item.next_step}</p>
+              )}
+              {item.reason && (
+                <p className="ai-coach-exercise-reason">{item.reason}</p>
+              )}
             </div>
           ))}
         </div>

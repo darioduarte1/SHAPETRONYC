@@ -1012,3 +1012,115 @@ class AiCoachEngineTests(SimpleTestCase):
 
         self.assertIn("recuperação", summary["headline"].lower())
         self.assertIn("falha", " ".join(summary["focus_points"]).lower())
+
+    def test_local_coach_returns_structured_exercise_feedback_for_working_sets(self):
+        summary = build_local_coach_summary(
+            {
+                "session": {
+                    "notes": "",
+                    "training_sets": 3,
+                    "calibration_sets": 0,
+                    "total_sets": 3,
+                    "total_volume": 1800,
+                    "failure_count": 0,
+                    "exercise_count": 1,
+                },
+                "exercises": [
+                    {
+                        "training_exercise": 1,
+                        "exercise_name": "Chest Press Machine",
+                        "completed_sets": 3,
+                        "working_sets": 3,
+                        "warmup_sets": 1,
+                        "drop_sets": 0,
+                        "failures": 0,
+                        "volume": 1800,
+                        "average_rir": 2,
+                        "calibration": None,
+                    }
+                ],
+                "progression": {
+                    "summary": {"action_counts": {"maintain_load": 1}},
+                    "recommendations": [
+                        {
+                            "training_exercise": 1,
+                            "exercise_name": "Chest Press Machine",
+                            "action": "maintain_load",
+                            "recommended_weight": 50,
+                            "recommended_sets": 3,
+                            "target_reps": 12,
+                            "target_rir": 2,
+                            "reason": "Carga mantida para consolidar.",
+                        }
+                    ],
+                },
+            }
+        )
+
+        feedback = summary["exercise_feedback"][0]
+
+        self.assertEqual(feedback["status"]["key"], "stable")
+        self.assertEqual(feedback["metrics"]["working_sets"], 3)
+        self.assertEqual(feedback["metrics"]["volume"], 1800)
+        self.assertIn("50kg", feedback["next_step"])
+        self.assertIn("consolidar", feedback["reason"].lower())
+
+    def test_local_coach_returns_structured_exercise_feedback_for_calibration(self):
+        summary = build_local_coach_summary(
+            {
+                "session": {
+                    "notes": "",
+                    "training_sets": 0,
+                    "calibration_sets": 3,
+                    "total_sets": 3,
+                    "total_volume": 900,
+                    "calibration_volume": 900,
+                    "failure_count": 0,
+                    "exercise_count": 1,
+                },
+                "exercises": [
+                    {
+                        "exercise": 10,
+                        "exercise_name": "Pec Deck",
+                        "completed_sets": 3,
+                        "working_sets": 0,
+                        "warmup_sets": 0,
+                        "drop_sets": 0,
+                        "failures": 0,
+                        "volume": 900,
+                        "average_rir": None,
+                        "calibration": {
+                            "status": "calibrated",
+                            "estimated_working_weight": 30,
+                            "target_reps": 12,
+                            "target_rir": 2,
+                            "confidence": "alta",
+                            "set_count": 3,
+                            "volume": 900,
+                        },
+                    }
+                ],
+                "progression": {
+                    "summary": {"action_counts": {"use_calibrated_load": 1}},
+                    "recommendations": [
+                        {
+                            "exercise": 10,
+                            "exercise_name": "Pec Deck",
+                            "action": "use_calibrated_load",
+                            "recommended_weight": 30,
+                            "recommended_sets": 3,
+                            "target_reps": 12,
+                            "target_rir": 2,
+                            "reason": "A calibração inicial encontrou um peso de trabalho.",
+                        }
+                    ],
+                },
+            }
+        )
+
+        feedback = summary["exercise_feedback"][0]
+
+        self.assertEqual(feedback["status"]["key"], "calibrated")
+        self.assertEqual(feedback["metrics"]["calibration_sets"], 3)
+        self.assertIn("30kg", feedback["next_step"])
+        self.assertIn("base criada", feedback["title"].lower())
