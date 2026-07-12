@@ -214,6 +214,10 @@ class UserTrainingExportView(APIView):
                     "started_at": session.started_at,
                     "completed_at": session.completed_at,
                     "notes": session.notes,
+                    "coach_feedback": session.coach_feedback,
+                    "coach_feedback_source": session.coach_feedback_source,
+                    "coach_feedback_status": session.coach_feedback_status,
+                    "coach_feedback_model": session.coach_feedback_model,
                 }
                 for session in sessions
             ],

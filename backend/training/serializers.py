@@ -109,4 +109,8 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "notes",
+            "coach_feedback",
+            "coach_feedback_source",
+            "coach_feedback_status",
+            "coach_feedback_model",
         ]

@@ -1226,6 +1226,13 @@ code {
   font-size: 13px;
 }
 
+.recent-session-row small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .muted-text {
   color: #94a3b8;
 }

@@ -378,6 +378,39 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(recommendation["confidence"], "média")
         self.assertIn("calibrado", recommendation["title"].lower())
 
+    def test_finish_workout_persists_coach_feedback_on_session(self):
+        session = WorkoutSession.objects.create(
+            user=self.user,
+            workout=self.workout,
+            status="IN_PROGRESS",
+        )
+        client = APIClient()
+
+        response = client.post(
+            "/api/training/finish-session/",
+            {
+                "session_id": session.id,
+                "notes": "sessao curta para testar feedback",
+            },
+            format="json",
+        )
+        session.refresh_from_db()
+        sessions_response = client.get(f"/api/training/sessions/{self.profile.id}/")
+        dashboard = build_athlete_dashboard(self.profile)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ai_coach_summary", response.data)
+        self.assertEqual(session.status, "COMPLETED")
+        self.assertTrue(session.coach_feedback)
+        self.assertEqual(session.coach_feedback["headline"], response.data["ai_coach_summary"]["headline"])
+        self.assertEqual(session.coach_feedback_source, session.coach_feedback["source"])
+        self.assertEqual(session.coach_feedback_status, session.coach_feedback["status"])
+        self.assertEqual(sessions_response.data[0]["coach_feedback"]["headline"], session.coach_feedback["headline"])
+        self.assertEqual(
+            dashboard["recent_sessions"][0]["coach_feedback"]["headline"],
+            session.coach_feedback["headline"],
+        )
+
     def test_workout_progression_uses_calibration_scale_snapshot(self):
         self.exercise.main_weight_options = [27.3]
         self.exercise.save(update_fields=["main_weight_options"])

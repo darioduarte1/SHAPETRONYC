@@ -66,6 +66,14 @@ def serialize_session_summary(session, set_logs, calibrations=None):
         "calibrated_exercises": len(session_calibrations),
         "failure_count": len([set_log for set_log in session_sets if set_log.reached_failure]),
         "average_rir": average(rir_values),
+        "coach_feedback": {
+            "headline": session.coach_feedback.get("headline", ""),
+            "summary": session.coach_feedback.get("summary", ""),
+            "exercise_feedback_count": len(session.coach_feedback.get("exercise_feedback", [])),
+            "source": session.coach_feedback_source,
+            "status": session.coach_feedback_status,
+            "model": session.coach_feedback_model,
+        } if session.coach_feedback else None,
     }
 
 

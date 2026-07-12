@@ -87,7 +87,12 @@ export default function AthleteDashboardPanel({
           <div className="compact-list">
             {(dashboard.recent_sessions || []).slice(0, 4).map((session) => (
               <div key={session.id} className="recent-session-row">
-                <span>{session.workout_name}</span>
+                <span>
+                  {session.workout_name}
+                  {session.coach_feedback?.headline && (
+                    <small>{session.coach_feedback.headline}</small>
+                  )}
+                </span>
                 <span>{formatNumber(session.volume)} kg</span>
               </div>
             ))}

@@ -13,8 +13,10 @@ Dar ao atleta uma leitura clara e motivadora do que aconteceu em cada exercício
 1. O atleta finaliza o treino.
 2. O backend recolhe séries normais, séries de calibração, progressão e notas.
 3. O motor local cria feedback estruturado por exercício.
-4. A IA externa, quando disponível, pode melhorar o texto sem alterar métricas e estados calculados localmente.
-5. O frontend mostra cartões por exercício com estado, métricas e próximo passo.
+4. O feedback fica guardado na `WorkoutSession`.
+5. A IA externa, quando disponível, pode melhorar o texto sem alterar métricas e estados calculados localmente.
+6. O frontend mostra cartões por exercício com estado, métricas e próximo passo.
+7. O dashboard/histórico conseguem recuperar o resumo do coach depois de sair do ecrã.
 
 ## Dados Necessários
 
@@ -38,6 +40,7 @@ Dar ao atleta uma leitura clara e motivadora do que aconteceu em cada exercício
 
 ## Backend
 
+- Modelo: `WorkoutSession.coach_feedback`
 - Serviço: `backend/recommendations/services/ai_coach_engine.py`
 - Endpoint: `POST /api/training/finish-session/`
 - Testes: `backend/recommendations/tests.py`
@@ -55,6 +58,7 @@ Dar ao atleta uma leitura clara e motivadora do que aconteceu em cada exercício
 - [x] Mostra estado por exercício.
 - [x] Mostra métricas por exercício.
 - [x] Mostra próximo passo.
+- [x] Guarda feedback na sessão.
+- [x] Expõe feedback no histórico de sessões e no dashboard.
 - [x] Não usa `alert()`.
 - [x] `./scripts/check.sh` passa.
-

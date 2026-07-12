@@ -153,7 +153,7 @@ npm run build
 ```
 
 Última validação feita:
-- Backend: 78 testes a passar
+- Backend: 81 testes a passar
 - Frontend: lint a passar
 - Frontend: build a passar
 
@@ -209,6 +209,7 @@ Implementado:
 - Botão experimental no menu principal para apagar atletas de teste e todos os dados associados
 - Mensagens internas da app para erros/sucessos, substituindo alertas nativos do browser
 - Modo experimental configurável por `VITE_EXPERIMENTAL_MODE`
+- Feedback pós-treino por exercício guardado na sessão e visível no histórico/dashboard
 - Script único de validação do projeto em `scripts/check.sh`
 - Dependências do backend registadas em `backend/requirements.txt`
 - Remoção de código legado não utilizado: app antiga `workouts`, assets iniciais do template Vite/React e wrapper antigo de recomendação híbrida

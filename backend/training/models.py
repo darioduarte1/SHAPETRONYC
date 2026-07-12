@@ -290,6 +290,10 @@ class WorkoutSession(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     notes = models.TextField(blank=True)
+    coach_feedback = models.JSONField(default=dict, blank=True)
+    coach_feedback_source = models.CharField(max_length=60, blank=True)
+    coach_feedback_status = models.CharField(max_length=60, blank=True)
+    coach_feedback_model = models.CharField(max_length=100, blank=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.workout.name} - {self.status}"

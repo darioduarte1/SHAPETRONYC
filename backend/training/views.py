@@ -177,6 +177,16 @@ class FinishWorkoutSessionView(APIView):
             notes,
             session_calibrations,
         )
+        session.coach_feedback = ai_coach_summary
+        session.coach_feedback_source = ai_coach_summary.get("source", "")
+        session.coach_feedback_status = ai_coach_summary.get("status", "")
+        session.coach_feedback_model = ai_coach_summary.get("model") or ""
+        session.save(update_fields=[
+            "coach_feedback",
+            "coach_feedback_source",
+            "coach_feedback_status",
+            "coach_feedback_model",
+        ])
         try:
             profile = UserProfile.objects.get(user=session.user)
             refresh_training_memory(profile)

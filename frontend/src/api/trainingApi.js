@@ -42,6 +42,10 @@ export function getTrainingBlock(profileId) {
   return apiRequest(`/api/training/training-blocks/${profileId}/`);
 }
 
+export function getWorkoutSessions(profileId) {
+  return apiRequest(`/api/training/sessions/${profileId}/`);
+}
+
 export function getProgram(profileId) {
   return apiRequest(`/api/training/program/${profileId}/`);
 }
