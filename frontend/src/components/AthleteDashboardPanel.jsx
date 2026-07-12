@@ -5,6 +5,9 @@
 // É usado no ecrã principal para mostrar evolução, volume, séries, calibrações, últimos treinos, alertas e memória disponível.
 // Recebe dados agregados do backend e funções de formatação vindas do App.jsx.
 // =============================================================================
+import { useState } from "react";
+import AiCoachSummaryPanel from "./AiCoachSummaryPanel";
+
 export default function AthleteDashboardPanel({
   dashboard,
   formatDate,
@@ -12,6 +15,8 @@ export default function AthleteDashboardPanel({
   getConfidenceColor,
   getMaxWeeklyVolume,
 }) {
+  const [openFeedbackSessionId, setOpenFeedbackSessionId] = useState(null);
+
   if (!dashboard) {
     return null;
   }
@@ -86,14 +91,36 @@ export default function AthleteDashboardPanel({
           <strong>Últimos treinos</strong>
           <div className="compact-list">
             {(dashboard.recent_sessions || []).slice(0, 4).map((session) => (
-              <div key={session.id} className="recent-session-row">
-                <span>
-                  {session.workout_name}
-                  {session.coach_feedback?.headline && (
-                    <small>{session.coach_feedback.headline}</small>
-                  )}
-                </span>
-                <span>{formatNumber(session.volume)} kg</span>
+              <div key={session.id} className="recent-session-card">
+                <div className="recent-session-row">
+                  <span>
+                    {session.workout_name}
+                    {session.coach_feedback?.headline && (
+                      <small>{session.coach_feedback.headline}</small>
+                    )}
+                  </span>
+                  <span>{formatNumber(session.volume)} kg</span>
+                </div>
+                {session.coach_feedback && (
+                  <button
+                    type="button"
+                    className="recent-session-feedback-button"
+                    onClick={() =>
+                      setOpenFeedbackSessionId(
+                        openFeedbackSessionId === session.id ? null : session.id
+                      )
+                    }
+                  >
+                    {openFeedbackSessionId === session.id ? "Fechar feedback" : "Ver feedback"}
+                  </button>
+                )}
+                {openFeedbackSessionId === session.id && session.coach_feedback && (
+                  <AiCoachSummaryPanel
+                    summary={session.coach_feedback}
+                    getSourceLabel={(status) => status || "histórico"}
+                    compact
+                  />
+                )}
               </div>
             ))}
             {dashboard.recent_sessions?.length === 0 && (

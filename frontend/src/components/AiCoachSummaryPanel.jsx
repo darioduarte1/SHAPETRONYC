@@ -20,13 +20,14 @@ function formatMetricValue(value, suffix = "") {
 export default function AiCoachSummaryPanel({
   summary,
   getSourceLabel,
+  compact = false,
 }) {
   if (!summary) {
     return null;
   }
 
   return (
-    <section className="ai-coach-panel">
+    <section className={`ai-coach-panel ${compact ? "compact" : ""}`}>
       <div className="panel-heading-row">
         <div>
           <div className="panel-kicker blue">AI Coach</div>

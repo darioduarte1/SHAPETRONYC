@@ -1112,6 +1112,20 @@ code {
   background: rgba(8, 47, 73, 0.42);
 }
 
+.ai-coach-panel.compact {
+  margin-top: 10px;
+  padding: 12px;
+  background: rgba(8, 47, 73, 0.26);
+}
+
+.ai-coach-panel.compact .ai-coach-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ai-coach-panel.compact h3 {
+  font-size: 17px;
+}
+
 .panel-heading-row {
   display: flex;
   justify-content: space-between;
@@ -1217,8 +1231,6 @@ code {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .recent-session-row span:last-child {
@@ -1231,6 +1243,22 @@ code {
   margin-top: 3px;
   color: #94a3b8;
   font-size: 12px;
+}
+
+.recent-session-card {
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.recent-session-feedback-button {
+  margin-top: 8px;
+  padding: 6px 9px;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 6px;
+  background: rgba(8, 47, 73, 0.32);
+  color: #bae6fd;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .muted-text {

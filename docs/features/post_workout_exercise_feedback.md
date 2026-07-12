@@ -50,6 +50,7 @@ Dar ao atleta uma leitura clara e motivadora do que aconteceu em cada exercício
 - Componente: `frontend/src/components/AiCoachSummaryPanel.jsx`
 - Estilos: `frontend/src/index.css`
 - Dados: `latestAiCoach.exercise_feedback`
+- Histórico: expansão de feedback em `dashboard.recent_sessions[].coach_feedback`
 
 ## Critérios De Aceitação
 
@@ -60,5 +61,6 @@ Dar ao atleta uma leitura clara e motivadora do que aconteceu em cada exercício
 - [x] Mostra próximo passo.
 - [x] Guarda feedback na sessão.
 - [x] Expõe feedback no histórico de sessões e no dashboard.
+- [x] Permite abrir feedback antigo nos últimos treinos do dashboard.
 - [x] Não usa `alert()`.
 - [x] `./scripts/check.sh` passa.

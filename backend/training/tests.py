@@ -410,6 +410,9 @@ class AthleteDashboardTests(TestCase):
             dashboard["recent_sessions"][0]["coach_feedback"]["headline"],
             session.coach_feedback["headline"],
         )
+        self.assertIn("summary", dashboard["recent_sessions"][0]["coach_feedback"])
+        self.assertIn("exercise_feedback", dashboard["recent_sessions"][0]["coach_feedback"])
+        self.assertIn("next_session_strategy", dashboard["recent_sessions"][0]["coach_feedback"])
 
     def test_workout_progression_uses_calibration_scale_snapshot(self):
         self.exercise.main_weight_options = [27.3]

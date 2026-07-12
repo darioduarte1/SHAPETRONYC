@@ -69,6 +69,11 @@ def serialize_session_summary(session, set_logs, calibrations=None):
         "coach_feedback": {
             "headline": session.coach_feedback.get("headline", ""),
             "summary": session.coach_feedback.get("summary", ""),
+            "focus_points": session.coach_feedback.get("focus_points", []),
+            "exercise_feedback": session.coach_feedback.get("exercise_feedback", []),
+            "next_session_strategy": session.coach_feedback.get("next_session_strategy", ""),
+            "recovery_note": session.coach_feedback.get("recovery_note", ""),
+            "metrics": session.coach_feedback.get("metrics", {}),
             "exercise_feedback_count": len(session.coach_feedback.get("exercise_feedback", [])),
             "source": session.coach_feedback_source,
             "status": session.coach_feedback_status,
