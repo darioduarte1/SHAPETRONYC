@@ -1261,6 +1261,97 @@ code {
   cursor: pointer;
 }
 
+.session-detail-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.session-detail-heading,
+.session-exercise-heading,
+.session-calibration-summary,
+.session-set-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.session-detail-heading {
+  align-items: flex-start;
+}
+
+.session-detail-heading p,
+.session-exercise-heading span {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.session-detail-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.session-detail-metrics span,
+.session-calibration-summary span {
+  padding: 5px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.5);
+  font-size: 12px;
+}
+
+.session-exercise-list {
+  display: grid;
+  gap: 10px;
+}
+
+.session-exercise-card {
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.session-exercise-heading {
+  align-items: flex-start;
+}
+
+.session-calibration-summary {
+  flex-wrap: wrap;
+  margin-top: 8px;
+  justify-content: flex-start;
+}
+
+.session-set-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.session-set-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.2fr) repeat(3, minmax(58px, 0.8fr));
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.34);
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.session-set-row span:first-child {
+  color: #e5e7eb;
+  font-weight: bold;
+}
+
 .muted-text {
   color: #94a3b8;
 }

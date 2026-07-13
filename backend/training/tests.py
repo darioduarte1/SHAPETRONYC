@@ -315,6 +315,9 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(dashboard["summary"]["failure_count"], 1)
         self.assertEqual(dashboard["summary"]["total_volume"], 1700.0)
         self.assertEqual(len(dashboard["recent_sessions"]), 3)
+        self.assertEqual(dashboard["recent_sessions"][0]["exercises"][0]["exercise_name"], "Chest Press Machine")
+        self.assertEqual(dashboard["recent_sessions"][0]["exercises"][0]["sets"][0]["weight_used"], 55.0)
+        self.assertEqual(dashboard["recent_sessions"][0]["exercises"][0]["sets"][0]["reps_completed"], 8)
         self.assertEqual(dashboard["top_progressing_exercises"][0]["exercise_name"], "Chest Press Machine")
         self.assertEqual(dashboard["top_progressing_exercises"][0]["load_change"], 5.0)
         self.assertEqual(dashboard["watchlist_exercises"][0]["exercise_name"], "Chest Press Machine")
@@ -356,6 +359,8 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(dashboard["summary"]["total_volume"], 1134.0)
         self.assertEqual(dashboard["recent_sessions"][0]["volume"], 1134.0)
         self.assertEqual(dashboard["recent_sessions"][0]["calibration_sets"], 3)
+        self.assertEqual(dashboard["recent_sessions"][0]["exercises"][0]["calibration"]["estimated_working_weight"], 32.0)
+        self.assertEqual(len(dashboard["recent_sessions"][0]["exercises"][0]["calibration"]["sets"]), 3)
         self.assertEqual(dashboard["calibrated_exercises"][0]["estimated_working_weight"], 32.0)
 
     def test_workout_progression_uses_calibrated_weight_without_normal_sets(self):

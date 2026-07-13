@@ -42,6 +42,87 @@ def average(values, digits=1):
     return round_metric(sum(values) / len(values), digits)
 
 
+def serialize_set_log(set_log):
+    return {
+        "id": set_log.id,
+        "set_number": set_log.set_number,
+        "set_type": set_log.set_type,
+        "planned_weight": round_metric(set_log.planned_weight) if set_log.planned_weight is not None else None,
+        "weight_used": round_metric(set_log.weight_used),
+        "target_min_reps": set_log.target_min_reps,
+        "target_max_reps": set_log.target_max_reps,
+        "reps_completed": set_log.reps_completed,
+        "rir": set_log.rir,
+        "reached_failure": set_log.reached_failure,
+        "notes": set_log.notes,
+        "created_at": set_log.created_at,
+    }
+
+
+def serialize_calibration_set(calibration_set, index):
+    return {
+        "id": f"calibration-{index}",
+        "set_number": index,
+        "set_type": "CALIBRATION",
+        "weight_used": round_metric(calibration_set.get("weight_used")),
+        "reps_completed": calibration_set.get("reps_completed"),
+        "result_color": calibration_set.get("result_color", ""),
+        "reached_failure": calibration_set.get("reached_failure", True),
+    }
+
+
+def serialize_session_exercises(set_logs, calibrations=None):
+    exercises = {}
+
+    for set_log in set_logs:
+        exercise_id = set_log.exercise_id
+        training_exercise = set_log.training_exercise
+        item = exercises.setdefault(
+            exercise_id,
+            {
+                "exercise_id": exercise_id,
+                "training_exercise_id": set_log.training_exercise_id,
+                "exercise_name": set_log.exercise.name,
+                "order": training_exercise.order if training_exercise else 999,
+                "target_min_reps": training_exercise.target_min_reps if training_exercise else set_log.target_min_reps,
+                "target_max_reps": training_exercise.target_max_reps if training_exercise else set_log.target_max_reps,
+                "target_rir": training_exercise.target_rir if training_exercise else None,
+                "sets": [],
+                "calibration": None,
+            },
+        )
+        item["sets"].append(serialize_set_log(set_log))
+
+    for calibration in calibrations or []:
+        item = exercises.setdefault(
+            calibration.exercise_id,
+            {
+                "exercise_id": calibration.exercise_id,
+                "training_exercise_id": None,
+                "exercise_name": calibration.exercise.name,
+                "order": 999,
+                "target_min_reps": calibration.target_reps,
+                "target_max_reps": calibration.target_reps,
+                "target_rir": calibration.target_rir,
+                "sets": [],
+                "calibration": None,
+            },
+        )
+        item["calibration"] = {
+            "status": calibration.status,
+            "estimated_working_weight": round_metric(calibration.estimated_working_weight),
+            "target_reps": calibration.target_reps,
+            "target_rir": calibration.target_rir,
+            "confidence": calibration.confidence,
+            "sets": [
+                serialize_calibration_set(calibration_set, index)
+                for index, calibration_set in enumerate(calibration.calibration_sets or [], start=1)
+            ],
+        }
+
+    return sorted(exercises.values(), key=lambda item: (item["order"], item["exercise_name"]))
+
+
 def serialize_session_summary(session, set_logs, calibrations=None):
     session_sets = list(set_logs)
     session_calibrations = list(calibrations or [])
@@ -66,6 +147,7 @@ def serialize_session_summary(session, set_logs, calibrations=None):
         "calibrated_exercises": len(session_calibrations),
         "failure_count": len([set_log for set_log in session_sets if set_log.reached_failure]),
         "average_rir": average(rir_values),
+        "exercises": serialize_session_exercises(session_sets, session_calibrations),
         "coach_feedback": {
             "headline": session.coach_feedback.get("headline", ""),
             "summary": session.coach_feedback.get("summary", ""),
@@ -258,7 +340,7 @@ def build_athlete_dashboard(profile):
             user=profile.user,
             workout_session_id__in=completed_session_ids,
         )
-        .select_related("exercise", "workout_session__workout")
+        .select_related("exercise", "training_exercise", "workout_session__workout")
         .order_by("workout_session__completed_at", "set_number", "created_at")
     )
     calibrations = list(

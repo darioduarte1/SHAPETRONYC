@@ -6,7 +6,7 @@
 // Recebe dados agregados do backend e funções de formatação vindas do App.jsx.
 // =============================================================================
 import { useState } from "react";
-import AiCoachSummaryPanel from "./AiCoachSummaryPanel";
+import WorkoutSessionDetailPanel from "./WorkoutSessionDetailPanel";
 
 export default function AthleteDashboardPanel({
   dashboard,
@@ -15,7 +15,7 @@ export default function AthleteDashboardPanel({
   getConfidenceColor,
   getMaxWeeklyVolume,
 }) {
-  const [openFeedbackSessionId, setOpenFeedbackSessionId] = useState(null);
+  const [openSessionId, setOpenSessionId] = useState(null);
 
   if (!dashboard) {
     return null;
@@ -101,24 +101,24 @@ export default function AthleteDashboardPanel({
                   </span>
                   <span>{formatNumber(session.volume)} kg</span>
                 </div>
-                {session.coach_feedback && (
+                {(session.coach_feedback || session.exercises?.length > 0) && (
                   <button
                     type="button"
                     className="recent-session-feedback-button"
                     onClick={() =>
-                      setOpenFeedbackSessionId(
-                        openFeedbackSessionId === session.id ? null : session.id
+                      setOpenSessionId(
+                        openSessionId === session.id ? null : session.id
                       )
                     }
                   >
-                    {openFeedbackSessionId === session.id ? "Fechar feedback" : "Ver feedback"}
+                    {openSessionId === session.id ? "Fechar treino" : "Ver treino"}
                   </button>
                 )}
-                {openFeedbackSessionId === session.id && session.coach_feedback && (
-                  <AiCoachSummaryPanel
-                    summary={session.coach_feedback}
-                    getSourceLabel={(status) => status || "histórico"}
-                    compact
+                {openSessionId === session.id && (
+                  <WorkoutSessionDetailPanel
+                    session={session}
+                    formatDate={formatDate}
+                    formatNumber={formatNumber}
                   />
                 )}
               </div>
