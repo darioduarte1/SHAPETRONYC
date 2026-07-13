@@ -6,6 +6,7 @@
 // Recebe dados agregados do backend e funções de formatação vindas do App.jsx.
 // =============================================================================
 import { useState } from "react";
+import ExerciseHistoryDetailPanel from "./ExerciseHistoryDetailPanel";
 import WorkoutSessionDetailPanel from "./WorkoutSessionDetailPanel";
 
 export default function AthleteDashboardPanel({
@@ -16,6 +17,7 @@ export default function AthleteDashboardPanel({
   getMaxWeeklyVolume,
 }) {
   const [openSessionId, setOpenSessionId] = useState(null);
+  const [openExerciseId, setOpenExerciseId] = useState(null);
 
   if (!dashboard) {
     return null;
@@ -164,19 +166,48 @@ export default function AthleteDashboardPanel({
         </div>
       </div>
 
-      {(dashboard.calibrated_exercises || []).length > 0 && (
+      {(dashboard.exercise_details || []).length > 0 && (
         <div className="dashboard-section">
-          <strong>Dados calibrados</strong>
+          <strong>Histórico por exercício</strong>
           <div className="dashboard-card-grid">
-            {dashboard.calibrated_exercises.map((exercise) => (
+            {dashboard.exercise_details.map((exercise) => (
               <div key={exercise.exercise_id} className="calibrated-exercise-card">
-                <span>{exercise.exercise_name}</span>
+                <div className="exercise-history-card-heading">
+                  <span>{exercise.exercise_name}</span>
+                  <span className={`exercise-history-status ${exercise.status?.status || "stable"}`}>
+                    {exercise.status?.label || "Estável"}
+                  </span>
+                </div>
                 <p>
-                  Peso base: {formatNumber(exercise.estimated_working_weight)} kg · {exercise.set_count} série(s)
+                  {exercise.calibration
+                    ? `Peso base: ${formatNumber(exercise.calibration.estimated_working_weight)} kg`
+                    : `Última carga: ${formatNumber(exercise.latest_working_weight)} kg`}
+                  {" · "}
+                  {exercise.sessions || 0} treino(s)
                 </p>
-                <p style={{ color: getConfidenceColor(exercise.confidence) }}>
-                  Confiança {exercise.confidence}
+                <p>
+                  Evolução: {Number(exercise.load_change || 0) > 0 ? "+" : ""}
+                  {formatNumber(exercise.load_change)} kg
                 </p>
+                <button
+                  type="button"
+                  className="recent-session-feedback-button"
+                  onClick={() =>
+                    setOpenExerciseId(
+                      openExerciseId === exercise.exercise_id ? null : exercise.exercise_id
+                    )
+                  }
+                >
+                  {openExerciseId === exercise.exercise_id ? "Fechar evolução" : "Ver evolução"}
+                </button>
+                {openExerciseId === exercise.exercise_id && (
+                  <ExerciseHistoryDetailPanel
+                    exercise={exercise}
+                    formatDate={formatDate}
+                    formatNumber={formatNumber}
+                    getConfidenceColor={getConfidenceColor}
+                  />
+                )}
               </div>
             ))}
           </div>

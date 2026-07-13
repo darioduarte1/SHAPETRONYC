@@ -1352,6 +1352,111 @@ code {
   font-weight: bold;
 }
 
+.exercise-history-card-heading,
+.exercise-history-summary,
+.exercise-history-calibration {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.exercise-history-status {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.42);
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.exercise-history-status.progressing {
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #86efac;
+  background: rgba(22, 101, 52, 0.18);
+}
+
+.exercise-history-status.warning,
+.exercise-history-status.watch {
+  border-color: rgba(251, 191, 36, 0.34);
+  color: #fde68a;
+  background: rgba(113, 63, 18, 0.2);
+}
+
+.exercise-history-status.stable {
+  border-color: rgba(125, 211, 252, 0.22);
+  color: #bae6fd;
+  background: rgba(8, 47, 73, 0.24);
+}
+
+.exercise-history-detail-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.exercise-history-summary p,
+.exercise-history-calibration p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.exercise-history-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+}
+
+.exercise-history-metrics span {
+  padding: 6px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.5);
+  font-size: 12px;
+}
+
+.exercise-history-calibration {
+  padding: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 8px;
+  background: rgba(20, 83, 45, 0.14);
+}
+
+.exercise-history-calibration span {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.exercise-history-set-list {
+  display: grid;
+  gap: 6px;
+}
+
+.exercise-history-set-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 1.2fr) repeat(3, minmax(58px, 0.8fr));
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.46);
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.exercise-history-set-row span:first-child {
+  color: #e5e7eb;
+  font-weight: bold;
+}
+
 .muted-text {
   color: #94a3b8;
 }

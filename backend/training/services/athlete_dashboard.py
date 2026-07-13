@@ -15,6 +15,8 @@ from training.services.training_memory import refresh_training_memory
 RECENT_SESSION_LIMIT = 6
 WEEKLY_VOLUME_LIMIT = 8
 EXERCISE_INSIGHT_LIMIT = 5
+EXERCISE_DETAIL_LIMIT = 12
+EXERCISE_DETAIL_SET_LIMIT = 8
 
 
 def round_metric(value, digits=1):
@@ -324,6 +326,181 @@ def serialize_calibrated_exercise(calibration):
     }
 
 
+def serialize_calibration_summary(calibration):
+    if not calibration:
+        return None
+
+    calibration_sets = calibration.calibration_sets or []
+
+    return {
+        "status": calibration.status,
+        "estimated_working_weight": round_metric(calibration.estimated_working_weight),
+        "target_reps": calibration.target_reps,
+        "target_rir": calibration.target_rir,
+        "confidence": calibration.confidence,
+        "set_count": len(calibration_sets),
+        "volume": round_metric(calibration_volume(calibration)),
+        "updated_at": calibration.updated_at,
+        "sets": [
+            serialize_calibration_set(calibration_set, index)
+            for index, calibration_set in enumerate(calibration_sets, start=1)
+        ],
+    }
+
+
+def build_exercise_status(recent_working_sets, load_change):
+    failures = len([set_log for set_log in recent_working_sets if set_log.reached_failure])
+    low_rep_sets = len([
+        set_log
+        for set_log in recent_working_sets
+        if set_log.reps_completed < (set_log.target_min_reps or 10)
+    ])
+
+    if failures or low_rep_sets:
+        return {
+            "status": "watch",
+            "label": "A vigiar",
+            "summary": "Há sinais recentes de fadiga, falha ou reps abaixo do alvo.",
+        }
+
+    if load_change and load_change > 0:
+        return {
+            "status": "progressing",
+            "label": "A evoluir",
+            "summary": "A carga de trabalho está a subir de forma positiva.",
+        }
+
+    return {
+        "status": "stable",
+        "label": "Estável",
+        "summary": "Ainda precisamos de mais sessões para confirmar uma tendência forte.",
+    }
+
+
+def exercise_detail_sort_timestamp(item):
+    calibration_updated_at = (item.get("calibration") or {}).get("updated_at")
+
+    if calibration_updated_at:
+        return calibration_updated_at.timestamp()
+
+    if item.get("latest_sets"):
+        created_at = item["latest_sets"][-1].get("created_at")
+
+        if created_at:
+            return created_at.timestamp()
+
+    return 0
+
+
+def build_exercise_details(set_logs_by_exercise, calibrations):
+    details = {}
+
+    for exercise_sets in set_logs_by_exercise.values():
+        if not exercise_sets:
+            continue
+
+        exercise = exercise_sets[0].exercise
+        details.setdefault(
+            exercise.id,
+            {
+                "exercise_id": exercise.id,
+                "exercise_name": exercise.name,
+                "muscle_group": exercise.muscle_group,
+                "equipment": exercise.equipment,
+                "sessions": 0,
+                "working_sets": 0,
+                "total_volume": 0,
+                "first_working_weight": None,
+                "latest_working_weight": None,
+                "load_change": 0,
+                "latest_reps": None,
+                "average_recent_rir": None,
+                "failure_count": 0,
+                "calibration": None,
+                "latest_sets": [],
+                "status": None,
+            },
+        )
+
+    for calibration in calibrations:
+        exercise = calibration.exercise
+        details.setdefault(
+            exercise.id,
+            {
+                "exercise_id": exercise.id,
+                "exercise_name": exercise.name,
+                "muscle_group": exercise.muscle_group,
+                "equipment": exercise.equipment,
+                "sessions": 0,
+                "working_sets": 0,
+                "total_volume": 0,
+                "first_working_weight": None,
+                "latest_working_weight": None,
+                "load_change": 0,
+                "latest_reps": None,
+                "average_recent_rir": None,
+                "failure_count": 0,
+                "calibration": None,
+                "latest_sets": [],
+                "status": None,
+            },
+        )
+        details[exercise.id]["calibration"] = serialize_calibration_summary(calibration)
+
+    for exercise_id, item in details.items():
+        exercise_sets = sorted(
+            set_logs_by_exercise.get(exercise_id, []),
+            key=lambda set_log: (
+                set_log.workout_session.completed_at or set_log.created_at,
+                set_log.set_number,
+                set_log.created_at,
+            ),
+        )
+        working_sets = [set_log for set_log in exercise_sets if set_log.set_type == "WORKING"]
+        session_groups = defaultdict(list)
+
+        for set_log in exercise_sets:
+            session_groups[set_log.workout_session_id].append(set_log)
+
+        first_sets = [
+            first_working_set_for_session(session_sets)
+            for session_sets in session_groups.values()
+        ]
+        first_sets = [set_log for set_log in first_sets if set_log]
+        first_sets.sort(key=lambda set_log: set_log.workout_session.completed_at or set_log.created_at)
+        recent_working_sets = working_sets[-4:]
+        rir_values = [set_log.rir for set_log in recent_working_sets if set_log.rir is not None]
+        load_change = (
+            round_metric(first_sets[-1].weight_used - first_sets[0].weight_used)
+            if len(first_sets) >= 2
+            else 0
+        )
+
+        item["sessions"] = len(session_groups)
+        item["working_sets"] = len(working_sets)
+        item["total_volume"] = round_metric(sum(set_volume(set_log) for set_log in exercise_sets))
+        item["first_working_weight"] = round_metric(first_sets[0].weight_used) if first_sets else None
+        item["latest_working_weight"] = round_metric(first_sets[-1].weight_used) if first_sets else None
+        item["load_change"] = load_change
+        item["latest_reps"] = first_sets[-1].reps_completed if first_sets else None
+        item["average_recent_rir"] = average(rir_values)
+        item["failure_count"] = len([set_log for set_log in working_sets if set_log.reached_failure])
+        item["latest_sets"] = [
+            serialize_set_log(set_log)
+            for set_log in exercise_sets[-EXERCISE_DETAIL_SET_LIMIT:]
+        ]
+        item["status"] = build_exercise_status(recent_working_sets, load_change)
+
+    return sorted(
+        details.values(),
+        key=lambda item: (
+            item["calibration"] is None,
+            -exercise_detail_sort_timestamp(item),
+            item["exercise_name"],
+        ),
+    )[:EXERCISE_DETAIL_LIMIT]
+
+
 def build_athlete_dashboard(profile):
     training_memories = refresh_training_memory(profile)
     completed_sessions = list(
@@ -402,6 +579,7 @@ def build_athlete_dashboard(profile):
             serialize_calibrated_exercise(calibration)
             for calibration in calibrations[:EXERCISE_INSIGHT_LIMIT]
         ],
+        "exercise_details": build_exercise_details(sets_by_exercise, calibrations),
         "training_memories": training_memories,
         **exercise_insights,
     }

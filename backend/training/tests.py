@@ -322,6 +322,12 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(dashboard["top_progressing_exercises"][0]["load_change"], 5.0)
         self.assertEqual(dashboard["watchlist_exercises"][0]["exercise_name"], "Chest Press Machine")
         self.assertIn("falha", dashboard["watchlist_exercises"][0]["reason"])
+        self.assertEqual(dashboard["exercise_details"][0]["exercise_name"], "Chest Press Machine")
+        self.assertEqual(dashboard["exercise_details"][0]["sessions"], 3)
+        self.assertEqual(dashboard["exercise_details"][0]["latest_working_weight"], 55.0)
+        self.assertEqual(dashboard["exercise_details"][0]["load_change"], 5.0)
+        self.assertEqual(dashboard["exercise_details"][0]["status"]["status"], "watch")
+        self.assertEqual(len(dashboard["exercise_details"][0]["latest_sets"]), 3)
 
     def test_dashboard_includes_experimental_calibration_data(self):
         completed_at = timezone.now()
@@ -362,6 +368,10 @@ class AthleteDashboardTests(TestCase):
         self.assertEqual(dashboard["recent_sessions"][0]["exercises"][0]["calibration"]["estimated_working_weight"], 32.0)
         self.assertEqual(len(dashboard["recent_sessions"][0]["exercises"][0]["calibration"]["sets"]), 3)
         self.assertEqual(dashboard["calibrated_exercises"][0]["estimated_working_weight"], 32.0)
+        self.assertEqual(dashboard["exercise_details"][0]["exercise_name"], "Chest Press Machine")
+        self.assertEqual(dashboard["exercise_details"][0]["calibration"]["estimated_working_weight"], 32.0)
+        self.assertEqual(dashboard["exercise_details"][0]["calibration"]["set_count"], 3)
+        self.assertEqual(dashboard["exercise_details"][0]["working_sets"], 0)
 
     def test_workout_progression_uses_calibrated_weight_without_normal_sets(self):
         calibration = ExerciseCalibration.objects.create(
